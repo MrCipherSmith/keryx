@@ -1,0 +1,51 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "summary": "slice-02 (kind: new) holds schema/doc text, flow bookkeeping and tests: the substring quote-locator step, repeatable --premises, the merged_duplicates counter, the '#'-in-display-id refusal, the fix-roster e2e test and the completion-gate history test. No exploitable code path is introduced: nothing new reaches a shell, a path join on untrusted input, eval, auth or secrets. The completion-gate test reads only this session's own `keryx review` tool-call arguments (src/review/completion-gate.ts states it never reads arbitrary tool output), so a tool result cannot redirect the gate. Repeatable --premises keeps per-file judges and drops conflicting claims, and review-premise still refuses downgrades of review-security-code findings, so a second judge file cannot launder a security finding. One info: the locator docs left in the cli-reference and reviewer-finding schemas still describe two matching steps after L5 added a third (substring).",
+  "slices": [
+    { "id": "slice-02", "status": "DONE", "coverage": "read the whole slice diff (1250 lines)" }
+  ],
+  "findings": [
+    {
+      "id": "SC-001",
+      "severity": "info",
+      "file": "docs/docs/cli-reference.md",
+      "line": null,
+      "quote": "Matching is exact first, then with whitespace collapsed, then it stops — nothing",
+      "problem": "This slice adds a third quote-matching step (a one-line quote as an exact substring of exactly one line, locator method `substring`) to review-finding.schema.json. The cli-reference section 'A finding points at the code it quotes' still says matching stops after the whitespace-collapsed step and that nothing looser applies. Both reviewer-finding.schema.json copies (.metaproject/skills/gdskills/review/review-orchestrator/ and src/gdskills/bundled/skills/review/review-orchestrator/) also describe only 'exactly first and then with whitespace collapsed'. Those copies are the ones reviewers are told to follow.",
+      "impact": "No security impact, and no attack vector. Reviewers and operators get the wrong picture of how loosely a quote is anchored, so they will not know to quote a distinct line to avoid a substring match. The reviewer-side schema says it is kept identical to the core schema, and that is now false for this description.",
+      "suggested_fix": "Add the substring step (and the `substring` method) to the cli-reference matching paragraph and its outcome table, and to the `quote` description in both reviewer-finding.schema.json copies.",
+      "evidence": "slice-02.diff lines 23-36 (core schema description and method enum gain the substring step); docs/docs/cli-reference.md:6674-6675 at head; reviewer-finding.schema.json:85 in both copies at head (keryx ctx rg 'then it stops|exactly first and then'). This lies outside the security domain and is reported as info because the caller asked for every finding.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [
+          "docs/docs/cli-reference.md:6674",
+          ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json:85",
+          "src/gdskills/bundled/skills/review/review-orchestrator/reviewer-finding.schema.json:85"
+        ],
+        "enumeration_method": "keryx ctx rg 'then it stops|nothing fuzzy|exactly first and then' over docs, src and .metaproject/skills"
+      }
+    }
+  ],
+  "needs_context": [],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 1 }
+}
+```
+
+## Summary
+
+Slice-02 is schema, docs, flow-state and test changes. Security categories checked with no finding:
+
+- injection (shell, eval, SQL)
+- path traversal
+- auth and trust boundaries: the completion-gate history only counts the session's own tool-call arguments, and premise merges cannot downgrade security findings
+- secrets: the only identity in the slice is a public GitHub noreply address, moved unchanged from review-plan.test.ts
+- crypto
+- input validation: ids that hold '#' are now refused
+
+The e2e fixture's `Bun.spawn(cmd)` is test data that exercises routing; it is not shipped code. One info finding: the locator docs and the reviewer-side schemas are stale after the substring matching step was added.

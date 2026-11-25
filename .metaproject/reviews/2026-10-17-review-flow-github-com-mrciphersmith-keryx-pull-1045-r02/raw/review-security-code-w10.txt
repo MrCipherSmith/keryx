@@ -1,0 +1,82 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-security-code",
+  "summary": "slice-06 (new): readiness coverage gating, research dispatchRuns/ingest-screened readers, retry-eval unreadable-input guard, round-split fix/new partition and fix roster, routing-check, NOT_REVIEW_PACKAGES_ANY_DEPTH, types/verdict premise sets. One major: the fix roster no longer unions round-1 content routing, so process-spawning code in a commit that names a prior finding id is routed to a fix slice that review-security-code never reads, and the routing check accepts it. Two minors: the security-finding heuristic misses common security classes; the depth/size recheck excludes nested .metaproject/reviews paths that slicing still includes. One info: the closed-package exemption keys on agent-writable manifest.status.",
+  "slices": ["slice-06"],
+  "findings": [
+    {
+      "id": "SEC-001",
+      "severity": "major",
+      "file": "src/review/round-split.ts",
+      "line": null,
+      "quote": "roles: fixRosterRoles(findingIds, prior),",
+      "problem": "Flow 460 L6 drops the union of a fix slice's roster with its round-1 content routing (458 M2/M3: 'a fix touching process spawning still gets the security reviewer'). The justification is that a fix slice now holds only fix lines, but splitDelta (src/review/prior-round.ts, the commit-message loop) marks EVERY hunk of a commit whose message names a prior finding id as FIX, in any file, so brand-new code in that commit is 'fix lines' too. Such a slice passes onlyFixLines, becomes kind fix, and gets only logic + regression + the authors of the named findings (+ security-code only when isSecurityFinding matches one of them). The content rule in slice-routing.ts that assigns review-security-code to exec/execSync/spawn/child_process/eval/fs-write/input-derived-path code is never applied. routing-check.ts narrowedSlices uses expectedFixRoles alone for a backed fix claim, so the narrowed-routing check accepts the slice.",
+      "impact": "Attack vector: a PR author (or a fixing agent) lands a commit 'fix LG-001' that, alongside the fix, adds e.g. execSync(`git ${userArg}`) or a path built from input in another file. In the next delta round those hunks are FIX hunks; the slice is routed to review-logic/review-regression/the LG author only; review-security-code never reads the new process-spawning code and keryx review routing/readiness reports nothing missing. A command-injection or path-traversal sink can merge with the security reviewer silently skipped. Precondition: a delta round and a commit message naming a prior finding id, which the author fully controls.",
+      "suggested_fix": "Restore the union for content-sensitive roles: in classifyDeltaSlices set roles to fixRosterRoles(findingIds, prior) unioned with the slice's round-1 roles (or at least with any review-security-code the content router assigns), and in narrowedSlices require [...expectedFixRoles(entry, fix!, text), ...needed.roles.filter(r => r === 'review-security-code')] (or the full needed.roles). Alternatively, make commit-named marking in splitDelta only mark hunks that also overlap the named finding's file, so unrelated new code stays NEW.",
+      "evidence": "Read at head: src/review/round-split.ts:199 `roles: fixRosterRoles(findingIds, prior),` (was `[...new Set([...fixRosterRoles(...), ...(slice.roles ?? [])])]`); src/review/routing-check.ts:37 `backedFix ? expectedFixRoles(entry, fix!, text) : needed.roles` (was union with needed.roles); src/review/prior-round.ts:738-749 commit-named loop marks every hunk of parseDiffHunks(own.stdout) across all files; src/review/slice-routing.ts:116-117 content rules route exec/spawn/child_process to review-security-code.",
+      "confidence": "high",
+      "reviewer": "review-security-code",
+      "class_scope": {
+        "sites": ["src/review/round-split.ts:199", "src/review/routing-check.ts:37", "src/review/prior-round.ts:743"],
+        "enumeration_method": "keryx ctx rg for fixRosterRoles/expectedFixRoles callers in src/review (round-split classifyDeltaSlices, routing-check narrowedSlices are the only roster writers/checkers for fix slices) plus the splitDelta commit-named marking that feeds them"
+      }
+    },
+    {
+      "id": "SEC-002",
+      "severity": "minor",
+      "file": "src/review/round-split.ts",
+      "line": null,
+      "quote": "const SECURITY_PROBLEM = /\\b(security|secur",
+      "problem": "isSecurityFinding decides whether review-security-code joins a fix slice from the prior finding's reviewer, a SEC id, or a keyword regex over its problem text. The regex misses common security classes a non-security reviewer would describe in other words: shell / command (without 'injection'), exec, spawn, path escape outside the package (only 'sandbox escape'), symlink, TOCTOU, denial of service / ReDoS, prototype pollution, SQL, deserialization, leak (except 'token leak'), unsafe argv.",
+      "impact": "A review-logic finding like 'argv passed with shell: true' or 'path escapes the package dir' is fixed in a fix slice that review-security-code does not read, so the fix of a security-relevant bug is checked only by non-security roles. Combined with SEC-001 this is the only remaining path to the security reviewer for fix slices.",
+      "suggested_fix": "Widen the keyword set (shell, command, exec, spawn, argv, escape, symlink, toctou, denial of service, dos, redos, prototype pollution, sql, deserializ, leak, unsafe) or, more robustly, route on the fix slice's content as SEC-001 suggests so the heuristic is not the only gate.",
+      "evidence": "src/review/round-split.ts:23 regex alternatives enumerated at head; fixRosterRoles adds FIX_SECURITY_ROLE only when attached.some(isSecurityFinding).",
+      "confidence": "medium",
+      "reviewer": "review-security-code"
+    },
+    {
+      "id": "SEC-003",
+      "severity": "minor",
+      "file": "src/review/round-record.ts",
+      "line": null,
+      "quote": "export const NOT_REVIEW_PACKAGES_ANY_DEPTH = [\".\", \":(exclude,glob)**/.metaproject/reviews/**\"",
+      "problem": "The coverage gate's diff stats (coverage.ts diffOfTarget, which feeds effectiveDepth's light-round qualification) now exclude any path under **/.metaproject/reviews/** at any depth, while slicing still uses the root-relative NOT_REVIEW_PACKAGES. A changed source file placed under a nested .metaproject/reviews/ directory (e.g. packages/x/.metaproject/reviews/run.ts) is therefore sliced and shipped but not counted toward the files/changed-lines that decide whether a 'light' dispatch is trusted.",
+      "impact": "A PR can move risky code under a nested review-package-looking directory to shrink the measured diff so a light round passes the depth gate, reducing reviewer coverage of that code. Needs an author who chooses that path and an orchestrator that records a light dispatch.",
+      "suggested_fix": "Exclude only directories that actually hold a review package (manifest.json present), or keep the exclusion root-relative to the project root the round was sliced at, so the gate and the slicer agree on the same file set.",
+      "evidence": "src/review/round-record.ts:17 (new constant); src/review/coverage.ts:571 `gitDiffAt(cwd, resolved.base, head, NOT_REVIEW_PACKAGES_ANY_DEPTH)`; coverage.ts:591-594 effectiveDepth consumes packageDiffStats for the light-round check.",
+      "confidence": "medium",
+      "reviewer": "review-security-code"
+    },
+    {
+      "id": "SEC-004",
+      "severity": "info",
+      "file": "src/review/readiness.ts",
+      "line": null,
+      "quote": "coverageGated: coverageMd?.includes(COVERAGE_MD_MARK) === true || manifest.status !== \"closed\",",
+      "problem": "The flow 460 checks (coverage gate in item 3, omitted-reviewer check in item 6) are skipped for a package whose manifest.status is 'closed' and whose coverage.md lacks the mark. Both inputs are plain files in the package, so editing manifest.status to 'closed' and dropping the marker line turns those two checks off for publish/panel readiness. This is a documented, deliberate legacy exemption, and every other readiness input (research.json, coverage.md, findings.json) is equally writable by the same actor, so no new trust boundary is crossed.",
+      "impact": "No attack vector beyond the existing local-file trust model; noted so a future hardening (e.g. keying the exemption on a recorded close version or close time before flow 460) can close it.",
+      "suggested_fix": "Optionally key the exemption on a recorded closing keryx version/timestamp rather than the mutable status field alone.",
+      "evidence": "src/review/readiness.ts:417; Context.coverageGated doc comment gives the reason (closed pre-460 packages keep their recorded close).",
+      "confidence": "medium",
+      "reviewer": "review-security-code",
+      "publication": "omit"
+    }
+  ],
+  "needs_context": [],
+  "stats": { "blocker": 0, "major": 1, "minor": 2, "info": 1 }
+}
+```
+
+## Summary
+
+Slice slice-06 (kind new). Checked: injection/command (no new exec; retry-eval reads `raw/` via `path.basename(driver.result)`, so no traversal), path handling, input parsing (dispatchRuns/ingestScreenedOf are lenient type-checked readers), secrets/crypto (none), and the trust gates this slice changes.
+
+- SEC-001 (major): the fix-slice roster dropped the round-1 content union. Commit-named fix hunks can carry new process-spawning code that review-security-code never reads, and the routing check accepts that.
+- SEC-002 (minor): the isSecurityFinding keyword heuristic is too narrow.
+- SEC-003 (minor): the any-depth review-package exclusion in the coverage/depth recheck differs from what slicing includes.
+- SEC-004 (info): the closed-package exemption keys on the mutable manifest.status. This was a deliberate choice and is within the existing trust model.
+
+Clean: SQL/XSS/SSTI/eval, auth, crypto, secrets, open redirect (none of these apply to this slice).

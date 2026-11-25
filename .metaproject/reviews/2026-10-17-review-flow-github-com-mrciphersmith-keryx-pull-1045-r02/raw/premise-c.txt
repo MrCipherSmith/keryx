@@ -1,0 +1,82 @@
+STATUS: DONE
+
+```json keryx:premises
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    { "finding_id": "r2-review-clean-code-w2:CC-001", "verdict": "upheld", "reasoning": "docs/docs/cli-reference.md:6674 still says matching stops after the whitespace pass, while src/review/locate.ts:17-18 and :233-244 add a one-line substring pass and the canonical schema names it. No intent signal keeps the reference behind the code. Same defect as CB-001, HL-001, LG-002 (w2), LG-001 (w7), RG-002, SEC-002 and ST-001." },
+    { "finding_id": "r2-review-clean-code-w2:CC-002", "verdict": "upheld", "reasoning": "The reviewer-facing quote description (.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json:85 and its bundled copy) still names only exact and whitespace-collapsed matching. The canonical src/gdskills/contracts/review-finding.schema.json:195 names the substring step. I found no 'kept identical' statement in the reviewer copy, so that part of the problem text is overstated. The drift between two descriptions of the same field is still real, and nothing marks it as deliberate." },
+    { "finding_id": "r2-review-clean-code-w2:CC-003", "verdict": "upheld", "reasoning": "review-ledger.test.ts runs build(pkg) twice to assert two substrings of one refusal. This is a small test-hygiene defect. The test was added by this branch, and no sibling or comment shows that the double run was chosen." },
+    { "finding_id": "r2-review-clean-code-w2:CC-004", "verdict": "upheld", "reasoning": "The assertion repeats the maxDispatches default (40) as a bare literal with no link to the setting. This is a minor maintainability defect, and no signal shows the literal was chosen." },
+    { "finding_id": "r2-review-core-boundaries-w1:CB-004", "verdict": "upheld", "reasoning": "In completion-gate.test.ts:207-216, pr-7975 is the only package fresh this session. The next test (:218-224) finds it with no pointer, so the pointer branch decides nothing. The round-1 premise upheld the same finding (review-logic-w3:F-002), and the operator recorded no dismissal." },
+    { "finding_id": "r2-review-core-boundaries-w2:CB-001", "verdict": "upheld", "reasoning": "Same defect as CC-001: cli-reference.md:6674 describes the locator without the substring pass that locate.ts:233-244 implements in this PR." },
+    { "finding_id": "r2-review-highload-w1:HL-005", "verdict": "upheld", "reasoning": "Same as CB-004. The fixture at completion-gate.test.ts:207-216 resolves to pr-7975 through the session-age filter alone, so the pointer branch is not pinned." },
+    { "finding_id": "r2-review-highload-w2:HL-001", "verdict": "upheld", "reasoning": "Same defect as CC-001: the CLI reference omits the substring locator pass this PR ships." },
+    { "finding_id": "r2-review-logic-w2:LG-001", "verdict": "upheld", "reasoning": "fixRosterRoles (src/review/round-split.ts:30-41) adds review-security-code when an attached finding is a security finding. review-orchestrator SKILL.md:685 still lists only logic, regression, the authors and the verifier. No signal shows the skill text omits this on purpose." },
+    { "finding_id": "r2-review-logic-w2:LG-002", "verdict": "upheld", "reasoning": "Same defect as CC-001 and CC-002: the cli-reference and reviewer-finding quote descriptions lack the substring pass." },
+    { "finding_id": "r2-review-logic-w2:LG-003", "verdict": "upheld", "reasoning": "At 375279e78, CHANGELOG [Unreleased] carries only the L1-L4 entries, written in dff7a38a1 'docs(changelog): flow 460' before L5 and L6 merged. Flow task T11 'CHANGELOG, release 0.3.122' is still open, so the gap may be closed at release. That shows when the gap will be closed, not that it is intended. The L5/L6 behaviour changes are still missing." },
+    { "finding_id": "r2-review-logic-w2:LG-004", "verdict": "upheld", "reasoning": "In flow.json at HEAD, T13 has status todo, while 851e83b24 and 7b4efeb1f (L6) are merged. T12 was marked done after its merge (5bd6ae567), so the sibling practice is to mark the task done. That supports the finding." },
+    { "finding_id": "r2-review-logic-w4:LG-002", "verdict": "upheld", "reasoning": "The wall-clock bounds of 1000 ms and 500 ms are absolute. The repository uses absolute bounds widely, but the sibling linear-time guards in the same file (src/review/ledger.test.ts:142, :272, :435) allow 2000 ms. The dedicated linear-time suites (src/security/detect/pii-linear-time.test.ts:254-255) use a ceiling plus a ratio. Either suggested fix brings these sites in line with their siblings, so the premise stands at minor." },
+    { "finding_id": "r2-review-logic-w7:LG-001", "verdict": "upheld", "reasoning": "Same defect as CC-001." },
+    { "finding_id": "r2-review-logic-w7:LG-002", "verdict": "upheld", "reasoning": "Same defect as r2-review-logic-w2:LG-004: T13 is todo although L6 is merged, and T12 shows the practice of marking a merged lane done." },
+    { "finding_id": "r2-review-logic-w9:LG-003", "verdict": "upheld", "reasoning": "Same as r2-review-logic-w4:LG-002. The new bounds are tighter than the 2000 ms siblings in ledger.test.ts, and no signal shows the tighter bound was chosen for a reason." },
+    { "finding_id": "r2-review-regression-w2:RG-001", "verdict": "upheld", "reasoning": "AC6's recorded check at 375279e78 named only review-plan.test.ts, after the plan, ingest, fix, plan sequence test had moved to review-plan.e2e.test.ts. Commit 1471bbb4d 'chore(flow): 460 AC6 names the moved e2e test', after the reviewed head, updates AC6 through the flow CLI with the reason 'review RG-001 (round 2)'. That confirms the premise. Whether it is now fixed is for the verifier. No intent or practice shrinks the severity." },
+    { "finding_id": "r2-review-regression-w2:RG-002", "verdict": "upheld", "reasoning": "Same defect as CC-001." },
+    { "finding_id": "r2-review-regression-w4:REG-002", "verdict": "upheld", "reasoning": "filter-stats now subtracts merged_duplicates and prints it in the status line. The guide's arithmetic sentence and sample line were not updated. No signal keeps the guide behind the code." },
+    { "finding_id": "r2-review-security-code-w2:SEC-001", "verdict": "upheld", "reasoning": "context.md:60 commits an absolute path under /Users/Goodea/.claude/uploads/ with a session UUID. Other tracked flow artifacts carry local paths, for example flow 428 research.json with /home/altsay/.claude/projects/..., so the reviewer's 'only this file' is too strong. Those are accidents of the same class, not a recorded choice. A security finding cannot be downgraded, so it is upheld." },
+    { "finding_id": "r2-review-security-code-w2:SEC-002", "verdict": "upheld", "reasoning": "Same defect as CC-001." },
+    { "finding_id": "r2-review-style-w2:ST-001", "verdict": "upheld", "reasoning": "Same defect as CC-001." },
+    { "finding_id": "r2-review-style-w2:ST-002", "verdict": "upheld", "reasoning": "Pre-existing review tests define their own local git helper (src/review/round-split.test.ts:308 and src/review/second-look.test.ts:56 on origin/main). That is a sibling pattern. However, the shared src/review/git-fixture.test-helpers.ts that this branch introduced (372c6af65) is the direction the branch itself set, so using it would make the review tests more consistent, not less. Minor duplication; upheld." },
+    { "finding_id": "r2-review-testing-practices-w1:T-R2-001", "verdict": "upheld", "reasoning": "Same as CB-004. The round-1 premise upheld review-testing-practices-w2:T-001, and the operator recorded no dismissal." },
+    {
+      "finding_id": "r2-review-testing-practices-w2:TP-001",
+      "verdict": "challenged",
+      "intent_signals": [
+        { "ref": "src/commands/agent.ts:3487", "says": "the agent only wires findReviewGateState(cwd, sessionStartedAt(history), sessionReviewNames(history, cwd)); the naming rule lives in src/review/completion-gate.ts" },
+        { "ref": "src/review/completion-gate.test.ts:316", "says": "'an older pointer to another PR that this session never named is ignored': a history that does not name the package, which must not be named or held" },
+        { "ref": "src/review/completion-gate.test.ts:226", "says": "'no pointer and only an old open package: the old package is never named': the negative branch with no naming at all" }
+      ],
+      "practice_sources": [
+        { "name": "Practical Test Pyramid (Martin Fowler, 'The Practical Test Pyramid', section 'Integration Tests')", "says": "branch coverage belongs in unit tests; an integration test checks the wiring on the representative path" }
+      ],
+      "reasoning": "The regression the finding names, a gate that holds for any package on disk, sits in the completion-gate naming rule. Unit tests at completion-gate.test.ts:226 and :316 already drive that rule's negative side and would turn red. agent-review-gate.test.ts is the integration test for the wiring in agent.ts, and checking only the positive path is the usual split. The reviewer also noted that branch coverage elsewhere was not visible in its slice.",
+      "question": "The 'history does not name the package' branch is pinned by completion-gate.test.ts:226 and :316. Do you also want an agent-level negative test in agent-review-gate.test.ts?",
+      "options": ["dismiss — the unit tests pin the negative branch; the agent test checks only the wiring", "uphold — add an agent-level test whose history does not name the package"]
+    },
+    { "finding_id": "r2-review-testing-practices-w2:TP-002", "verdict": "upheld", "reasoning": "Filtering researchErrors by the raw stem can hide an unresolved-link error that names the canonical id, so the assertion is weaker than its comment says. The reviewer already scoped the cost as small, and no signal shows the filter was a choice." },
+    { "finding_id": "r2-review-testing-practices-w4:TP-001", "verdict": "upheld", "reasoning": "completion-gate.test.ts:276-284 shrinks the history, which drives only the length arm of the reset at completion-gate.ts:137. The identity arm and the pendingCalls pairing across update() calls are not driven, and nothing marks them as covered elsewhere." },
+    { "finding_id": "r2-review-testing-practices-w4:TP-002", "verdict": "upheld", "reasoning": "Same as r2-review-logic-w4:LG-002. The bounds are tighter than the 2000 ms siblings in ledger.test.ts, and the ratio form exists in the pii linear-time suites." },
+    { "finding_id": "r2-review-testing-practices-w4:TP-003", "verdict": "upheld", "reasoning": "A 15 ms sleep orders two mtimes, while the neighbouring helpers set the order with utimes (writeOldPackage, completion-gate.test.ts:201-205). The older sleep at :146 is the same accident, not a reason. The suggested fix matches the file's own deterministic pattern." },
+    { "finding_id": "r2-review-testing-practices-w4:TP-004", "verdict": "upheld", "reasoning": "This branch (851e83b24) replaced the byte comparison with a line count. The comment at round-split.test.ts:528-530 gives a sound reason for removing the headers. A change cannot ratify itself, though, and the test name still promises a size bound. The /^--- / strip would also drop a removed '-- ' line. The fixture has no such line, so this is minor." },
+    { "finding_id": "r2-review-testing-practices-w4:TP-005", "verdict": "upheld", "reasoning": "The new continue at round-trip.test.ts:471-474 can turn the legacy-ingest loop into a refusal check with only reports.length > 5 guarding it. The stub check also copies the production text. No signal shows the weakening is intended." },
+    { "finding_id": "r2-review-testing-practices-w4:TP-006", "verdict": "upheld", "reasoning": "The deletion-boundary rule in partitionRegionsByFix is pinned from one side only (round-split.test.ts:96-99). The over-claiming side is untested, and nothing marks it as covered elsewhere." }
+  ]
+}
+```
+
+## Summary
+
+32 findings judged (31 minor, 1 major); none below minor.
+
+| Verdict | Count |
+|---|---|
+| upheld | 31 |
+| downgraded | 0 |
+| challenged | 1 |
+| owner-decision | 0 |
+
+### Held findings
+
+- **r2-review-testing-practices-w2:TP-001** (challenged). Question: the 'history does not name the package' branch is pinned by completion-gate.test.ts:226 and :316; do you also want an agent-level negative test in agent-review-gate.test.ts? Options: dismiss (the unit tests pin the negative branch; the agent test checks only the wiring) / uphold (add the agent-level negative test). Signals:
+  - src/commands/agent.ts:3487 only wires findReviewGateState with sessionReviewNames; the rule lives in completion-gate.ts.
+  - completion-gate.test.ts:316 ('an older pointer to another PR that this session never named is ignored') and :226 ('no pointer and only an old open package ... never named') drive the negative branch.
+  - Source: Fowler, 'The Practical Test Pyramid', section Integration Tests.
+
+### Notes
+
+- Eight findings report the same cli-reference.md:6674 locator drift: CC-001, CB-001, HL-001, LG-002 (w2), LG-001 (w7), RG-002, SEC-002 and ST-001. All are upheld; the caller's duplicate merge should collapse them.
+- RG-001 (major) is upheld. Commit 1471bbb4d, after the reviewed head 375279e78, already updates AC6 citing this finding. Whether that fixes it is for the verifier.
+- LG-003: flow task T11 (CHANGELOG, release) is still open and may cover the gap. That shows when it will be closed, not that the gap is intended, so it is upheld.
+- SEC-001: the reviewer's claim that no other tracked flow commits a local path is too strong. Flow 428's research.json carries /home/altsay/.claude/projects/... paths. The finding is upheld; a security finding cannot be downgraded.
+- History read: git log/show/grep only (read-only). Flow intent was read at HEAD.

@@ -1,0 +1,92 @@
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "slices": ["slice-07"],
+  "summary": "Second look at slice-07 (schema, flow records, journals, CHANGELOG, cli-reference, review guide, review-orchestrator skill docs, one ledger test). No blocker or major. Four minors are doc drift from code this PR shipped and round 1 did not name: the fix-slice roster in review-orchestrator SKILL.md, the matching order in cli-reference, the CHANGELOG missing the L5/L6 behaviour changes, and flow 460 T13 still todo after its lane merged. One info on a schema claim that the two unplaced-quote records never disagree.",
+  "stats": { "blocker": 0, "major": 0, "minor": 4, "info": 1 },
+  "findings": [
+    {
+      "id": "LG-001",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": 685,
+      "quote": "gets `review-logic`, `review-regression`, the authors of the findings attached to it and the verifier",
+      "problem": "The orchestrator's delta-round rule names the FIX-slice roster as logic, regression and the authors only. L6 (851e83b24) changed the roster in code: fixRosterRoles (src/review/round-split.ts:35-40) also adds review-security-code when an attached finding is a security one, and cli-reference's `plan` row was updated to say so. SKILL.md (both the .metaproject copy and the bundled src/gdskills copy) and flow-orchestrator SKILL.md:529 were not. git show --stat 851e83b24 lists only docs/docs/cli-reference.md among the docs.",
+      "impact": "An orchestrator that follows the skill text rather than `review next` leaves review-security-code off a fix slice with a security finding attached. The ledger then reports the fix slice as not covered by its roster, or the security fix gets no security re-read.",
+      "suggested_fix": "Add 'and review-security-code when one of them is a security finding' to the delta-round bullet in both review-orchestrator SKILL.md copies, and to the 'small roster' sentence in flow-orchestrator SKILL.md:529.",
+      "evidence": "src/review/round-split.ts:39 `const security = attached.some(isSecurityFinding) ? [FIX_SECURITY_ROLE] : [];`. docs/docs/cli-reference.md:4888 states the new roster. .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:685 and src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:685 are identical and omit it. Same for flow-orchestrator SKILL.md:529 'logic, regression, the findings' authors, the verifier'.",
+      "confidence": "high"
+    },
+    {
+      "id": "LG-002",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "line": 6674,
+      "quote": "Matching is exact first, then with whitespace collapsed, then it stops — nothing",
+      "problem": "The 'A finding points at the code it quotes' section still says matching stops after the whitespace-collapsed pass. This PR adds a third pass: a one-line quote that is an exact substring of exactly one line is placed with `method: substring` (src/review/locate.ts:233-244), and the schema hunk in this slice adds 'substring' to `locator.method`. The reviewer-facing reviewer-finding.schema.json:85 (both copies) says the same old 'exactly first and then with whitespace collapsed'.",
+      "impact": "A reader of the locator contract cannot tell that `method: substring` exists, or that a short quote lifted from mid-line now anchors and is no longer `quote_unlocated`. Locator records show a method the reference says cannot happen.",
+      "suggested_fix": "Change the sentence to 'exact first, then with whitespace collapsed, then (a one-line quote) as an exact substring of exactly one line, then it stops'. Make the same change to the quote description in both reviewer-finding.schema.json copies.",
+      "evidence": "src/review/locate.ts:239 `return { state: \"derived\", method: \"substring\", line: within[0] as number };`; .metaproject/core/gdskills/contracts/review-finding.schema.json adds \"substring\" to the method enum (slice-07 line 36). keryx ctx rg 'then with whitespace collapsed|exactly first, then' shows cli-reference.md:6674 and reviewer-finding.schema.json:85 not updated.",
+      "confidence": "high"
+    },
+    {
+      "id": "LG-003",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": "CHANGELOG.md",
+      "line": 7,
+      "quote": "- Readiness item 12 `quotes-located` names findings whose quote could not be placed at the reviewed head.",
+      "problem": "[Unreleased] covers L1-L4 only. The L5 and L6 behaviour changes in this PR are missing: quotes are now located as a one-line substring (`method: substring`); `--premises` is repeatable, with agreeing and disagreeing duplicate claims merged (`duplicate-claim`); finding ids may not hold '#'; and a fix slice holds only fix lines and gets exactly the fix roster (plus review-security-code), no longer the slice's own routing. cli-reference documents each of these.",
+      "impact": "The 0.3.122 release notes will not mention changes that alter ingest results: anchors that were unlocatable before now derive, and premise claims that disagree are now dropped. They also will not mention who reads a fix slice. A user upgrading cannot learn of these from the changelog.",
+      "suggested_fix": "Add Changed/Fixed bullets for the substring locator pass, repeatable --premises with the duplicate-claim rule, and the fix-slice roster and fix-line partition.",
+      "evidence": "CHANGELOG.md lines 3-15 (Unreleased) at 375279e78 contain no 'substring', 'premises' or 'fix slice'. cli-reference.md:4888 (plan row, L6) and the --premises row (slice-07 line 1885) document the changes. Flow 460 T12/T13 titles name them.",
+      "confidence": "high"
+    },
+    {
+      "id": "LG-004",
+      "reviewer": "review-logic",
+      "severity": "minor",
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json",
+      "line": null,
+      "quote": "\"title\": \"L6 fix slices get the fix roster; fix hunks are the ones touching a finding\",",
+      "problem": "T13 (L6) is still `todo` at the reviewed head, but its lane is implemented and merged: 851e83b24 'fix(review): a fix slice gets the fix roster … (flow 460 L6)' and merge 7b4efeb1f. L5 got its 'chore(flow): 460 L5 done' (5bd6ae567); L6 got none. The journal's round-2 note also says 'After L6 the plan is …', which treats L6 as done.",
+      "impact": "Task Manager reports L6 as not started while its code is under review. The flow cannot reach implemented/complete until someone marks a task done that has already shipped, and `flow status` misstates progress.",
+      "suggested_fix": "Run `keryx flow task done 460 T13` (with disposition completed) and commit the flow folder.",
+      "evidence": "jq '.tasks[]|.id+\" \"+.status' on flow.json at 375279e78 returns 'T13 todo'. git log shows 7b4efeb1f 'merge lane 460-l6' and 851e83b24.",
+      "confidence": "high"
+    },
+    {
+      "id": "LG-005",
+      "reviewer": "review-logic",
+      "severity": "info",
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "line": null,
+      "quote": "ingest writes both from one result and recomputes both on every ingest, so they never disagree",
+      "problem": "The `quote_unlocated` description says it and `locator` 'never disagree'. In anchorFindings (src/review/managed.ts:1445) the flag is written only for `source !== \"external\"` and only for kinds absent/ambiguous. An external finding whose quote is absent therefore gets `locator.state: unlocatable` with no `quote_unlocated`. Because refuseUnresolvedLocators also skips externals, that finding passes both ingest and readiness `quotes-located` without notice. The design may intend this, since externals keep GitHub's path, but the schema states an invariant the code does not hold.",
+      "impact": "No wrong gate outcome is shown. A reader who relies on the stated invariant ('gates branch on this flag') would assume every unlocatable record is flagged.",
+      "suggested_fix": "Narrow the sentence: 'for an internal finding whose quote is absent or ambiguous; an external finding, or one stopped by a bound, carries only locator'.",
+      "evidence": "src/review/managed.ts:1445 `if (finding.source !== \"external\" && (locator.kind === \"absent\" || locator.kind === \"ambiguous\")) {`",
+      "confidence": "medium"
+    }
+  ]
+}
+```
+
+## Logic Review — slice-07 (second look, round 2)
+
+- Scope: slice-07 of PR #1045 at 375279e78 (docs, schema, flow records, one test). Spec compliance was not re-run here: round 1 already filed the AC8 spec gap (review-logic-w1 LG-001).
+- Stats: blocker 0 | major 0 | minor 4 | info 1
+
+Round 1 did not name any of these:
+- LG-001: L6 added review-security-code to the fix roster in code and in cli-reference. Both review-orchestrator SKILL.md copies and flow-orchestrator SKILL.md still state the old roster.
+- LG-002: cli-reference (and reviewer-finding.schema.json) still say matching stops after the whitespace pass. The new `substring` pass is not mentioned.
+- LG-003: CHANGELOG [Unreleased] is missing the L5/L6 behaviour changes (substring locating, repeatable --premises with duplicate-claim, the fix-slice roster).
+- LG-004: flow 460 T13 (L6) is still `todo` after its lane merged.
+- LG-005 (info): the schema says `quote_unlocated` and `locator` never disagree. External findings with an absent quote break that.
+
+I checked these against the code and found them consistent with the docs: readiness item 12 (answered = any disposition state except unknown), the refusal set left after flow 460 (commit absent, no file, bound), KERYX_USAGE parsing and run/round totals, and the ledger test change for override decisions (B).
+
+Routing audit: graph_used: no (not-relevant: doc slice, direct file reads); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: no.

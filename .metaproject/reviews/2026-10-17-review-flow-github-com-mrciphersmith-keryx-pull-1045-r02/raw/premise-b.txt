@@ -1,0 +1,341 @@
+STATUS: DONE
+
+```json keryx:premises
+{
+  "judge": "review-premise",
+  "model": "claude-opus-5-5",
+  "premises": [
+    {
+      "finding_id": "r2-review-logic-w11:LG-002",
+      "verdict": "upheld",
+      "reasoning": "scope.ts:135-144 defines contextTruncated as a window narrower than asked; the half-and-half cut is introduced by this branch (L6), so it is no prior intent. No signal or practice against it."
+    },
+    {
+      "finding_id": "r2-review-logic-w3:LG-001",
+      "verdict": "upheld",
+      "reasoning": "saveTimedOutPartial's own doc (spawn-subagent-tool.ts:325-327) protects a complete result; the placeholder writes are new in this branch and isEmptyOutput treats them as empty. No intent signal against the premise."
+    },
+    {
+      "finding_id": "r2-review-logic-w3:LG-002",
+      "verdict": "upheld",
+      "reasoning": "AC7 (criterion H) asks every dispatch's usage to land in the package; one-usage-per-raw-file is new in this branch, so it cannot ratify itself. Upheld as reported."
+    },
+    {
+      "finding_id": "r2-review-logic-w3:LG-003",
+      "verdict": "upheld",
+      "reasoning": "The ledgerBlockers comment claims parity with complete; flow 460 problem A is exactly this disagreement. Nothing marks the missing completeness gate as deliberate."
+    },
+    {
+      "finding_id": "r2-review-logic-w4:LG-001",
+      "verdict": "upheld",
+      "reasoning": "The UNREADABLE_INPUT doc (ledger.ts:24-30) says defect prose about a schema or payload must never match; the sentence-start anchor admits it. The finding agrees with the stated intent."
+    },
+    {
+      "finding_id": "r2-review-logic-w5:LG-001",
+      "verdict": "upheld",
+      "reasoning": "Same stated intent at ledger.ts:24-30; the any-determiner plus find verb admits a clean summary. No signal against."
+    },
+    {
+      "finding_id": "r2-review-logic-w5:LG-002",
+      "verdict": "upheld",
+      "reasoning": "AC3 requires naming the session's package including under a subdirectory project root; the cd-prefixed start path is not covered. Upheld."
+    },
+    {
+      "finding_id": "r2-review-logic-w5:LG-003",
+      "verdict": "upheld",
+      "reasoning": "The tracker doc (completion-gate.ts:95, 199-201) says names come only from this session's keryx review commands; any call mentioning the words passes. Consistent with the intent the finding cites."
+    },
+    {
+      "finding_id": "r2-review-logic-w5:LG-004",
+      "verdict": "upheld",
+      "reasoning": "The skip-if-present rule is new in this branch (renderSpendMarkdown, test pins only idempotency); it was meant to avoid a duplicate section, not to keep a stale figure. Upheld."
+    },
+    {
+      "finding_id": "r2-review-logic-w6:LG-001",
+      "verdict": "upheld",
+      "reasoning": "The coverageGated exemption's stated reason (a closed package's record is final) applies to marked packages too; the finding uses the code's own reason. Upheld."
+    },
+    {
+      "finding_id": "r2-review-logic-w6:LG-002",
+      "verdict": "upheld",
+      "reasoning": "No signal that the early return before the lying check is intended. Upheld."
+    },
+    {
+      "finding_id": "r2-review-logic-w8:LG-001",
+      "verdict": "upheld",
+      "reasoning": "Same as the spend-loss group: AC7 asks every dispatch's usage to land; the per-file model is introduced by this branch. Upheld."
+    },
+    {
+      "finding_id": "r2-review-logic-w8:LG-002",
+      "verdict": "upheld",
+      "reasoning": "saveTimedOutPartial doc at spawn-subagent-tool.ts:325-327 protects a complete result, which the placeholder is not by isEmptyOutput. Upheld."
+    },
+    {
+      "finding_id": "r2-review-logic-w8:LG-003",
+      "verdict": "upheld",
+      "reasoning": "The comment at spawn-subagent-tool.ts:311 says never compared, while ledger isEmptyOutput compares a copy of the literal. Upheld."
+    },
+    {
+      "finding_id": "r2-review-logic-w8:LG-004",
+      "verdict": "upheld",
+      "reasoning": "No signal that the guard should ignore fix-cut omissions; the merged list sits two lines above. Upheld."
+    },
+    {
+      "finding_id": "r2-review-logic-w8:LG-005",
+      "verdict": "upheld",
+      "reasoning": "Ledger classification per call predates L6; splitting the source into two calls is new and changes the rule's input. Upheld."
+    },
+    {
+      "finding_id": "r2-review-logic-w9:LG-001",
+      "verdict": "upheld",
+      "reasoning": "Same stated intent at ledger.ts:24-30; first-person did not find any schema matches. Upheld."
+    },
+    {
+      "finding_id": "r2-review-logic-w9:LG-002",
+      "verdict": "upheld",
+      "reasoning": "Same as w5 LG-004: the skip rule is branch-introduced and leaves a stale figure. Upheld."
+    },
+    {
+      "finding_id": "r2-review-performance-w1:PERF-R2-001",
+      "verdict": "upheld",
+      "reasoning": "dispatch-usage.ts is new in this PR; the round-1 note (PERF-005, info) has no disposition. trimEnd is the idiomatic linear form. Upheld."
+    },
+    {
+      "finding_id": "r2-review-performance-w1:PERF-R2-002",
+      "verdict": "upheld",
+      "reasoning": "No signal that whole arguments must be kept; reviewer does not overstate (latency only). Upheld."
+    },
+    {
+      "finding_id": "r2-review-performance-w4:PF-001",
+      "verdict": "upheld",
+      "reasoning": "Duplicate of PERF-R2-002 in substance. Upheld."
+    },
+    {
+      "finding_id": "r2-review-performance-w4:PF-002",
+      "verdict": "upheld",
+      "reasoning": "The comment at prior-round.ts:322 (probes are independent) is introduced by this branch and gives no measurement, so it is no prior intent. Upheld."
+    },
+    {
+      "finding_id": "r2-review-performance-w5:PERF-001",
+      "verdict": "upheld",
+      "reasoning": "Bounded N is stated by the reviewer, but no intent or practice source shrinks a minor. Upheld."
+    },
+    {
+      "finding_id": "r2-review-regression-w1:REG-R2-001",
+      "verdict": "upheld",
+      "reasoning": "Same group as logic-w3 LG-001; at the round-1 head no placeholder was written. Upheld."
+    },
+    {
+      "finding_id": "r2-review-regression-w3:RG-001",
+      "verdict": "upheld",
+      "reasoning": "Same group as logic-w3 LG-001. Upheld."
+    },
+    {
+      "finding_id": "r2-review-regression-w3:RG-002",
+      "verdict": "upheld",
+      "reasoning": "premise.ts names premises.json as the file to pass back to --premises, and the reader refuses its array form. Inconsistent with the code's own instruction. Upheld."
+    },
+    {
+      "finding_id": "r2-review-regression-w4:REG-001",
+      "verdict": "upheld",
+      "reasoning": "The binding comment at managed.ts:2848-2851 is L5's own choice (branch-introduced); it does not address the flow readers that lose the round. Upheld."
+    },
+    {
+      "finding_id": "r2-review-regression-w5:RG-001",
+      "verdict": "upheld",
+      "reasoning": "Intent signal supports the finding: f6d9e21c4 (flow 458 M2/M3) added the union for two reasons, and the L6 header (round-split.ts:6-10) answers only the new-lines reason. Upheld."
+    },
+    {
+      "finding_id": "r2-review-security-code-w1:SEC-R2-001",
+      "verdict": "upheld",
+      "reasoning": "Security finding: hold or uphold only. No signal that token-anywhere matching is intended; tracker doc says only the session's own commands. Upheld."
+    },
+    {
+      "finding_id": "r2-review-security-code-w1:SEC-R2-002",
+      "verdict": "upheld",
+      "reasoning": "Security finding. The closedAt max over all roots when best is null (completion-gate.ts:324) has no signal of a deliberate release. Upheld."
+    },
+    {
+      "finding_id": "r2-review-security-code-w10:SEC-001",
+      "verdict": "upheld",
+      "reasoning": "Same as regression-w5 RG-001; f6d9e21c4 recorded the security-reviewer reason for the union. Upheld."
+    },
+    {
+      "finding_id": "r2-review-security-code-w10:SEC-002",
+      "verdict": "upheld",
+      "reasoning": "Security finding; keyword heuristic gaps are factual and no source says the list is complete by design. Upheld."
+    },
+    {
+      "finding_id": "r2-review-security-code-w10:SEC-003",
+      "verdict": "upheld",
+      "reasoning": "Any-depth exclusion serves nested packages (description problem A), but the slicer still uses the root-relative list, so the two disagree. Upheld."
+    },
+    {
+      "finding_id": "r2-review-security-code-w3:SEC-001",
+      "verdict": "upheld",
+      "reasoning": "Sibling canonicalByReviewer (ledger.ts:599-602) uses the same fallback but closes to an existing canonical finding and is guarded by length 1 at the caller; screenedAs has no guard. Upheld."
+    },
+    {
+      "finding_id": "r2-review-security-code-w3:SEC-002",
+      "verdict": "upheld",
+      "reasoning": "dispatch-usage.ts:12-13 accepts reviewer-written lines only for hosts where the reviewer writes its own file; keryx shell is not such a host. Upheld."
+    },
+    {
+      "finding_id": "r2-review-security-code-w3:SEC-003",
+      "verdict": "upheld",
+      "reasoning": "Same spend-loss group; security finding, upheld."
+    },
+    {
+      "finding_id": "r2-review-security-code-w4:SC-001",
+      "verdict": "upheld",
+      "reasoning": "Security finding; the OWN_OUTPUT_LINE doc says the lines keryx review start/attach/ingest prints, which a compound command breaks. Upheld."
+    },
+    {
+      "finding_id": "r2-review-security-code-w5:SEC-R2-001",
+      "verdict": "upheld",
+      "reasoning": "Same as security-code-w3 SEC-001. Upheld."
+    },
+    {
+      "finding_id": "r2-review-security-code-w5:SEC-R2-002",
+      "verdict": "upheld",
+      "reasoning": "Security finding. Plan risk (plan.md:23) forbids guessed anchors; a one-token substring is close to one. No signal against. Upheld."
+    },
+    {
+      "finding_id": "r2-review-security-code-w6:SEC-001",
+      "verdict": "upheld",
+      "reasoning": "Security finding; FINDING_DISPOSITION_STATES exists and is not used. Upheld."
+    },
+    {
+      "finding_id": "r2-review-security-code-w8:SEC-001",
+      "verdict": "upheld",
+      "reasoning": "Security finding stated as hardening, already minor. Upheld."
+    },
+    {
+      "finding_id": "r2-review-security-code-w8:SEC-002",
+      "verdict": "upheld",
+      "reasoning": "Same as security-code-w3 SEC-001. Upheld."
+    },
+    {
+      "finding_id": "r2-review-security-code-w9:SEC-001",
+      "verdict": "upheld",
+      "reasoning": "plan.md:13 chose target.base as the diff base but says nothing against validating it; the fix is additive and consistent with the plan. Security finding, upheld."
+    },
+    {
+      "finding_id": "r2-review-style-w1:STY-001",
+      "verdict": "upheld",
+      "reasoning": "Stacked doc comments misattribute; no signal of intent. Upheld."
+    },
+    {
+      "finding_id": "r2-review-style-w1:STY-002",
+      "verdict": "upheld",
+      "reasoning": "The helper now serves a non-timeout caller added by this branch. Upheld."
+    },
+    {
+      "finding_id": "r2-review-style-w3:ST-001",
+      "verdict": "upheld",
+      "reasoning": "src/commands/review.ts:228-235 is otherwise sorted; PremiseSource breaks it. Upheld."
+    },
+    {
+      "finding_id": "r2-review-style-w3:ST-002",
+      "verdict": "upheld",
+      "reasoning": "No signal the casts are needed. Upheld."
+    },
+    {
+      "finding_id": "r2-review-style-w3:ST-003",
+      "verdict": "upheld",
+      "reasoning": "No signal against. Upheld."
+    },
+    {
+      "finding_id": "r2-review-style-w3:ST-004",
+      "verdict": "upheld",
+      "reasoning": "operator-confirm-review.ts:306 derives the bound and hard-codes Item 11 in the same sentence. Upheld."
+    },
+    {
+      "finding_id": "r2-review-style-w4:ST-001",
+      "verdict": "challenged",
+      "intent_signals": [
+        {
+          "ref": "origin/main:src/review/ledger.ts:534",
+          "says": "the const dispatch = { version: 1 ... } line is byte-identical at the base (855 chars); this PR does not change it, contrary to the finding's claim that the diff adds to the pattern"
+        },
+        {
+          "ref": "eslint.config.mjs",
+          "says": "the project lint config sets no max-len rule"
+        },
+        {
+          "ref": "src/commands/review.ts, src/review/replay.ts, src/mcp/tools.ts, src/metrics/record.ts",
+          "says": "sibling source files each hold a line over 800 characters; long single-line object builders are the existing house pattern"
+        }
+      ],
+      "reasoning": "The line is pre-existing and unchanged by this PR, and the project neither limits line length nor avoids this shape elsewhere. It is not a defect of this change; at most a separate cleanup.",
+      "question": "The 855-char dispatch line is unchanged from main and the project sets no line limit. Dismiss it for this PR, or keep it as a finding here?",
+      "options": [
+        "dismiss - pre-existing, out of this PR's scope (file a cleanup separately if wanted)",
+        "uphold - split the line in this PR"
+      ]
+    },
+    {
+      "finding_id": "r2-review-style-w4:ST-002",
+      "verdict": "upheld",
+      "reasoning": "Four restatements of one matching rule in ledger.ts; no signal against. Upheld."
+    },
+    {
+      "finding_id": "r2-review-style-w4:ST-003",
+      "verdict": "upheld",
+      "reasoning": "display-id.ts holds the rule; premise.ts restates it. Upheld."
+    },
+    {
+      "finding_id": "r2-review-style-w4:ST-004",
+      "verdict": "upheld",
+      "reasoning": "No signal against. Upheld."
+    },
+    {
+      "finding_id": "r2-review-style-w5:ST-001",
+      "verdict": "upheld",
+      "reasoning": "Two parsers of dispatch.runs in one package. Upheld."
+    },
+    {
+      "finding_id": "r2-review-style-w5:ST-002",
+      "verdict": "upheld",
+      "reasoning": "No note explains the differing walker. Upheld."
+    },
+    {
+      "finding_id": "r2-review-style-w5:ST-003",
+      "verdict": "upheld",
+      "reasoning": "The literal branches are subsumed by the wildcard branches. Upheld."
+    },
+    {
+      "finding_id": "r2-review-style-w5:ST-004",
+      "verdict": "upheld",
+      "reasoning": "FIX_SECURITY_ROLE sits beside the literal in the same file. Upheld."
+    },
+    {
+      "finding_id": "r2-review-style-w5:ST-005",
+      "verdict": "upheld",
+      "reasoning": "No signal against. Upheld."
+    }
+  ]
+}
+```
+
+## Summary
+
+Findings judged: 58 (none below minor). upheld 57, downgraded 0, challenged 1, owner-decision 0.
+
+Held:
+- r2-review-style-w4:ST-001 (challenged). Question: The 855-char dispatch line is unchanged from main and the project sets no line limit. Dismiss it for this PR, or keep it as a finding here? Options: dismiss - pre-existing, out of scope / uphold - split the line in this PR. Signals: origin/main:src/review/ledger.ts:534 identical line; eslint.config.mjs has no max-len; sibling files with lines over 800 chars.
+
+Intent signal that supports (not rebuts) a finding: f6d9e21c4 (flow 458 M2/M3) gave the fix-slice union two reasons, including that a fix touching process spawning still gets the security reviewer; the L6 header (src/review/round-split.ts:6-10) answers only the new-lines reason. Applies to r2-review-regression-w5:RG-001 and r2-review-security-code-w10:SEC-001.
+
+Duplicate groups (same defect, for the merge):
+1. saveTimedOutPartial treats the no-text placeholder as a complete result: r2-review-logic-w3:LG-001, r2-review-logic-w8:LG-002, r2-review-regression-w1:REG-R2-001, r2-review-regression-w3:RG-001.
+2. Re-dispatch to the same save_result_to loses one dispatch's usage: r2-review-logic-w3:LG-002, r2-review-logic-w8:LG-001, r2-review-security-code-w3:SEC-003.
+3. UNREADABLE_INPUT false positives on clean or defect prose: r2-review-logic-w4:LG-001, r2-review-logic-w5:LG-001, r2-review-logic-w9:LG-001.
+4. renderSpendMarkdown keeps a stale Token spend section on re-ingest: r2-review-logic-w5:LG-004, r2-review-logic-w9:LG-002.
+5. Session tracker retains whole keryx review arguments and rescans them: r2-review-performance-w1:PERF-R2-002, r2-review-performance-w4:PF-001.
+6. Any tool call mentioning keryx review is trusted as the session's own command/output: r2-review-logic-w5:LG-003, r2-review-security-code-w4:SC-001, r2-review-security-code-w1:SEC-R2-001 (its second half).
+7. Fix slice roster drops content routing (security reviewer): r2-review-regression-w5:RG-001, r2-review-security-code-w10:SEC-001 (related, distinct: r2-review-security-code-w10:SEC-002).
+8. screenedAs reviewer + bare display id fallback closes other waves' findings: r2-review-security-code-w3:SEC-001, r2-review-security-code-w5:SEC-R2-001, r2-review-security-code-w8:SEC-002.
+Overlap (not duplicates): r2-review-security-code-w1:SEC-R2-002 and r2-review-security-code-w4:SC-001 both rely on closedAt being the max over all roots when no package is chosen (completion-gate.ts:324).
+
+History read: git log origin/main..HEAD -- src (subjects only, no bodies), git show f6d9e21c4, git show origin/main:src/review/ledger.ts.

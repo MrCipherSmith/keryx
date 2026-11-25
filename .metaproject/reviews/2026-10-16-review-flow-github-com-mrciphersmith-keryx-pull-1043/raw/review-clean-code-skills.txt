@@ -1,0 +1,222 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "summary": "Skill-text pass over slices 03, 06, 07. Shared law 4 is byte-identical in all 23 reviewer SKILL.md files in both trees and the .metaproject and bundled mirrors are in sync. The remaining problems are in how the new premise step is wired into the orchestrators: the operator-decision recording instruction cannot be executed by an agent outside keryx shell, and job-orchestrator's first-round ingest never takes the premises.",
+  "slices": ["slice-03", "slice-06", "slice-07"],
+  "findings": [
+    {
+      "id": "CC-001",
+      "severity": "major",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": 1129,
+      "quote": "record the answer with `keryx review decide-premise --package <package> --finding <id> --answer uphold|dismiss --reason \"<their words>\"`",
+      "problem": "Five skills tell the agent to ask the operator (card in keryx shell, the host's question tool elsewhere) and then itself record the answer with `keryx review decide-premise ... --reason \"<their words>\"`. That command is an operator command that refuses when stdin or stdout is not a TTY (src/commands/review-operator.ts:9-10: \"an agent's shell cannot answer for the operator\"), and the same file's Hosts table lists it among the commands the operator runs in their own terminal, with the rule \"never write an operator quote yourself\". Outside keryx shell the two instructions contradict.",
+      "impact": "Trigger: a round on Claude Code, Codex or any non-shell host with a challenged/owner-decision finding. The operator answers the question tool, the agent runs decide-premise, the CLI refuses (non-TTY), no decision is recorded, and readiness and the flow review gate keep failing on a finding the operator already answered. The only ways out are the agent writing the operator's words by some other path, or asking the operator again for a terminal command.",
+      "suggested_fix": "Outside keryx shell, say what the Hosts table says for every other operator decision: give the operator the exact `keryx review decide-premise ...` command to run in their own terminal and wait. Keep the card for keryx shell. Use the question tool only to present the question, not to record the answer. State it once in review-orchestrator Wave D and point the other four sites at it.",
+      "evidence": "src/commands/review-operator.ts:6 and :9-10 (TTY refusal); review-orchestrator/SKILL.md Hosts table, Operator decisions bullet (decide-premise listed as a terminal command, 'never write an operator quote yourself'); Wave D bullet 3 (line 1129) says 'the host's question tool elsewhere' and then 'record the answer with'.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "decide-premise-agent-cannot-record",
+      "class_scope": {
+        "sites": [
+          ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md:1129",
+          ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md:277",
+          ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md:440",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md:1279",
+          ".metaproject/skills/gdskills/orchestration/feature-dev/SKILL.md:42",
+          ".metaproject/skills/gdskills/orchestration/feature-dev/SKILL.md:116",
+          ".metaproject/skills/gdskills/review/review-pr-feedback/SKILL.md:368",
+          "src/gdskills/bundled/skills/** : the same seven sites in the byte-identical mirror files"
+        ],
+        "enumeration_method": "keryx ctx rg for 'decide-premise' and 'review_decide_premise' over .metaproject/skills/gdskills and src/gdskills/bundled/skills; the flow-orchestrator Phase 1 and feature-dev Phase 1 sites ask the operator without a package and need no command, so the contradiction is at the five that record (orchestrator Wave D, flow-orchestrator step 6, job-orchestrator loop, feature-dev Phase 7, review-pr-feedback rule 7); mirrors compared with cmp, identical."
+      }
+    },
+    {
+      "id": "CC-002",
+      "severity": "major",
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      "line": 1149,
+      "quote": "--verifications <path/to/verifications.json> --verification-mode annotate \\\n  --refuted <path/to/refuted.json> \\",
+      "problem": "Only the fix-loop ingest in job-orchestrator gained `--premises <file>`. The round-1 sequence it calls the 'FULL 2.6.1 sequence' (Step 7 'verification is part of the round', Step 8 'ingest the round', and the completion-gate table row 'verification stats exist') never mentions Wave D or `--premises`. The fix loop then tells the agent to exclude findings 'review-premise holds', but a round-1 ingest without premises holds nothing.",
+      "impact": "Trigger: a job whose first review round surfaces a major finding whose premise is wrong. Step 8 ingests without premises, so no claim is stored, nothing is held, and step 2.6's blocker/major set goes into the fix prompt unfiltered: the exact path of the case this PR exists for. The held-finding exclusion added to the loop is dead for round 1.",
+      "suggested_fix": "Add Wave D to Step 7 ('review-orchestrator runs review-premise after the verifier'), add `--premises <path/to/premises.json>` to the Step 8 ingest command, and add a row for premise verdicts to the completion-gate table, mirroring what the fix-loop hunk did.",
+      "evidence": "job-orchestrator/SKILL.md 1141-1157 (Step 7 and Step 8, unchanged), 994-1000 (gate table, unchanged); the changed ingest is the loop one at ~1308 with `--premises`.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "job-orchestrator-round1-ingest-no-premises",
+      "class_scope": {
+        "sites": [
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md:1141-1145",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md:1149-1156",
+          ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md:1000",
+          "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md (identical mirror)"
+        ],
+        "enumeration_method": "keryx ctx rg for 'review ingest', '--verifications' and 'verifier' in job-orchestrator/SKILL.md (21 matches); only the loop ingest at ~1308 carries --premises. flow-orchestrator, feature-dev and review-pr-feedback contain no ingest command, so they have no equivalent site."
+      }
+    },
+    {
+      "id": "CC-003",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+      "line": 112,
+      "quote": "| **Read-only.** Run nothing but `git log`, `git blame` and `git show`, and read files. |",
+      "problem": "Shared law 4 (added to 23 reviewers) and review-premise's Step 3 / question 1 tell the reader to use `git log -L`, `git blame` and `git show` to read the reason behind a choice. The orchestrator's own rule says 'Reviewers are read-only: they read the diff and the files and run no command' (SKILL.md:110), review-clean-code says 'a read-only child has no shell, so run no git command' two paragraphs above its new law 4 (SKILL.md:74 vs :89), and review-verifier notes a keryx shell child has no shell. Only the orchestrator, the verifier and one testing reviewer run commands, and the premise payload has no equivalent of `verify-run` for history.",
+      "impact": "Trigger: any read-only child, including the premise judge on keryx shell, applying law 4. It cannot read a commit message or blame, so the 'commit giving a reason' signal is silently unavailable and the judge decides on comments and siblings only, or breaks read-only to get it. Within review-clean-code the two paragraphs contradict.",
+      "suggested_fix": "Either have the orchestrator pre-compute history for the sites (a `git log -L`/blame excerpt saved under the package and passed in context_files, like verify-run output) and word law 4 as 'the comment, the supplied history, the sibling', or declare git read commands allowed for review-premise in its payload `allowed_tools`. Reconcile the review-clean-code line 74 sentence with law 4.",
+      "evidence": "review-orchestrator/SKILL.md:110; review-clean-code/SKILL.md:74 and :89; review-premise/SKILL.md:73-76 and :112; reviewer-input.schema.json allowed_tools is read-only or run-tests.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "law4-git-for-read-only-reviewers"
+    },
+    {
+      "id": "CC-004",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": 134,
+      "quote": "- **Early verdict.** When every reviewer and the verifier are done, save every verifier pass",
+      "problem": "Wave D was added to Round plan step 8, Step 10b, the flag table and 'How to spawn', but the surrounding text it must agree with was not touched: Control 'Waves' still says 'A/B/C' (line 132); 'Early verdict' still says the verdict goes to the operator when reviewers and verifier are done, before Wave D (line 134); Step 13 still counts 'dropped by pre-filter, refuted by the verifier, retained' while the Stage counts section now adds premise verdicts (line 91); the plan bridge ids stay `step-0`...`step-14` and Step 6a's 'steps 8-10 become completed' has no id for 10b (lines 105, 120). Wave D also says 'once after the last verifier pass', which has no referent in a round where no blocker/major started a verifier.",
+      "impact": "Trigger: a reader following Control or Early verdict literally gives the operator a verdict that counts a challenged finding as an open blocker, and a minor-only round has no stated moment for Wave D. Maintenance cost only (the Round plan order 8 then 9 is correct), hence minor.",
+      "suggested_fix": "Name Wave D in the Waves and Early verdict bullets ('after Wave D, or after the last reviewer when no verifier ran'), add premise verdicts to Step 13, and give Step 10b a plan id (or fold it into step-10) in Step 6a and item 0.",
+      "evidence": "review-orchestrator/SKILL.md lines 58, 88, 91, 105, 120, 132, 134 and Wave D at 1123-1130.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "wave-d-not-propagated-to-control",
+      "class_scope": {
+        "sites": [
+          "review-orchestrator/SKILL.md:91",
+          "review-orchestrator/SKILL.md:105",
+          "review-orchestrator/SKILL.md:120",
+          "review-orchestrator/SKILL.md:132",
+          "review-orchestrator/SKILL.md:134",
+          "review-orchestrator/SKILL.md:1127"
+        ],
+        "enumeration_method": "keryx ctx rg for 'Wave C', 'A/B/C', 'step-14', 'Early verdict' in review-orchestrator/SKILL.md and SKILL.detail.md (detail has no premise mention)"
+      }
+    },
+    {
+      "id": "CC-005",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+      "line": 117,
+      "quote": "| **An external finding is held, never dismissed.** | A human asked; the operator answers them. |",
+      "problem": "Rules about external (PR-comment) findings do not fit together. The premise skill says an external finding is 'held, never dismissed' but its verdict table still lets it be `downgraded`, and Wave D includes external findings in the severity-lowering path. review-pr-feedback rule 3 says 'Never lower a comment's severity', while rule 7 now hands the same comments to a judge that may lower it. Rule 7 also gives no verdict for a held comment the operator dismisses: Step 10's reply pass needs one of the listed verdicts, and none of them (disagree needs a recorded decision, not-reproducible says the path does not exist) is named. The premise skill's Step 1 and 'Never with findings it raised' guard a case that cannot occur, since the judge never adds findings.",
+      "impact": "Trigger: an external comment judged `downgraded` or dismissed by the operator. The reader cannot tell whether the downgrade applies, or what the reply pass should say for a dismissal; two readers will pick differently.",
+      "suggested_fix": "State that an external finding can only be upheld, challenged or owner-decision (no downgrade), and map an operator dismissal to a named verdict (for example `disagree`, citing the operator's recorded decision). Drop or reword the 'findings you raised yourself' clause.",
+      "evidence": "review-premise/SKILL.md verdict table and Iron Laws; review-pr-feedback/SKILL.md rules 3 and 7, Step 10; review-orchestrator Wave D bullet 1.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "external-finding-premise-semantics"
+    },
+    {
+      "id": "CC-006",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+      "line": 277,
+      "quote": "**A flow whose source is a finding** — a follow-up issue filed from a review, or an external review comment — is a premise to check",
+      "problem": "The new Phase 1 paragraph sits at the end of the section titled 'A verification step in the plan is a task, not a sentence', after the gate-scope bullets, so it reads as part of that section. It also does not say how to build the input review-premise needs (its contract requires findings with id and reviewer, plus `source: follow-up-issue|external-comment`), and it asks the operator without a review package, so the `decide-premise --package` used elsewhere does not apply; it only says 'journal the answer'. The same text is repeated in feature-dev Phase 1.",
+      "impact": "Maintenance cost: the reader has to infer the dispatch payload and where the answer lives. No runtime path is named.",
+      "suggested_fix": "Move it under its own heading before 'Then freeze and start', say to pass `source` and a synthesised finding (id, reviewer = the issue or comment author, claim, file, quote), and state that the decision is journalled rather than recorded with decide-premise.",
+      "evidence": "flow-orchestrator/SKILL.md 247-298 hunk; review-premise/SKILL.md Input Contract table.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "flow-source-finding-placement"
+    },
+    {
+      "id": "CC-007",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+      "line": 1279,
+      "quote": "UNRESOLVED_FINDINGS = all blocker + major findings from step 2.6, never one review-premise holds   # held (challenged/owner-decision): ask the operator its question with its options",
+      "problem": "DRY and structure. The same instruction (a held finding is not fixed; ask the operator its question with its options through the card or the question tool; record it with decide-premise; only an upheld one proceeds) is restated in five places with three different wordings. In job-orchestrator it is a 60-word trailing comment on a pseudo-code assignment, where the assignment expression itself now contains prose ('never one review-premise holds').",
+      "impact": "Cost to whoever edits it next: a fix to the wording (for example the CC-001 correction) has to be applied at five sites in each of two mirrored trees, and the five wordings already differ ('their words', 'a dispatched run leaves it held', 'card ... elsewhere the question tool').",
+      "suggested_fix": "Keep one full statement in review-orchestrator Wave D and make the others one-line pointers ('held findings: see review-orchestrator Wave D'). In job-orchestrator keep the pseudo-code assignment executable (`... AND NOT held`) and move the explanation to a sentence below the block.",
+      "evidence": "review-orchestrator/SKILL.md:1129; flow-orchestrator:440; job-orchestrator:1279; feature-dev:116; review-pr-feedback:368.",
+      "confidence": "high",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "held-finding-instruction-duplicated"
+    },
+    {
+      "id": "CC-008",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/review/review-layout/SKILL.md",
+      "line": 124,
+      "quote": "numbers, code, phone numbers, and a chart's time axis unless the product decides",
+      "problem": "The new 'does not mirror' bullet is attributed to Material Bidirectionality and Apple HIG, and under law 4 it tells reviewers a forced `dir=\"ltr\"` is 'expected, not a defect'. Media controls, numbers and code are well established. 'A chart's time axis' is the one entry I could not confirm from the text: the platform guidance I know recommends mirroring time-based charts for RTL locales, which is the opposite, and the 'unless the product decides otherwise' hedge suggests the author was unsure.",
+      "impact": "No named trigger from the diff, so this is an observation: a reviewer following it could suppress a real finding on an RTL chart.",
+      "suggested_fix": "Would be settled by quoting the exact Material or HIG passage on chart axes in RTL. If it cannot be quoted, drop the chart clause.",
+      "evidence": "review-layout/SKILL.md:122-125.",
+      "confidence": "low",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "layout-chart-axis-claim"
+    },
+    {
+      "id": "CC-009",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "line": 1,
+      "quote": null,
+      "problem": "The diff carries reflow-only changes unrelated to the intent: shared laws 1-3 are unwrapped to one line in about 18 files (reasonable if a test compares the three laws across files verbatim, but it buries the one real change per file), and several unrelated paragraphs are re-wrapped too (review-pr-contract intro, review-regression 'The one question', review-testing-practices intro, flow-orchestrator gate bullets, review-pr-feedback rule 1). The section 'Everything written to GitHub is brief' is moved from SKILL.md into SKILL.detail.md as a condensed pointer.",
+      "impact": "Review noise, not a defect; the move probably offsets the size the new Wave D adds, but nothing in the flow intent mentions it.",
+      "suggested_fix": "Keep the law reflow (state why), revert the unrelated re-wraps, and note the move in the changelog or the commit message.",
+      "evidence": "slice-03 lines 182-201; slice-06 lines 113-125 and 1308-1328; slice-07 lines 676-678, 766-768, 1059-1061, 1261-1263.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "reflow-noise"
+    },
+    {
+      "id": "CC-010",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+      "line": 80,
+      "quote": null,
+      "problem": "review-premise returns a `keryx:premises` block, not a REVIEW_RESULT. review-orchestrator 'How to spawn' says a reply without a REVIEW_RESULT block is BLOCKED, requires `save_result_to: <package>/raw/<reviewer>.txt` and one driver per dispatch, and says only reviewer replies belong in raw/. Wave D says only 'save its claims object unchanged to a file'. The verifier has the same shape and is the precedent, but Wave D does not say which of those rules apply to this dispatch (path of the saved reply, driver file, dispatch-check, ledger build).",
+      "impact": "Observation: would be settled by a sentence in Wave D naming the raw path or confirming the REVIEW_RESULT/driver rules do not apply to the premise judge. Whether `ledger build` sets the reply aside or reports a gap depends on code outside these slices.",
+      "suggested_fix": "Say where the reply is saved and that it is exempt from the REVIEW_RESULT and driver rules, as the verifier is.",
+      "evidence": "review-orchestrator/SKILL.md 'How to spawn' bullets 4-6 and Wave D; review-premise Output Contract.",
+      "confidence": "low",
+      "reviewer": "review-clean-code",
+      "dedupe_key": "premise-reply-not-review-result"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 2, "minor": 5, "info": 3 }
+}
+```
+
+## Clean Code Review
+
+### Review Scope
+- PR keryx #1043 at head c144874f, slices slice-03, slice-06, slice-07 (skill text, `.metaproject/skills/gdskills` and the byte-identical `src/gdskills/bundled/skills` mirror).
+- Intent read: `.metaproject/flows/459-2026-10-16-review-premise/description.md`.
+
+### Summary
+Shared law 4 is identical in all 23 reviewer files in both trees (checked by grep and uniq, mirrors compared with cmp). It is absent from review-premise, review-verifier, review-pr-feedback and the legacy `code-*` profiles, which have no "Shared laws" block, so that is consistent. The two majors are wiring defects in the new step: the operator-decision recording instruction cannot be executed by an agent on non-shell hosts (the CLI refuses non-TTY), and job-orchestrator's round-1 ingest never takes premises, so the held-finding exclusion in its fix loop has nothing to exclude. The rest is maintenance-level.
+
+### Stats
+- blocker: 0  |  major: 2  |  minor: 5  |  info: 3
+
+### Findings
+
+#### Functions / Structure
+- CC-001 (major) decide-premise recorded by the agent against the TTY-only CLI and the Hosts table.
+- CC-002 (major) job-orchestrator round-1 ingest and Step 7 omit Wave D and `--premises`.
+- CC-004 (minor) Wave D not propagated to Control, Early verdict, Step 13, plan ids.
+- CC-006 (minor) flow-orchestrator source-is-a-finding paragraph misplaced and underspecified.
+
+#### Comments / Instruction consistency
+- CC-003 (minor) law 4 and premise's Read-only rule use git commands that read-only children cannot run; review-clean-code contradicts itself at lines 74 and 89.
+- CC-005 (minor) external-finding rules conflict (held never dismissed vs downgrade; review-pr-feedback rule 3 vs rule 7; no verdict for operator dismissal).
+
+#### DRY
+- CC-007 (minor) the held-finding instruction is stated five times with three wordings, one as a trailing comment on a pseudo-code assignment.
+
+#### Info
+- CC-008 chart time-axis claim unverifiable; CC-009 reflow and moved section noise; CC-010 premise reply is not a REVIEW_RESULT.
+
+### Clean Areas
+- Law 4 wording identical across all reviewers and mirrors; `review-security-code` now says "carries a fifth".
+- `.metaproject` and bundled copies of every changed skill are byte-identical.
+- review-premise verdict table, can-only-lower rule, tier (`deep`) and orchestrator tier text agree with each other; its description, triggers and scope boundaries are consistent with the orchestrator flag table row.
+- Naming, error handling and SOLID checks do not apply to this skill-text pass beyond the above.

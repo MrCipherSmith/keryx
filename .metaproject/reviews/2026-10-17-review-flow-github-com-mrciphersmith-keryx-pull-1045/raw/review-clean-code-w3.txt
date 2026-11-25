@@ -1,0 +1,193 @@
+# review-clean-code (slice-04)
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-clean-code",
+  "slices": [
+    "slice-04"
+  ],
+  "summary": "slice-04 (src/review completion-gate, coverage, dispatch-usage, ledger, locate, managed, mutate, readiness, research, types): no SRP/SOLID blockers. 11 minor findings (indentation slip, orphaned doc comment, duplicated regex/expressions/magic strings, over-long functions, loose union return type) and 2 info.",
+  "findings": [
+    {
+      "id": "CC-1",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "line": null,
+      "quote": "const assigned = raw.assignedSlices ?? (mine.length === 1 && input.payloadDispatchCounts?.[reviewer] === 1 ? input.payloadSlices[reviewer] : undefined);",
+      "problem": "The edit that removed the `closed` const left this statement indented 16 spaces inside a loop body that otherwise uses 8.",
+      "impact": "Misleading structure in a dense block; formatter/lint drift.",
+      "suggested_fix": "Re-indent to match the surrounding `for` body.",
+      "evidence": "Diff slice-04 ledger.ts hunk 485-587: the `-const assigned` line is replaced by a `+                const assigned` line.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-2",
+      "severity": "minor",
+      "file": "src/review/locate.ts",
+      "line": null,
+      "quote": "/** How a finding's `line` was arrived at. */",
+      "problem": "The new `UnlocatableKind` doc block and type were inserted after the existing doc comment, so `How a finding's line was arrived at` now sits above `UnlocatableKind` instead of `LocatorRecord` (two stacked doc comments).",
+      "impact": "The comment of `LocatorRecord` is lost and `UnlocatableKind` carries a wrong description in IDE hovers.",
+      "suggested_fix": "Move the `How a finding's line was arrived at` comment to directly above `export type LocatorRecord`.",
+      "evidence": "locate.ts line 52 followed by the new block at lines ~53-60 and `export type UnlocatableKind`.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-3",
+      "severity": "minor",
+      "file": "src/review/coverage.ts",
+      "line": null,
+      "quote": "const { defaultGitRunner, resolveBase } = await import(\"./prior-round\");",
+      "problem": "`packageDiffStats` (~35 lines) parses the manifest, finds the git top level, resolves the base and runs the diff, with a dynamic import inside a branch and a `where` closure re-evaluated at four error sites.",
+      "impact": "Several responsibilities and levels of abstraction in one function; the dynamic import hides a dependency (and a possible cycle) from the module header.",
+      "suggested_fix": "Split into `readTarget(manifest)` and `resolveDiffBase(...)`; import `./prior-round` statically, or comment why it must be lazy.",
+      "evidence": "coverage.ts packageDiffStats; four `return { error: ... ${where(...)} }` sites.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-4",
+      "severity": "minor",
+      "file": "src/review/coverage.ts",
+      "line": null,
+      "quote": "const where = (base: string | undefined): string => `cwd ${cwd ?? options.packageDir}, base ${base ?? \"unresolved\"}, head ${head ?? \"unrecorded\"}`;",
+      "problem": "The two early-return error messages repeat the argument `recordedBase ?? (kind === \"pr\" ? undefined : ref)` verbatim.",
+      "impact": "Duplicated expression; a change to base derivation must be made in two places.",
+      "suggested_fix": "Compute `const nominalBase = recordedBase ?? (kind === \"pr\" ? undefined : ref)` once and reuse it.",
+      "evidence": "The head-undefined and cwd-undefined returns in packageDiffStats.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-5",
+      "severity": "minor",
+      "file": "src/review/coverage.ts",
+      "line": null,
+      "quote": "? `Dispatch them, or have the operator leave them out (${decisionWriters(\"reviewer-override\", path.relative(process.cwd(), options.packageDir ?? \".\") || \".\")})`",
+      "problem": "The `decisionWriters(\"reviewer-override\", path.relative(process.cwd(), dir) || \".\")` expression already exists in `skipDecision`; it is now copied into the missing-reviewers message, with a nested ternary inside a template string.",
+      "impact": "Duplicated path-formatting logic; hard to read; `process.cwd()` is read implicitly deep inside a pure-looking helper.",
+      "suggested_fix": "Extract `overrideWriters(packageDir)` used by both sites.",
+      "evidence": "coverage.ts skipDecision `const writers = decisionWriters(...)` and this message.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-6",
+      "severity": "minor",
+      "file": "src/review/readiness.ts",
+      "line": null,
+      "quote": "const listed = new Set([...raw.matchAll(/reviewer:\\s*(\\S+)\\s*\\n\\s*status:\\s*(\\S+)/g)].map((match) => match[1] as string));",
+      "problem": "The same regex is now written twice in `coverageMdCheck` (once for `claimed`, once for `listed`), and the second one captures an unused status group.",
+      "impact": "DRY violation; the two parses can drift apart.",
+      "suggested_fix": "Parse once: `const entries = [...raw.matchAll(RE)].map(m => ({ reviewer: m[1]!, status: m[2]! }))`, then derive `claimed` and `listed`.",
+      "evidence": "readiness.ts coverageMdCheck.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-7",
+      "severity": "minor",
+      "file": "src/review/mutate.ts",
+      "line": null,
+      "quote": "return (await readdir(dir)).some((n) => /^mutation-\\d+\\.json$/.test(n));",
+      "problem": "`packageHasMutationRecord` repeats the `/^mutation-\\d+\\.json$/` literal and the exists/readdir preamble of `doneMutantIds` (and `writeMutationEvidence` builds the same pattern from `stem`).",
+      "impact": "Three copies of one file-name rule.",
+      "suggested_fix": "Export a `MUTATION_RECORD = /^mutation-(\\d+)\\.json$/` constant and a `mutationRecordNames(dir)` helper used by all three.",
+      "evidence": "mutate.ts packageHasMutationRecord, doneMutantIds.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-8",
+      "severity": "minor",
+      "file": "src/review/managed.ts",
+      "line": null,
+      "quote": "await writeFileAtomic(path.join(packageDir, \"report.md\"), renderReport(report, input.mode) + (report.includes(\"\\n## Token spend\\n\") ? \"\" : renderSpendMarkdown(input.research)));",
+      "problem": "The `## Token spend` heading is a magic string here and again inside `renderSpendMarkdown`; the write line also mixes rendering, de-duplication and I/O in one 150-character expression.",
+      "impact": "If the heading changes in one place the duplicate guard silently stops working.",
+      "suggested_fix": "Export a `SPEND_HEADING` constant from dispatch-usage.ts, or let `renderSpendMarkdown(research, existingReport)` return \"\" itself when the report already holds it.",
+      "evidence": "managed.ts report.md write vs dispatch-usage.ts renderSpendMarkdown.",
+      "confidence": "high",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-9",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "line": null,
+      "quote": "function runUsage(mine: readonly RawFile[]): Record<string, unknown> | \"unknown\" {",
+      "problem": "`runUsage` returns either a loose `Record<string, unknown>` or the string literal `\"unknown\"`, and the caller stores it into an untyped `run` record. The sibling `UsageTotals` / `DispatchUsage` types are not reused.",
+      "impact": "Union of unrelated shapes forces every reader to type-test; no compile-time contract for `dispatch.runs[].usage`.",
+      "suggested_fix": "Define `type RunUsage = { tokens_in: number; tokens_out: number; model?: string; dispatches: number; unknown: number }` and return `RunUsage | \"unknown\"` from an exported type.",
+      "evidence": "ledger.ts runUsage and `run.usage = runUsage(mine)`.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-10",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "line": null,
+      "quote": "const UNREADABLE_INPUT = [",
+      "problem": "`unreadableInputClaim` decides a reviewer did not finish by regex over free-text `summary`, with unexplained magic bounds (`{0,80}`, `slice(0, 120)`) and two long composed patterns; the helper is declared above the `ParsedResult` type it takes and relies on the later `text` const.",
+      "impact": "Hard to read and to reason about; false positives (e.g. a summary saying the payload was not found in a sibling file by design) silently turn a finished review into `incomplete`.",
+      "suggested_fix": "Name the bounds as constants with a comment on the false-positive trade-off, add table-driven positive and negative cases next to the helper, and move it below the `text` helper.",
+      "evidence": "ledger.ts lines 14-34.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-11",
+      "severity": "minor",
+      "file": "src/review/completion-gate.ts",
+      "line": null,
+      "quote": "const roots = [cwd, ...extraRoots.filter((r) => path.resolve(r) !== path.resolve(cwd))];",
+      "problem": "`findReviewGateState` now scans roots, resolves the active pointer, picks the newest candidate, applies the closed rule and builds the signature (about 50 lines, several levels of abstraction). The cwd is also removed in `sessionReviewRoots` (`roots.delete(path.resolve(cwd))`), so the second filter is redundant, and the pointer read is one dense `.then(...).catch(...)` line.",
+      "impact": "Harder to test and to change; redundant normalisation in two places.",
+      "suggested_fix": "Extract `pickActivePackage(roots, candidates, since)` and drop one of the two cwd filters (keep it in the function that is public API).",
+      "evidence": "completion-gate.ts findReviewGateState and sessionReviewRoots.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-12",
+      "severity": "info",
+      "file": "src/review/git-fixture.test-helpers.ts",
+      "line": null,
+      "quote": "const EMAIL = \"200531777+MrCipherSmith@users.noreply.github.com\";",
+      "problem": "The test helper hard-codes the maintainer's GitHub noreply address, and exports a bare `git` function name that shadows the concept across test files.",
+      "impact": "A personal identifier is spread into tests; the name is generic and easy to collide with other helpers.",
+      "suggested_fix": "Name it `FIXTURE_EMAIL` with a comment that the commit hook requires this identity, and export `gitIn` / `runGit`.",
+      "evidence": "git-fixture.test-helpers.ts lines 7 and 10.",
+      "confidence": "medium",
+      "reviewer": "review-clean-code"
+    },
+    {
+      "id": "CC-13",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "line": null,
+      "quote": "function coverageFromResearch(research: unknown): ReviewCoverageEntry[] {",
+      "problem": "The nested `unknown` narrowing (`research.dispatch.runs`) is hand-rolled here; every non-`complete`/`incomplete` status, including a typo, becomes `failed: not run`. `normalizeCoverage` also gained a third optional `research?: unknown` parameter instead of a typed value.",
+      "impact": "Silent mapping of unknown statuses; weak typing at an internal boundary.",
+      "suggested_fix": "Pass the already-typed dispatch runs, and map unrecognised statuses explicitly (skip or flag), not into `failed`.",
+      "evidence": "managed.ts coverageFromResearch / normalizeCoverage.",
+      "confidence": "low",
+      "reviewer": "review-clean-code"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 11,
+    "info": 2
+  }
+}
+```
+
+## Summary
+
+Slice slice-04 reviewed in full. No blocker or major. Minors: CC-1 re-indent in ledger.ts; CC-2 misplaced doc comment in locate.ts; CC-3/CC-4/CC-5 packageDiffStats and message duplication in coverage.ts; CC-6 duplicated regex in readiness.ts; CC-7 duplicated file-name pattern in mutate.ts; CC-8 magic heading in managed.ts; CC-9 loosely typed run usage; CC-10 regex heuristic with magic bounds; CC-11 findReviewGateState size and redundant cwd filter. Info: CC-12, CC-13.

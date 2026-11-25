@@ -1,0 +1,1610 @@
+[
+  {
+    "file": "scripts/benchmark/long-runner-turn.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/agents/generate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "verifyAgents"
+    ]
+  },
+  {
+    "file": "src/agents/verify.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "verifyAgents"
+    ]
+  },
+  {
+    "file": "src/bus/delivery.integration.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/cli-reference-coverage.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "skillsCommand"
+    ]
+  },
+  {
+    "file": "src/cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "OPERATOR_COMMANDS"
+    ]
+  },
+  {
+    "file": "src/commands/agent-approval-binding.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-bus-notification.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-destructive-gate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-fewer-prompts.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-lifecycle-hooks.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-orchestrator-log.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/commands/agent-permission-mode.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-question-axis.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "AutomaticReviewRun"
+    ]
+  },
+  {
+    "file": "src/commands/agent-review-gate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-rewind-seam.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-task-notification.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "RunAgentTurnOptions",
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-tool-call-budget.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-trust-orchestration.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent-untrusted-batch.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.context-guard.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.error-hint.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.host-contracts.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.overflow-retry.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.recovery.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.repeat-guard-prune.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.slate-trail.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/agent.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "AutomaticReviewRun"
+    ]
+  },
+  {
+    "file": "src/commands/agent.working-memory.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/approvals.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "GROUP_SUBCOMMANDS"
+    ]
+  },
+  {
+    "file": "src/commands/automatic-review.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "AutomaticReviewRun"
+    ]
+  },
+  {
+    "file": "src/commands/flow-check-ac.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowServiceDeps"
+    ]
+  },
+  {
+    "file": "src/commands/flow-check-hygiene.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/commands/flow-complete-uncommitted.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/commands/flow-freeze-kind-prompt.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/commands/flow-sensitivity.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/commands/flow-status-uncommitted.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/commands/governance.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowServiceDeps"
+    ]
+  },
+  {
+    "file": "src/commands/import-only.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/mcp-tool-surface.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/mcp-untrusted.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/memory-orchestrator-log.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/commands/operator-confirm-other-tools.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "writeCleanReviewPackage"
+    ]
+  },
+  {
+    "file": "src/commands/operator-confirm-tools.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "isUnattendedExcludedTool",
+      "unattendedRefusal"
+    ]
+  },
+  {
+    "file": "src/commands/permissions-command.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "GROUP_SUBCOMMANDS"
+    ]
+  },
+  {
+    "file": "src/commands/review-ac-check-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-arbiter-config.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-arbiter-eval.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-arbiter.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-blast-radius-base.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-chunks.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-ci-triage-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-comments-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-conform-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-floor-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-help.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "CREATE_FLAGS",
+      "printReviewHelpFor"
+    ]
+  },
+  {
+    "file": "src/commands/review-jev-comments-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-jev-contract-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-jev-docs-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-jev-edit-guard.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-jev-profile-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-jev-risk-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-jev-rules-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-jev-rules-discovery.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-jev-scenarios-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-jev-select-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-jev-triage-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-layers.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-learn-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-learn-reviewer-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-ledger.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "recordOperatorDecision"
+    ]
+  },
+  {
+    "file": "src/commands/review-parity-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-plan.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "printReviewHelpFor"
+    ]
+  },
+  {
+    "file": "src/commands/review-required-package.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-result-contract.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-revision-operand.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-run.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-slice-paths.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/review-slice.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/review-tty-refusal.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/commands/routing-baseline.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "BUNDLED_GDSKILLS"
+    ]
+  },
+  {
+    "file": "src/commands/routing-corpus.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "RANK1_FIRST",
+      "RANK1_TOTAL",
+      "ROUTING_CORPUS"
+    ]
+  },
+  {
+    "file": "src/commands/routing-entrypoint-lifecycle.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "BUNDLED_GDSKILLS"
+    ]
+  },
+  {
+    "file": "src/commands/schedule-review.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/schedule-security.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/schedule-tools.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "unattendedRefusal"
+    ]
+  },
+  {
+    "file": "src/commands/shell-task-tools.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "RunAgentTurnOptions",
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/commands/skills-install-route.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "skillsCommand"
+    ]
+  },
+  {
+    "file": "src/commands/skills-install-warnings.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "skillsCommand"
+    ]
+  },
+  {
+    "file": "src/commands/skills-remove.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "knownSubcommandsFor"
+    ]
+  },
+  {
+    "file": "src/commands/skills-route.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "BUNDLED_GDSKILLS"
+    ]
+  },
+  {
+    "file": "src/commands/trigger-dispatch.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowServiceDeps"
+    ]
+  },
+  {
+    "file": "src/commands/trigger-reachability.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "BUNDLED_GDSKILLS"
+    ]
+  },
+  {
+    "file": "src/commands/trigger-review.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/commands/trigger-unattended.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "unattendedRefusal"
+    ]
+  },
+  {
+    "file": "src/commands/verify-kind-creation-paths.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/decisions/backfill.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "GROUP_SUBCOMMANDS"
+    ]
+  },
+  {
+    "file": "src/decisions/decisions.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/decisions/own-answer.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/decisions/review-fixes.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/decisions/round2.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/decisions/round3.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/decisions/round4.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/flow/ac-kinds-errors.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/ac-kinds-never-gates.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/ac-kinds.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/ac-reseal.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowServiceDeps"
+    ]
+  },
+  {
+    "file": "src/flow/ac-strict-args.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/allocation.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowServiceDeps"
+    ]
+  },
+  {
+    "file": "src/flow/attempts.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowServiceDeps"
+    ]
+  },
+  {
+    "file": "src/flow/check-complete.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "writeCleanReviewPackage"
+    ]
+  },
+  {
+    "file": "src/flow/completion-attempts.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "writeCleanReviewPackage"
+    ]
+  },
+  {
+    "file": "src/flow/completion-never-stuck.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "writeCleanReviewPackage"
+    ]
+  },
+  {
+    "file": "src/flow/confirm-floors.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "unattendedRefusal"
+    ]
+  },
+  {
+    "file": "src/flow/confirm-token.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "writeCleanReviewPackage"
+    ]
+  },
+  {
+    "file": "src/flow/confirmation-backward-compat.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "writeCleanReviewPackage"
+    ]
+  },
+  {
+    "file": "src/flow/default-tasks.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "writeCleanReviewPackage"
+    ]
+  },
+  {
+    "file": "src/flow/depends-and-attempts.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/duplicate-ids.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowServiceDeps"
+    ]
+  },
+  {
+    "file": "src/flow/folder-hygiene.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "writeCleanReviewPackage"
+    ]
+  },
+  {
+    "file": "src/flow/init-tracker.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/flow/migration.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowServiceDeps"
+    ]
+  },
+  {
+    "file": "src/flow/origin-evidence.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/origin-init.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/origin-never-gates.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/origin-outcome-author.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/origin-status.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/outcome-author-init.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/outcome-author-set.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/outcome-author-status.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/outcome-author-template.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowServiceDeps"
+    ]
+  },
+  {
+    "file": "src/flow/owner-backward-compat.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "writeCleanReviewPackage"
+    ]
+  },
+  {
+    "file": "src/flow/owner-gate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "writeCleanReviewPackage"
+    ]
+  },
+  {
+    "file": "src/flow/owner-status-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "flowCommand"
+    ]
+  },
+  {
+    "file": "src/flow/owner.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowServiceDeps"
+    ]
+  },
+  {
+    "file": "src/flow/renumber-reviews.e2e.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "readReviewRounds",
+      "runReviewGate"
+    ]
+  },
+  {
+    "file": "src/flow/review-gate-coverage.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "readReviewRounds"
+    ]
+  },
+  {
+    "file": "src/flow/review-gate.e2e.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "durableExternalCommentsGate",
+      "runReviewGate"
+    ]
+  },
+  {
+    "file": "src/flow/security-gate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "writeCleanReviewPackage"
+    ]
+  },
+  {
+    "file": "src/flow/service.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "writeCleanReviewPackage"
+    ]
+  },
+  {
+    "file": "src/flow/signatures.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "writeCleanReviewPackage"
+    ]
+  },
+  {
+    "file": "src/flow/task-depends.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowServiceDeps"
+    ]
+  },
+  {
+    "file": "src/flow/task-gate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "writeCleanReviewPackage"
+    ]
+  },
+  {
+    "file": "src/flow/task-traceability.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowServiceDeps"
+    ]
+  },
+  {
+    "file": "src/flow/templates.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/gdskills/agent-catalogue-xref.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "BUNDLED_GDSKILLS"
+    ]
+  },
+  {
+    "file": "src/gdskills/catalog-frontmatter.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "BUNDLED_GDSKILLS"
+    ]
+  },
+  {
+    "file": "src/gdskills/catalog-single-source.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "BUNDLED_GDSKILLS"
+    ]
+  },
+  {
+    "file": "src/gdskills/governance/catalog-index.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/gdskills/import-skills-gate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "importProjectSkills",
+      "runSkillsImportCommand"
+    ]
+  },
+  {
+    "file": "src/gdskills/import-skills-templates.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "importProjectSkills"
+    ]
+  },
+  {
+    "file": "src/gdskills/import-skills-update.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "importProjectSkills"
+    ]
+  },
+  {
+    "file": "src/gdskills/import-skills.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "importProjectSkills"
+    ]
+  },
+  {
+    "file": "src/gdskills/install.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "removeStaleRuntimeBuilds"
+    ]
+  },
+  {
+    "file": "src/gdskills/remove-skill.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "BUNDLED_GDSKILLS"
+    ]
+  },
+  {
+    "file": "src/gdskills/review-orchestrator-preflight.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "SKILL_LENGTH_CEILINGS"
+    ]
+  },
+  {
+    "file": "src/gdskills/review-orchestrator-skill-parity.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "SKILL_LENGTH_CEILINGS"
+    ]
+  },
+  {
+    "file": "src/gdskills/reviewer-triggers.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "requiredReviewers"
+    ]
+  },
+  {
+    "file": "src/gdskills/skill-length.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "SKILL_LENGTH_CEILINGS"
+    ]
+  },
+  {
+    "file": "src/harness/flow/managed-flow-port.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowServiceDeps"
+    ]
+  },
+  {
+    "file": "src/harness/flow/parity.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowServiceDeps"
+    ]
+  },
+  {
+    "file": "src/harness/tool/builtin/shell-exec-spill.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/job/job.e2e.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "skillsCommand"
+    ]
+  },
+  {
+    "file": "src/lib/group-subcommands-flow.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "GROUP_SUBCOMMANDS"
+    ]
+  },
+  {
+    "file": "src/lib/orchestrators-inline.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "renderGdskillsCatalog"
+    ]
+  },
+  {
+    "file": "src/mcp/metaproject-orchestrator-log.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/product/bulk-budget.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "GROUP_SUBCOMMANDS"
+    ]
+  },
+  {
+    "file": "src/product/never-gates.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowServiceDeps"
+    ]
+  },
+  {
+    "file": "src/remote/telegram-permission.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/review/active-review.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/blast-radius.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "StructuredReviewFinding"
+    ]
+  },
+  {
+    "file": "src/review/bot/metrics.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/bot/post.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/bot/run.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "StructuredReviewFinding"
+    ]
+  },
+  {
+    "file": "src/review/clean-context.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/complete-coverage-gate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "readReviewRounds"
+    ]
+  },
+  {
+    "file": "src/review/complete-head-gate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/cost-cli.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/coverage-complete.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/review/coverage.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "coverageErrors",
+      "requiredReviewers"
+    ]
+  },
+  {
+    "file": "src/review/cross-family.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/dispatch-check.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "coverageErrors"
+    ]
+  },
+  {
+    "file": "src/review/dispatch.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "coverageErrors",
+      "requiredReviewers"
+    ]
+  },
+  {
+    "file": "src/review/estimate.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/evidence-level.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/filter-stats.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/harness-robustness.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "buildReviewConfirmSpecs"
+    ]
+  },
+  {
+    "file": "src/review/import-reviewers.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "importProjectSkills"
+    ]
+  },
+  {
+    "file": "src/review/ingest-locator-sha.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/ledger.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "requiredReviewers"
+    ]
+  },
+  {
+    "file": "src/review/locate-ingest.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/loop-real-path.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/loop.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/managed.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/memory-outside-stage-auto.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "computeReadiness"
+    ]
+  },
+  {
+    "file": "src/review/memory-outside-stage.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "computeReadiness",
+      "readinessItemId",
+      "waiveReadiness"
+    ]
+  },
+  {
+    "file": "src/review/mutate-not-reached.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "coverageErrors"
+    ]
+  },
+  {
+    "file": "src/review/pr-comments.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "mergeVerifications"
+    ]
+  },
+  {
+    "file": "src/review/pr-contract.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "coverageErrors",
+      "requiredReviewers"
+    ]
+  },
+  {
+    "file": "src/review/pr-replay.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "requiredReviewers"
+    ]
+  },
+  {
+    "file": "src/review/prior-round.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "computeVerdict",
+      "renderVerdict"
+    ]
+  },
+  {
+    "file": "src/review/publish-guard.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewPublishRefusal"
+    ]
+  },
+  {
+    "file": "src/review/publish.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "computeReadiness"
+    ]
+  },
+  {
+    "file": "src/review/rebuttal-citation.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/repair-ingest.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/repair.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "repairMechanicalOmissions"
+    ]
+  },
+  {
+    "file": "src/review/research.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/review-next.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/review-notes.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "findingVerdict"
+    ]
+  },
+  {
+    "file": "src/review/reviewers.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "BUNDLED_GDSKILLS"
+    ]
+  },
+  {
+    "file": "src/review/round-split.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/round-trip.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createManagedReviewPackage"
+    ]
+  },
+  {
+    "file": "src/review/second-look.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "reviewCommand"
+    ]
+  },
+  {
+    "file": "src/review/slice-routing.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "collectReviewers"
+    ]
+  },
+  {
+    "file": "src/review/verification.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "mergeVerifications"
+    ]
+  },
+  {
+    "file": "src/security/web-taint-durable-boundary.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  },
+  {
+    "file": "src/trigger/unattended.test.ts",
+    "reason": "related-test",
+    "symbols": []
+  },
+  {
+    "file": "src/tui/ac-kinds-surface.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/tui/ask-user-bridge.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/tui/flow-hygiene.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/tui/flow-inspector-interrupted.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/tui/flow-inspector-outcome-author.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/tui/flow-inspector-uncommitted.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/tui/inspector-sources.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "FlowServiceDeps"
+    ]
+  },
+  {
+    "file": "src/tui/origin-surface.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "createFlowService"
+    ]
+  },
+  {
+    "file": "src/tui/review-panel.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "ReviewDepthRow",
+      "formatReviewDepthLines",
+      "loadReviewDepth",
+      "renderReviewDepthText",
+      "renderReviewLayersText"
+    ]
+  },
+  {
+    "file": "src/tui/review-parity-visibility.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "formatReviewDepthLines",
+      "loadReviewDepth",
+      "renderReviewDepthText",
+      "renderReviewParityText"
+    ]
+  },
+  {
+    "file": "src/tui/review-readiness.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "computeReadiness",
+      "renderReadiness"
+    ]
+  },
+  {
+    "file": "src/tui/reviews-inspector.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "mountReviewsPanel"
+    ]
+  },
+  {
+    "file": "src/tui/tui-shell.test.ts",
+    "reason": "graph-consumer",
+    "symbols": [
+      "runAgentTurn"
+    ]
+  }
+]

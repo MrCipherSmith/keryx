@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-performance",
+  "wave": 7,
+  "waves": 9,
+  "slices": [
+    "slice-07"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-07",
+      "path": "/Users/Goodea/goodea/keryx/.claude/worktrees/blissful-poitras-27beb5/.metaproject/reviews/2026-10-16-review-flow-github-com-mrciphersmith-keryx-pull-1043/slices/slice-07.diff",
+      "bytes": 117703
+    }
+  ],
+  "result": "raw/review-performance-w7.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-performance/SKILL.md"
+}

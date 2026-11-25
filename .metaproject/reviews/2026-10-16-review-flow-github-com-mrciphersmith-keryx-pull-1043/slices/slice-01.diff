@@ -1,0 +1,888 @@
+--- .metaproject/core/gdskills/contracts/review-finding.schema.json
+@@ 98,184 @@
+         "evidence": {
+           "type": "string",
+           "minLength": 1,
+           "description": "The command that ran and what it returned, or the search that enumerated the sites. A verdict with nothing behind it is the operation this replaces."
+         },
+         "verifier": {
+           "type": "string",
+           "minLength": 1,
+           "description": "Who checked. Beyond the three properties AC7 names, and present because AC9 is otherwise untraceable after the fact: the merge refuses a claim whose verifier equals the finding's `reviewer`, but a record that does not say who verified cannot be audited for that rule — the same defect as `reviewer` being hardcoded to `review-orchestrator` on all 83 recorded findings."
+         }
+       },
+       "if": {
+         "required": ["method"],
+         "properties": { "method": { "const": "reasoning" } }
+       },
+       "then": {
+         "properties": { "verdict": { "const": "unverifiable" } },
+         "description": "Reasoning alone produces no new evidence, so it can never reach `confirmed` (AC7). It cannot reach `refuted` either, and that extension is deliberate: `refuted` is the only verdict with a destructive consequence, so granting it to the weakest method would reinstate review-strict with the sign flipped. Anything checkable is `site-check` or `execution`; `reasoning` is what is left when nothing was run."
+       }
+     },
++    "premise": {
++      "title": "What the premise judge found when it asked whether this finding's request is right",
++      "description": "Flow 459. Declared HERE and deliberately NOT in the bundled reviewer-finding.schema.json, on the same basis as `verification`: the reviewer that raised a finding is the one actor that may not judge its premise. The verifier asks whether the facts hold; the premise judge asks whether the request is right (an explicit override, an exemption, a sibling doing the same and accepted platform practice are all evidence that a flagged shape is a deliberate choice). `challenged` and `owner-decision` HOLD the finding: it is not an open blocker or major and is not passed to a fixer until the operator answers. The judge is delete-only: it never adds a finding, never raises a severity and never edits the finding's text; `downgraded` carries a strictly lower `severity`, which is then also the finding's own. Absent means nobody judged.",
++      "type": "object",
++      "additionalProperties": false,
++      "required": ["verdict", "judge"],
++      "properties": {
++        "verdict": { "type": "string", "enum": ["upheld", "downgraded", "challenged", "owner-decision"] },
++        "judge": { "type": "string", "minLength": 1 },
++        "model": { "type": "string", "minLength": 1 },
++        "severity": { "type": "string", "enum": ["blocker", "major", "minor", "info"], "description": "`downgraded` only: the lower severity, also the finding's own." },
++        "original_severity": { "type": "string", "enum": ["blocker", "major", "minor", "info"], "description": "`downgraded` only: what the reviewer reported." },
++        "intent_signals": {
++          "type": "array",
++          "items": {
++            "type": "object",
++            "additionalProperties": false,
++            "required": ["ref", "says"],
++            "properties": { "ref": { "type": "string", "minLength": 1 }, "says": { "type": "string", "minLength": 1 } }
++          }
++        },
++        "practice_sources": {
++          "type": "array",
++          "items": {
++            "type": "object",
++            "additionalProperties": false,
++            "required": ["name", "says"],
++            "properties": { "name": { "type": "string", "minLength": 1 }, "says": { "type": "string", "minLength": 1 } }
++          }
++        },
++        "reasoning": { "type": "string" },
++        "question": { "type": "string", "minLength": 1, "description": "`challenged` and `owner-decision`: what the operator is asked." },
++        "options": { "type": "array", "minItems": 2, "items": { "type": "string", "minLength": 1 } },
++        "operator": {
++          "type": "object",
++          "additionalProperties": false,
++          "required": ["answer", "reason", "at", "actor"],
++          "description": "The operator's answer once applied to the record (`keryx review decide-premise`).",
++          "properties": {
++            "answer": { "type": "string", "enum": ["uphold", "dismiss"] },
++            "reason": { "type": "string", "minLength": 1 },
++            "at": { "type": "string", "minLength": 1 },
++            "actor": { "type": "string", "minLength": 1 }
++          }
++        }
++      }
++    },
+     "severity": { "type": "string", "enum": ["blocker", "major", "minor", "info"] },
+     "repo": {
+       "type": ["string", "null"],
+       "description": "Which repository `file` and `line` are in. Null, the default, means the repository under review. A cross-repo claim names the producer here and pins the ref it was read at in `evidence`; without this field a finding about another service's behaviour could not say where its evidence lived, so the rule that such a claim is `info` unless it has a `file:line` at a pinned ref could not be checked by anything but the reviewer's word. Declared in BOTH this schema and skills/review/review-orchestrator/reviewer-finding.schema.json: this one is additionalProperties:false, so a finding carrying `repo` is rejected here if only the reviewer-side schema knows about it."
+     },
+     "file": { "type": ["string", "null"] },
+     "line": {
+       "title": "Where the finding points — DERIVED when the finding quotes code",
+       "description": "Reported by the reviewer only when there is nothing to quote. When `quote` is present this field is OUTPUT: `review ingest` finds the quote in `file` at the round's head and writes the line the match started on, overwriting whatever the reviewer said and recording both in `locator`. The reason is the failure it replaces — nothing compared a reported line to anything, so a number that had drifted travelled into findings.json, into the report, and into the disposition recorded against it. On a fix round the file has moved under the finding by construction, which is when the reported number is least trustworthy and most acted upon.",
+       "type": ["integer", "null"],
+       "minimum": 1
+     },
+     "quote": {
+       "title": "The code this finding is about, copied verbatim out of `file`",
+       "description": "What replaces asking the model for a line number: a model is poor at counting lines and good at repeating text it has just read. The quote is matched against `file` at the round's head — exactly first, then with whitespace collapsed, then not at all. A quote that matches in more than one place is `unlocatable` rather than anchored to the first hit, because choosing among them would be a guess wearing a line number. Absent for a finding that is about the round rather than a site.",
+       "type": ["string", "null"]
+     },
+     "locator": {
+       "title": "How `line` was arrived at",
+       "description": "Present exactly when the finding carries a quote. `derived` means the quote was found and `line` is where; `unlocatable` means it was not, and then `line` is null rather than a number nobody checked. `reported_line` keeps what the reviewer said, so a round can measure how far the claims drifted from the code — which is the only way to know whether deriving them repaired anything or is insurance.",
+
+--- .metaproject/core/gdskills/contracts/task-implementer-input-contract.schema.json
+@@ 127,167 @@
+           "description": "GitHub issue title for context"
+         },
+         "job_name": {
+           "type": "string",
+           "description": "Job package slug, when the dispatch came from job-orchestrator. Phase 6.1 records its result against this name with `keryx job document <job_name> --type implementation-report --file <path>`; absent, Phase 6.1 skips the file write.",
+           "examples": ["issue-4141--pipeline-validation"]
+         },
+         "context_path": {
+           "type": "string",
+           "description": "Job context document read at the start of Phase 2, e.g. .metaproject/jobs/<job_name>/ai/context.md"
+         }
+       }
+     },
+     "fix_context": {
+       "type": "object",
+       "description": "Present only for fix tasks dispatched from review loop.",
+       "additionalProperties": false,
+       "properties": {
+         "review_feedback": {
+           "type": "array",
++          "description": "Findings to fix. Never carries a finding held by review-premise (verdict challenged or owner-decision) until the operator upholds it with `keryx review decide-premise`; the caller filters held findings out before dispatch.",
+           "items": {
+             "type": "object",
+             "additionalProperties": false,
+             "required": ["file", "severity", "message"],
+             "properties": {
+               "id": {
+                 "type": "string",
+                 "description": "The finding's id in the review package, cited back in the result's `notes` when the fix diverged from `suggested_fix` or the finding did not reproduce"
+               },
+               "suggested_fix": {
+                 "type": "string",
+                 "description": "The reviewer's proposed fix. A hypothesis, not an instruction: SKILL.md 1.3 reproduces the finding first and checks this against the plan's state × event matrix before applying anything"
+               },
+               "file": {
+                 "type": "string",
+                 "description": "File path where the issue was found"
+               },
+               "line": {
+                 "type": "integer",
+                 "description": "Line number (if available)"
+
+--- .metaproject/data/gdgraph/.provenance.json
+@@ 1,5 @@
+ {
+-  "commit": "8eaec2ee4a0bd5a736fbe4d6c9f226a9c0461a84",
+-  "branch": "feat/flow-364-governance-flow-actions",
+-  "builtAt": "2026-10-01T09:34:14.337Z"
++  "commit": "646a846f288a0e4a70f72485f127d1f3b8d7e57b",
++  "branch": "feat/review-premise",
++  "builtAt": "2026-10-16T12:44:31.010Z"
+ }
+
+--- .metaproject/flows/459-2026-10-16-review-premise/eval/inputs/fixture-findings.json
+@@ 1,58 @@
++[
++  {
++    "id": "F1",
++    "reviewer": "review-layout",
++    "severity": "major",
++    "file": "src/player/PlaybackTimeline.tsx",
++    "line": 33,
++    "quote": "<div className=\"timeline\" dir=\"ltr\" ref={scroller} onWheel={onWheel} style={{ overflowX: \"auto\" }}>",
++    "title": "Playback timeline pinned LTR — does not mirror in RTL, violates STYLING.md",
++    "problem": "The timeline root hard-codes dir=\"ltr\", so in an RTL locale (Arabic, Hebrew) the whole strip keeps its left-to-right scroll origin, tick order and progress growth while every other surface on the page mirrors. STYLING.md states the project rule: \"Layout is direction-agnostic: use logical properties ... Never hard-code a writing direction.\" This line is a direct, unambiguous breach of that rule, and the same component is the only one in src/player that forces a direction on a scrolling surface the user interacts with. RTL users get a page whose primary control sits on the wrong side of the visual flow and whose progress moves against the reading direction of everything around it.",
++    "impact": "Trigger: a user whose locale is ar or he opens the player. Outcome: the timeline renders and scrolls left-to-right inside a mirrored page; it looks broken and inconsistent, and the project's own styling rule is violated in shipped code. Accessibility reviewers will flag the same thing.",
++    "suggested_fix": "Remove dir=\"ltr\" from the timeline root and compute scroll offsets with logical properties (scrollInlineStart / writing-mode aware offsets). Delete the lint exemption for src/player/PlaybackTimeline.tsx in eslint.config.js so the logical-properties rule applies here like everywhere else.",
++    "evidence": "STYLING.md line 3; eslint.config.js has to carry a special exemption to keep this line, which shows the rule is being worked around rather than followed.",
++    "confidence": "high"
++  },
++  {
++    "id": "C1",
++    "reviewer": "review-logic",
++    "severity": "major",
++    "file": "src/player/PlaybackTimeline.tsx",
++    "line": 14,
++    "quote": "const x = e.clientX - rect.left;",
++    "title": "Wheel seek ignores the scroller's scroll offset",
++    "problem": "onWheel converts the pointer position to media time with e.clientX - rect.left only. The strip is a horizontally scrolling element (overflowX: auto) whose content is wider than its box, so the pixel under the pointer is rect-relative position PLUS scroller.scrollLeft. Without scrollLeft the computed time is always inside the first viewport-width of the media.",
++    "impact": "Trigger: the user scrolls the timeline past the first screen and wheels over it. Outcome: onSeek jumps back to a time in the first few seconds instead of the time under the pointer.",
++    "suggested_fix": "Use const x = e.clientX - rect.left + e.currentTarget.scrollLeft.",
++    "evidence": "The effect on line 18-21 maps positionMs to scrollLeft with the same PX_PER_SECOND, so the two directions are inconsistent.",
++    "confidence": "high"
++  },
++  {
++    "id": "C2",
++    "reviewer": "review-performance",
++    "severity": "major",
++    "file": "src/player/PlaybackTimeline.tsx",
++    "line": 29,
++    "quote": "window.addEventListener(\"resize\", onResize);",
++    "title": "Resize listener is never removed",
++    "problem": "The effect registers a window resize listener and returns no cleanup. It re-registers every time positionMs changes (several times a second during playback) and is never removed on unmount, so listeners accumulate and each keeps a stale closure and the unmounted element alive.",
++    "impact": "Trigger: playback for a few minutes, or mounting and unmounting the timeline. Outcome: hundreds of resize handlers run on every resize, and the detached scroller is retained (leak).",
++    "suggested_fix": "Return () => window.removeEventListener(\"resize\", onResize) from the effect.",
++    "evidence": "No removeEventListener anywhere in the file.",
++    "confidence": "high"
++  },
++  {
++    "id": "C3",
++    "reviewer": "review-frontend",
++    "severity": "major",
++    "file": "src/player/VolumeBar.tsx",
++    "line": 6,
++    "quote": "<button onClick={onMute}>🔇</button>",
++    "title": "Icon-only mute button has no accessible name",
++    "problem": "The button's only content is an emoji glyph. Screen readers announce it as a speaker-with-cancellation-stroke emoji or nothing at all, and there is no aria-label, title or visually hidden text. The sibling controls in MediaPlaybackControls.tsx all carry aria-label.",
++    "impact": "Trigger: a screen-reader user tabs to the volume control. Outcome: they cannot tell what the button does (WCAG 4.1.2 Name, Role, Value).",
++    "suggested_fix": "Add aria-label=\"Mute\" (localised) to the button.",
++    "evidence": "MediaPlaybackControls.tsx lines 10-12 label every button.",
++    "confidence": "high"
++  }
++]
+
+--- .metaproject/flows/459-2026-10-16-review-premise/eval/inputs/pr1005-findings.json
+@@ 1,28 @@
++[
++ {
++  "id": "F-066",
++  "reviewer": "review-security-code",
++  "severity": "major",
++  "file": "src/lib/trust-routine-command.ts",
++  "line": 110,
++  "quote": "return words.some(isExecWord) || words.some(isShellSpelledOption);",
++  "problem": "The round 1 fix for F-058 (isShellSpelledOption) catches only dash-leading words that contain a backslash, brace or dollar. splitWords does not honour a backslash inside double quotes and does not expand $IFS, brace lists or $'..', so the words the gate judges differ from the words the shell hands to git. isTrustRoutineCommand returns true for commands that make git write or truncate a file.",
++  "impact": "Trigger: an agent or a pasted command such as `git log -S \"\\\"\" --output=X`, `git diff HEAD$IFS--output=X`, `git diff \"HEAD\"$IFS\"--output=X\"`, `git diff $'\\x2d\\x2doutput=X'` (bash) or `git diff {HEAD,--output=X}` (bash) is auto-approved by the trust/review-auto routine-command gate without a prompt. Outcome: git writes or truncates an arbitrary file, X. The plain `git diff --output=X` control is correctly refused. Reproduced by the orchestrator, review-security-code and the Wave C verifier (all five cases).",
++  "suggested_fix": "Fail closed on any unquoted dollar, backslash, open brace or close brace in the git read rows and the keryx review rows, or compute the shell's real words. Fix the backslash-in-double-quote handling in splitWords. Add a pinned row in src/lib/trust-routine-command.test.ts for each of the five spellings.",
++  "evidence": "orch/gate.ts and gate2.ts in the scratchpad t5pkg-r2 directory print `true` for the five commands above and `false` for the plain control. The git side was confirmed by running the commands in a scratch repo, where the file X was created. mutation-2.md shows the existing mutants are all killed, so the gap is a missing spelling, not a weak assertion.",
++  "confidence": "high"
++ },
++ {
++  "id": "F-067",
++  "reviewer": "review-security-code",
++  "severity": "major",
++  "file": "src/gdgraph/staleness.ts",
++  "line": 240,
++  "quote": "const diff = await gitCmd(cwd, [\"diff\", \"--name-only\", \"-z\", fromCommit, toCommit]);",
++  "problem": "src/gdgraph/staleness.ts:240 passes provenance.commit to `git diff --name-only -z <fromCommit> <toCommit>` with neither assertGitRevision nor --end-of-options. readProvenance only checks typeof commit === \"string\", and .metaproject/data/gdgraph/.provenance.json is a tracked repository file. The PR's scan test exempts this file with a false reason (\"operands are commits recorded in the graph provenance\"), so the PR's claim to have closed the ref-to-git class does not hold.",
++  "impact": "Trigger: a committed .provenance.json containing {\"commit\":\"--output=<path>\"} and any `keryx gdgraph find <query>` run or opening the TUI inspector, both of which call checkGraphStaleness. Outcome: git runs `git diff --name-only -z --output=<path> HEAD` and writes or truncates <path>. Reproduced by the orchestrator in scratch repos, by review-logic (`keryx gdgraph find a`), review-security-code, review-architecture and the Wave C verifier.",
++  "suggested_fix": "Spell the call as `[\"diff\", \"--name-only\", \"-z\", ...revisionOperand(fromCommit), toCommit]` inside a try/catch that returns [] on a rejected value, and validate that commit is hex in readProvenance (src/sync/provenance.ts ~235-249). Remove the false ALLOWED entry at src/commands/review-revision-operand.test.ts:184 and add a behavioural row with a hostile provenance file.",
++  "evidence": "orch/stale.ts with scratch repos orch/repo and orch/repo2 (graph file at .metaproject/data/gdgraph/storage/nodes.jsonl, two commits) created the target file. mutation-2 does not cover staleness.ts and the scan test skips the file, so nothing in the suite would fail.",
++  "confidence": "high"
++ }
++]
+
+--- .metaproject/flows/459-2026-10-16-review-premise/eval/inputs/pr992-findings.json
+@@ 1,62 @@
++[
++ {
++  "id": "F-007",
++  "reviewer": "review-regression",
++  "severity": "major",
++  "file": "src/commands/agent.ts",
++  "line": 5581,
++  "problem": "The F-003 fix records every non-approval in the process-wide refusal memory in every permission mode, but the delegate and write branches read that memory with no mode guard. A single refused write_file/apply_patch/spawn_subagent (or any stale, dismissed, race-lost, timed-out or unattended `false`) now blocks the identical call for the life of the process: the second request is answered `refused earlier: choose another path` and the operator is never asked. Nothing in production resets the memory (resetOperatorDenials has only test callers), it is not scoped to a session, and recording does not distinguish an operator's `no` from a facade `false` for a stale turn (foreground-operation.ts:279,281), a Telegram timeout, a dock Esc, or deniedUnattendedApproval.",
++  "impact": "Ask mode, default: refuse a write once, say `ok, go ahead`, and the model's retry of the same call is refused without a prompt until the shell restarts. In trust and auto the same happens for any write/delegate call a floor forces to ask (credentials, untrusted origin, hook ask, protected path), and the memory also forces every permission-worded ask_user question to the human for the rest of the process (reviewAutoMayAnswer reads the set size). One session's refusal or stale-turn `false` poisons other sessions in the same process.",
++  "suggested_fix": "Decouple the two uses. Keep the per-fingerprint set and its REFUSED_EARLIER reads (5574, 5686, 5821, 5868) exactly as before, written and read only under reviewAutoActive(), and give the question floor its own cheap `operator refused something` flag. Record only a genuine operator refusal: not the facade's !accepts() branch, not an unattended approver, not a dismissal or a timeout. Give the flag an owner and a production reset (new session, /clear, mode change). Add production-path tests in ask, trust and auto: turn 1 refuses a write, turn 2 repeats the identical call and approves, and the approver must be called twice; the same for risk delegate. Also correct the comment at 5570.",
++  "evidence": "Wrapper at agent.ts:5568-5589 is now installed unconditionally and calls recordOperatorDenial(meta.fingerprint) and recordOperatorDenial(spelled) when !isApprovalFor(response, fingerprint) (5580-5582); at the merge-base 7f4059cf it was installed only under reviewAutoActive(). Unguarded reads: agent.ts:5821 (risk delegate) and 5868 (risk write); the shell read at 5686 is guarded by reviewAutoActive(). Four independent runs on head d9ccfb6c: (1) orchestrator repro, ask mode, same write call in two turns, first refused: second returns `refused earlier: choose another path`, baseline asks again. (2) review-regression repro, ask mode: PR approvals=1, outputs [not approved, refused earlier]; baseline 7f4059cf approvals=2, outputs [not approved, wrote]. (3) review-logic repro, same result. (4) review-highload repro through createForegroundAgentIoFacade: owner.invalidateSession() while the approval is pending, approver then resolves true -> session A: `patch not approved by the user`, session B identical call: `refused earlier` with asksB=0, and a second turn in trust mode is also refused. resetOperatorDenials callers outside tests: src/lib/test-preload-hooks.ts only. Mutants M14/M15 on the read guard were killed; no test repeats a call after a refusal.",
++  "confidence": "high"
++ },
++ {
++  "id": "F-008",
++  "reviewer": "review-logic",
++  "severity": "major",
++  "file": "src/commands/agent.ts",
++  "line": 2511,
++  "problem": "Under /mode auto in an interactive shell with the review-auto system on (KERYX_REVIEW_SYSTEM=review-auto) there is no AutomaticReviewRun, so selfAnsweredQuestion does not stand aside. It answers a policy-tagged ask_user question with the recommended option before the question reaches journaledAskUser, consultArbiter and the decision journal. askFloor never reads request.policy, so nothing keeps the question for the arbiter's deny/escalate verdict or for the human. The two other answerers (the bridge and AutomaticReviewRun.answerAskUser) apply floor then arbiter; the new third answerer applies the floor only and sits ahead of both.",
++  "impact": "The flow-425 guarantee that only the arbiter or a person answers policy questions in review-auto is lost in this combination: a scope-widening, gate-waiver or budget question that the arbiter would deny or escalate to the operator is answered with the model's own recommendation, the arbiter is never consulted, and no decision-journal row is written (flow 392). The same applies when KERYX_AUTONOMOUS_ANSWERS_FILE or KERYX_REVIEW_AUTO_ANSWER=1 is set: answerAutonomously' journal is bypassed. The new documentation sentence `An automatic review does not use this path` holds only for an AutomaticReviewRun turn.",
++  "suggested_fix": "Give the answerers one order. Preferred: move the `auto answers with the recommended option` step out of agent.ts into the AskUserFn composition after journal, autonomous file, arbiter and floor, so agent.ts passes only the mode. Minimal: in selfAnsweredQuestion return undefined when request.policy !== undefined and (reviewAutoActive() || KERYX_REVIEW_AUTO_ANSWER === '1' || an autonomous answers file is configured). Add a runAgentTurn-level test: auto + setReviewSystem('review-auto') + no review run + a policy-tagged question + an arbiter deny -> the host is reached once. Decide, and document, whether a plain-auto self-answer is journaled.",
++  "evidence": "agent.ts:2511 stands aside only for reviewRun !== undefined; askFloor (arbiter-floor.ts:28-34) has no policy rule; journaledAskUser (ask-user-bridge.ts:62-83) holds the only consultArbiter call and is reached only through tool.invoke, which a self-answer skips (agent.ts:4389-4401). Repros on d9ccfb6c, auto mode, setReviewSystem('review-auto'), policy-tagged question with a recommended option: orchestrator repro hostCalls 0 on the PR vs 1 on baseline 7f4059cf; review-regression: PR hostCalls 0 and output `[auto mode] chose this without asking the user: id=\"yes\" ... (recommended)`, baseline hostCalls 2 and `User selected id=\"no\"`; review-logic: hostCalls 0, selfAnswered=[{Which scope?, Full}]. The arbiter-allow/deny path with a configured arbiter model was read (review-arbiter-install.ts:54-71), not run. The three reviewers (security-code, architecture, style) reached the same result by reading. No test covers the combination (agent-question-axis.test.ts:285-309 pass an AutomaticReviewRun only).",
++  "confidence": "high"
++ },
++ {
++  "id": "F-009",
++  "reviewer": "review-testing-practices",
++  "severity": "major",
++  "file": "src/lib/test-preload-hooks.ts",
++  "line": 11,
++  "problem": "The d9ccfb6c runner-only preload clears the process-wide refusal memory before every test in the suite, so no test can observe the production leak described in F-007: each test starts with an empty set, and the only refusal test (agent-question-axis.test.ts:187-207) refuses once and then asks a question. Nothing pins the preload itself either: dropping the second entry from bunfig.toml, or turning the hook into a no-op, fails no test in the targeted suites.",
++  "impact": "The leak is invisible to CI by construction, and a later trim of bunfig.toml back to one preload would reintroduce order-dependent leaks that surface far from their cause. The preload is a workaround for a production design (module-level state with no owner); it hides the symptom a test would otherwise expose.",
++  "suggested_fix": "Prefer removing the need: give the refusal memory an owner (per shell/session) so tests construct their own and no global reset exists. If the preload stays: add a pair of order-dependent tests in test-preload.test.ts (the first records a denial, the second asserts the memory is empty) and assert that bunfig.toml [test].preload lists ./src/lib/test-preload-hooks.ts; keep production-path tests that repeat a refused call (see F-007) so the reset cannot mask them.",
++  "evidence": "keryx review mutate on the changed functions: M25-second-preload-dropped (bunfig.toml preload list without test-preload-hooks.ts) and M26-preload-reset-dropped (hook body replaced by an empty function) both survived the targeted suites (agent-question-axis, permission-mode, ask-user-tool, ask-user-bridge, foreground-operation, review-system, review-arbiter, agent-fewer-prompts, agent, test-preload): mutant:M26-preload-reset-dropped and mutant:M25-second-preload-dropped . test-preload.test.ts:40 asserts only the env contract of the first preload. review-testing-practices, review-architecture and review-clean-code read the same gap. Cost of the second preload measured by review-performance: about 1-2 ms per bun test process, within noise. keryx's own bunfig.toml already carried a preload at the merge-base, so PR 1000's rule that `bun test` is routine only when bunfig.toml has no `preload` key is not newly affected.",
++  "confidence": "high"
++ },
++ {
++  "id": "F-011",
++  "reviewer": "review-testing-practices",
++  "severity": "major",
++  "file": "src/harness/tool/builtin/ask-user-tool.ts",
++  "line": 162,
++  "problem": "Nothing pins the sentence `The user did not answer this question.` in the text the model reads after a self-answer. The unit test for selfAnswerAskUser checks the option id and one substring for the recommended case and only the id for the plain case; the agent-level test asserts the `[auto mode] chose this without asking the user` notice but not the disclaimer.",
++  "impact": "The disclaimer is the part of the self-answer text that stops the model from reporting the choice as the user's own answer. A refactor can drop it without a red test.",
++  "suggested_fix": "Assert in ask-user-tool.test.ts that result.output contains the notice and the `did not answer` disclaimer for both the recommended and the plain case, that `(recommended)` is absent for the plain case, and that isError is false.",
++  "evidence": "keryx review mutate: mutant:M18-self-answer-says-user-answered (the sentence replaced by a bare period) survived every targeted suite. review-testing-practices read the same weak assertions at ask-user-tool.test.ts:98.",
++  "confidence": "high"
++ },
++ {
++  "id": "F-012",
++  "reviewer": "review-testing-practices",
++  "severity": "major",
++  "file": "src/commands/agent.ts",
++  "line": 5581,
++  "problem": "No assertion distinguishes the two recordings in the denial wrapper: the exact fingerprint and the spelling-normalised one. Removing the exact-fingerprint recording changes no test result.",
++  "impact": "A call repeated with a differently spelled but equivalent input (the case refusalFingerprint exists for) is the only place the two diverge, and no test repeats a refused call at all (see F-007). The mutant may be partly equivalent for identical re-spellings; it is reported as a survivor, not as proof of a bug.",
++  "suggested_fix": "Add a review-auto test that refuses a shell/write call and repeats it spelled differently (flag order, quoting) and identically; assert REFUSED_EARLIER in both cases.",
++  "evidence": "keryx review mutate: mutant:M10-denial-fingerprint-not-recorded (recordOperatorDenial(meta.fingerprint) replaced by void 0) survived; its sibling M11 (spelled form) was killed.",
++  "confidence": "medium"
++ }
++]
+
+--- .metaproject/flows/459-2026-10-16-review-premise/eval/inputs/validate.ts
+@@ 1,31 @@
++// usage: bun validate.ts <claims.json> <findings.json>
++// claims.json may be the raw judge output (markdown with a ```json keryx:premises block) or bare JSON.
++import { readFileSync } from "node:fs";
++import { parsePremiseClaims, mergePremises } from "/Users/Goodea/goodea/keryx/.claude/worktrees/blissful-poitras-27beb5/src/review/premise";
++
++const [claimsPath, findingsPath] = process.argv.slice(2);
++let text = readFileSync(claimsPath!, "utf8");
++const fenced = text.match(/```json keryx:premises\s*([\s\S]*?)```/);
++if (fenced) text = fenced[1]!;
++const findings = JSON.parse(readFileSync(findingsPath!, "utf8"));
++let parsed;
++try {
++  parsed = parsePremiseClaims(JSON.parse(text));
++} catch (e) {
++  console.log(JSON.stringify({ parseError: String(e) }));
++  process.exit(1);
++}
++const res = mergePremises(findings, parsed);
++console.log(
++  JSON.stringify(
++    {
++      judge: parsed?.judge,
++      model: parsed?.model,
++      counts: res.counts,
++      rejections: res.rejections,
++      verdicts: res.findings.map((f: any) => ({ id: f.id, severity: f.severity, verdict: f.premise?.verdict })),
++    },
++    null,
++    1,
++  ),
++);
+
+--- .metaproject/flows/459-2026-10-16-review-premise/eval/premise-eval.json
+@@ 1,33 @@
++{
++  "flow": 459, "task": "T8", "ac": "AC7", "date": "2026-10-16",
++  "judge_model": "opus (claude-opus-5-5)", "skill": "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
++  "runs": {
++    "fixture": { "dispatches": 1, "subagent_tokens": 70419, "tool_uses": 7, "duration_ms": 41853, "repo": "synthetic fixture (inputs/fixture.bundle, head e503a37)", "raw": "judge-fixture.raw.md", "validation": "validate-fixture.json", "rejections": 0 },
++    "pr1005": { "dispatches": 1, "subagent_tokens": 74684, "tool_uses": 7, "duration_ms": 52608, "repo": "keryx @ f5d3385f", "raw": "judge-pr1005.raw.md", "validation": "validate-pr1005.json", "rejections": 0 },
++    "pr992": { "dispatches": 1, "subagent_tokens": 80772, "tool_uses": 16, "duration_ms": 79430, "repo": "keryx @ d9ccfb6c", "raw": "judge-pr992.raw.md", "validation": "validate-pr992.json", "rejections": 0 }
++  },
++  "findings": [
++    { "set": "fixture", "id": "F1", "kind": "premise-defect", "severity": "major", "verdict": "challenged", "intent_signals": 6, "practice_sources": 2, "expected": "challenged|owner-decision with >=1 intent and >=1 practice", "pass": true },
++    { "set": "fixture", "id": "C1", "kind": "real", "severity": "major", "verdict": "upheld", "expected": "upheld", "pass": true },
++    { "set": "fixture", "id": "C2", "kind": "real", "severity": "major", "verdict": "upheld", "expected": "upheld", "pass": true },
++    { "set": "fixture", "id": "C3", "kind": "real", "severity": "major", "verdict": "upheld", "expected": "upheld", "pass": true },
++    { "set": "pr1005", "id": "F-066", "kind": "truth", "severity": "major", "verdict": "upheld", "expected": "upheld", "pass": true },
++    { "set": "pr1005", "id": "F-067", "kind": "truth", "severity": "major", "verdict": "upheld", "expected": "upheld", "pass": true },
++    { "set": "pr992", "id": "F-007", "kind": "truth", "severity": "major", "verdict": "upheld", "expected": "upheld", "pass": true },
++    { "set": "pr992", "id": "F-008", "kind": "truth", "severity": "major", "verdict": "upheld", "expected": "upheld", "pass": true },
++    { "set": "pr992", "id": "F-009", "kind": "truth", "severity": "major", "verdict": "downgraded", "to": "minor", "expected": "upheld", "pass": false, "note": "downgrade of a truth finding counts as a miss" },
++    { "set": "pr992", "id": "F-011", "kind": "truth", "severity": "major", "verdict": "downgraded", "to": "minor", "expected": "upheld", "pass": false, "note": "downgrade of a truth finding counts as a miss" },
++    { "set": "pr992", "id": "F-012", "kind": "truth", "severity": "major", "verdict": "downgraded", "to": "minor", "expected": "upheld", "pass": false, "note": "downgrade of a truth finding counts as a miss" }
++  ],
++  "summary": {
++    "f1_pass": true,
++    "controls_total": 10,
++    "controls_upheld": 7,
++    "controls_challenged_or_held": 0,
++    "controls_downgraded": 3,
++    "misses": ["F-009", "F-011", "F-012"],
++    "ac7_literal": "met: F1 challenged with intent+practice; no control challenged",
++    "ac7_strict": "not met: 3 of 7 #992/#1005 truth findings downgraded major->minor (never held)",
++    "claims_validated_with_code": "all 3 files parse; 11 claims applied, 0 rejected"
++  }
++}
+
+--- .metaproject/flows/459-2026-10-16-review-premise/eval/validate-fixture.json
+@@ 1,39 @@
++{
++ "judge": "review-premise",
++ "model": "claude-opus-5-5",
++ "counts": {
++  "judge": "review-premise",
++  "claims": 4,
++  "applied": 4,
++  "rejected": 0,
++  "upheld": 3,
++  "downgraded": 0,
++  "challenged": 1,
++  "ownerDecision": 0,
++  "held": 1,
++  "findingsIn": 4
++ },
++ "rejections": [],
++ "verdicts": [
++  {
++   "id": "F1",
++   "severity": "major",
++   "verdict": "challenged"
++  },
++  {
++   "id": "C1",
++   "severity": "major",
++   "verdict": "upheld"
++  },
++  {
++   "id": "C2",
++   "severity": "major",
++   "verdict": "upheld"
++  },
++  {
++   "id": "C3",
++   "severity": "major",
++   "verdict": "upheld"
++  }
++ ]
++}
+
+--- .metaproject/flows/459-2026-10-16-review-premise/eval/validate-pr1005.json
+@@ 1,29 @@
++{
++ "judge": "review-premise",
++ "model": "claude-opus-5-5",
++ "counts": {
++  "judge": "review-premise",
++  "claims": 2,
++  "applied": 2,
++  "rejected": 0,
++  "upheld": 2,
++  "downgraded": 0,
++  "challenged": 0,
++  "ownerDecision": 0,
++  "held": 0,
++  "findingsIn": 2
++ },
++ "rejections": [],
++ "verdicts": [
++  {
++   "id": "F-066",
++   "severity": "major",
++   "verdict": "upheld"
++  },
++  {
++   "id": "F-067",
++   "severity": "major",
++   "verdict": "upheld"
++  }
++ ]
++}
+
+--- .metaproject/flows/459-2026-10-16-review-premise/eval/validate-pr992.json
+@@ 1,44 @@
++{
++ "judge": "review-premise",
++ "model": "claude-opus-5-5",
++ "counts": {
++  "judge": "review-premise",
++  "claims": 5,
++  "applied": 5,
++  "rejected": 0,
++  "upheld": 2,
++  "downgraded": 3,
++  "challenged": 0,
++  "ownerDecision": 0,
++  "held": 0,
++  "findingsIn": 5
++ },
++ "rejections": [],
++ "verdicts": [
++  {
++   "id": "F-007",
++   "severity": "major",
++   "verdict": "upheld"
++  },
++  {
++   "id": "F-008",
++   "severity": "major",
++   "verdict": "upheld"
++  },
++  {
++   "id": "F-009",
++   "severity": "minor",
++   "verdict": "downgraded"
++  },
++  {
++   "id": "F-011",
++   "severity": "minor",
++   "verdict": "downgraded"
++  },
++  {
++   "id": "F-012",
++   "severity": "minor",
++   "verdict": "downgraded"
++  }
++ ]
++}
+
+--- .metaproject/flows/459-2026-10-16-review-premise/flow.json
+@@ 1,349 @@
++{
++  "schemaVersion": 2,
++  "gates": {
++    "tasks": true,
++    "review": true,
++    "owner": true,
++    "folderCommitted": true
++  },
++  "id": "459",
++  "slug": "review-premise",
++  "title": "Review findings get an independent premise check before anyone acts on them",
++  "status": "in-progress",
++  "createdAt": "2026-10-16T11:39:19.756Z",
++  "updatedAt": "2026-10-16T12:43:37.574Z",
++  "source": {
++    "type": "description",
++    "ref": null
++  },
++  "acChecksum": "sha256:8b96e54ec840d4f339a17d0c511de0c55363a201171a96e8bfbd0a976b69a648",
++  "acConfirmed": {},
++  "pr": {
++    "url": null
++  },
++  "baseBranch": "main",
++  "owner": {
++    "value": "MrCipherSmith",
++    "basis": "stated",
++    "source": "`--owner` flag on `flow init`"
++  },
++  "outcomeAuthor": "agent",
++  "tasks": [
++    {
++      "id": "T1",
++      "title": "Collect remaining context",
++      "kind": "context",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T2",
++      "title": "Implement per plan",
++      "kind": "implement",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "superseded by the lane tasks in plan.md"
++    },
++    {
++      "id": "T3",
++      "title": "Add/adjust tests and make them pass",
++      "kind": "test",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "superseded by the lane tasks in plan.md"
++    },
++    {
++      "id": "T4",
++      "title": "Self-review and prepare draft PR",
++      "kind": "review",
++      "origin": "scaffold",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "skipped",
++      "dispositionReason": "superseded by the lane tasks in plan.md"
++    },
++    {
++      "id": "T5",
++      "title": "L1 code core: premise claims, delete-only merge, held findings in verdict/readiness/gate/dedupe",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-10-16T11:46:27.181Z",
++            "outcome": "started",
++            "detail": "459-T5 sonnet worktree lane L1"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T6",
++      "title": "L3 skills: review-premise skill, shared law 4, review-layout no-mirror, Wave D, fix-loop orchestrators",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-10-16T11:46:27.335Z",
++            "outcome": "started",
++            "detail": "459-T6 opus worktree lane L3"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T7",
++      "title": "L2 operator + CLI: premise-question decision, decide-premise card, flags, tier, catalog, docs",
++      "kind": "implement",
++      "status": "done",
++      "dependsOn": [
++        "T5"
++      ],
++      "attempts": {
++        "count": 1,
++        "log": [
++          {
++            "at": "2026-10-16T12:09:31.742Z",
++            "outcome": "started",
++            "detail": "459-T7 sonnet worktree lane L2"
++          }
++        ]
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T8",
++      "title": "Live eval: #7849 fixture + #992/#1005 controls",
++      "kind": "verify",
++      "status": "done",
++      "dependsOn": [
++        "T5",
++        "T6",
++        "T7"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {},
++      "disposition": "completed"
++    },
++    {
++      "id": "T9",
++      "title": "PR review round(s) clean",
++      "kind": "review",
++      "status": "todo",
++      "dependsOn": [
++        "T8"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    },
++    {
++      "id": "T10",
++      "title": "CHANGELOG, release 0.3.121",
++      "kind": "docs",
++      "status": "todo",
++      "dependsOn": [
++        "T9"
++      ],
++      "attempts": {
++        "count": 0,
++        "log": []
++      },
++      "acRefs": [],
++      "evidenceRefs": [],
++      "budget": {}
++    }
++  ],
++  "history": [
++    {
++      "at": "2026-10-16T11:39:19.756Z",
++      "event": "created"
++    },
++    {
++      "at": "2026-10-16T11:45:27.901Z",
++      "event": "task-done",
++      "detail": "T1: Collect remaining context"
++    },
++    {
++      "at": "2026-10-16T11:45:28.049Z",
++      "event": "task-done",
++      "detail": "T2: Implement per plan"
++    },
++    {
++      "at": "2026-10-16T11:45:28.198Z",
++      "event": "task-done",
++      "detail": "T3: Add/adjust tests and make them pass"
++    },
++    {
++      "at": "2026-10-16T11:45:28.346Z",
++      "event": "task-done",
++      "detail": "T4: Self-review and prepare draft PR"
++    },
++    {
++      "at": "2026-10-16T11:45:28.496Z",
++      "event": "task-added",
++      "detail": "T5: L1 code core: premise claims, delete-only merge, held findings in verdict/readiness/gate/dedupe"
++    },
++    {
++      "at": "2026-10-16T11:45:28.644Z",
++      "event": "task-added",
++      "detail": "T6: L3 skills: review-premise skill, shared law 4, review-layout no-mirror, Wave D, fix-loop orchestrators"
++    },
++    {
++      "at": "2026-10-16T11:45:28.799Z",
++      "event": "task-added",
++      "detail": "T7: L2 operator + CLI: premise-question decision, decide-premise card, flags, tier, catalog, docs"
++    },
++    {
++      "at": "2026-10-16T11:45:28.947Z",
++      "event": "task-added",
++      "detail": "T8: Live eval: #7849 fixture + #992/#1005 controls"
++    },
++    {
++      "at": "2026-10-16T11:45:29.103Z",
++      "event": "task-added",
++      "detail": "T9: PR review round(s) clean"
++    },
++    {
++      "at": "2026-10-16T11:45:29.253Z",
++      "event": "task-added",
++      "detail": "T10: CHANGELOG, release 0.3.121"
++    },
++    {
++      "at": "2026-10-16T11:45:29.556Z",
++      "event": "frozen",
++      "detail": "8 criteria; checksum recorded"
++    },
++    {
++      "at": "2026-10-16T11:45:29.707Z",
++      "event": "started"
++    },
++    {
++      "at": "2026-10-16T11:46:27.181Z",
++      "event": "task-attempt",
++      "detail": "T5: started (attempt 1) — 459-T5 sonnet worktree lane L1"
++    },
++    {
++      "at": "2026-10-16T11:46:27.335Z",
++      "event": "task-attempt",
++      "detail": "T6: started (attempt 1) — 459-T6 opus worktree lane L3"
++    },
++    {
++      "at": "2026-10-16T12:04:21.666Z",
++      "event": "task-done",
++      "detail": "T6: L3 skills: review-premise skill, shared law 4, review-layout no-mirror, Wave D, fix-loop orchestrators"
++    },
++    {
++      "at": "2026-10-16T12:09:31.586Z",
++      "event": "task-done",
++      "detail": "T5: L1 code core: premise claims, delete-only merge, held findings in verdict/readiness/gate/dedupe"
++    },
++    {
++      "at": "2026-10-16T12:09:31.742Z",
++      "event": "task-attempt",
++      "detail": "T7: started (attempt 1) — 459-T7 sonnet worktree lane L2"
++    },
++    {
++      "at": "2026-10-16T12:43:37.426Z",
++      "event": "task-done",
++      "detail": "T7: L2 operator + CLI: premise-question decision, decide-premise card, flags, tier, catalog, docs"
++    },
++    {
++      "at": "2026-10-16T12:43:37.574Z",
++      "event": "task-done",
++      "detail": "T8: Live eval: #7849 fixture + #992/#1005 controls"
++    }
++  ],
++  "acKinds": {
++    "AC1": {
++      "kind": "exec",
++      "check": "bun test src/review/premise.test.ts"
++    },
++    "AC2": {
++      "kind": "exec",
++      "check": "bun test src/review/verdict.test.ts src/review/readiness.test.ts src/flow/review-gate.test.ts src/review/dedupe.test.ts"
++    },
++    "AC3": {
++      "kind": "exec",
++      "check": "bun test src/review/premise-decision.test.ts src/commands/review-operator-cli.test.ts src/commands/operator-confirm-review-tools.test.ts"
++    },
++    "AC4": {
++      "kind": "invariant",
++      "check": "bun test src/gdskills/ src/review/coverage.test.ts src/commands/skills.bundled-verify.test.ts"
++    },
++    "AC5": {
++      "kind": "invariant",
++      "check": "bun test src/gdskills/review-skills-iron-laws.test.ts src/gdskills/"
++    },
++    "AC6": {
++      "kind": "invariant",
++      "check": "bun test src/gdskills/"
++    },
++    "AC7": {
++      "kind": "judged"
++    },
++    "AC8": {
++      "kind": "exec",
++      "check": "npm view @mrciphersmith/keryx version"
++    }
++  }
++}
+
+--- .metaproject/skills/gdskills/orchestration/task-implementer/input-contract.schema.json
+@@ 127,167 @@
+           "description": "GitHub issue title for context"
+         },
+         "job_name": {
+           "type": "string",
+           "description": "Job package slug, when the dispatch came from job-orchestrator. Phase 6.1 records its result against this name with `keryx job document <job_name> --type implementation-report --file <path>`; absent, Phase 6.1 skips the file write.",
+           "examples": ["issue-4141--pipeline-validation"]
+         },
+         "context_path": {
+           "type": "string",
+           "description": "Job context document read at the start of Phase 2, e.g. .metaproject/jobs/<job_name>/ai/context.md"
+         }
+       }
+     },
+     "fix_context": {
+       "type": "object",
+       "description": "Present only for fix tasks dispatched from review loop.",
+       "additionalProperties": false,
+       "properties": {
+         "review_feedback": {
+           "type": "array",
++          "description": "Findings to fix. Never carries a finding held by review-premise (verdict challenged or owner-decision) until the operator upholds it with `keryx review decide-premise`; the caller filters held findings out before dispatch.",
+           "items": {
+             "type": "object",
+             "additionalProperties": false,
+             "required": ["file", "severity", "message"],
+             "properties": {
+               "id": {
+                 "type": "string",
+                 "description": "The finding's id in the review package, cited back in the result's `notes` when the fix diverged from `suggested_fix` or the finding did not reproduce"
+               },
+               "suggested_fix": {
+                 "type": "string",
+                 "description": "The reviewer's proposed fix. A hypothesis, not an instruction: SKILL.md 1.3 reproduces the finding first and checks this against the plan's state × event matrix before applying anything"
+               },
+               "file": {
+                 "type": "string",
+                 "description": "File path where the issue was found"
+               },
+               "line": {
+                 "type": "integer",
+                 "description": "Line number (if available)"

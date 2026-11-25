@@ -1,0 +1,138 @@
+```json keryx:findings
+{
+  "reviewer": "review-clean-code",
+  "status": "DONE",
+  "slices": ["slice-05"],
+  "summary": "Slice 05 is readable and well documented; no blocker or major. Findings are minor maintenance costs: one comment that contradicts its use, repeated identity predicates, a cache that round-trips its arguments through JSON, and growing long functions.",
+  "findings": [
+    {
+      "id": "CC-001",
+      "severity": "minor",
+      "file": "src/review/managed.ts",
+      "line": 1239,
+      "quote": "when the operator named none: never a coverage entry",
+      "title": "ATTRIBUTION_FALLBACK doc says it is never a coverage entry, but normalizeCoverage emits it as one",
+      "problem": "The doc comment on ATTRIBUTION_FALLBACK says the reviewer is 'never a coverage entry'. Sixteen lines below, normalizeCoverage builds `selected = named ? reviewers : [ATTRIBUTION_FALLBACK]` and maps it to coverage entries with status 'run'. Only the attribution call site (line 279) avoids it by re-running normalizeCoverage without research. The comment misleads the next reader (Clean Code C1).",
+      "impact": "A reader editing normalizeCoverage or the attribution default believes the fallback cannot reach coverage.",
+      "suggested_fix": "State what holds: the fallback becomes a coverage entry when neither coverage, reviewers nor research.json name one; attribution of unnamed findings uses only the reviewers the input names.",
+      "evidence": "src/review/managed.ts:1239-1255 (comment vs `const selected = named ? reviewers : [ATTRIBUTION_FALLBACK];`)",
+      "principle": "Clean Code C1 (comment contradicts code)",
+      "confidence": "high"
+    },
+    {
+      "id": "CC-002",
+      "severity": "minor",
+      "file": "src/review/coverage.ts",
+      "line": 548,
+      "quote": "const [packageDir, root, target] = JSON.parse(key) as [string, string, PackageTarget];",
+      "title": "packageDiffStatsCached encodes its arguments as a JSON cache key and decodes them back with a cast",
+      "problem": "processCache takes a single string key, so packageDiffStats serialises (packageDir, root, target) with JSON.stringify and the compute callback JSON.parses them back under an `as` cast, then passes `target.head!` (a non-null assertion on a value the caller already checked at line 530) as a fourth argument `head` to diffOfTarget, which also receives `target` (coverage.ts:565). The cache key doubles as the argument transport, so a type mismatch in the tuple is invisible and head travels twice.",
+      "impact": "Maintenance cost: a new PackageTarget field changes key and decode silently; the cast and the `!` hide mismatches.",
+      "suggested_fix": "Give processCache a key function plus typed arguments (`processCache(compute, keep, keyOf)`), narrow head once, and drop diffOfTarget's separate head parameter.",
+      "evidence": "src/review/coverage.ts:547-549 and :565",
+      "principle": "Clean Code B2 (redundant argument), B3",
+      "confidence": "high"
+    },
+    {
+      "id": "CC-003",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "line": 785,
+      "quote": "const matching = (key: unknown) => canonical.filter((f) => f.id === key || f.global_id === key);",
+      "title": "'canonical finding whose id or global_id is X' is spelled three times in the ledger builder",
+      "problem": "The predicate `f.id === key || f.global_id === key` is written in canonicalByObligation (ledger.ts:607), resolvesOnce (ledger.ts:611) and closeWith.matching (ledger.ts:785); the merged_from test `m === id || m.endsWith('#' + id)` is written in absorbedInto (ledger.ts:598) and canonicalByObligation (ledger.ts:608). They must change together.",
+      "impact": "Cost to whoever changes finding identity next: one site missed makes linking and closure disagree.",
+      "suggested_fix": "Extract `canonicalWithKey(canonical, key)` and `mergedFrom(f, id)` beside `sha`/`text` and use them at all sites.",
+      "evidence": "src/review/ledger.ts lines 607, 611, 785 (id/global_id predicate) and 598, 608 (merged_from test)",
+      "principle": "Clean Code E1 (DRY, 3 sites)",
+      "confidence": "high"
+    },
+    {
+      "id": "CC-004",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "line": 625,
+      "quote": "const byObligation = byReviewer.length === 1 ? [] : canonicalByObligation(id);",
+      "title": "Same `byReviewer.length === 1` branch evaluated twice; closeWith called with a trailing literal undefined",
+      "problem": "Lines 625-626 test `byReviewer.length === 1` twice in a row (byObligation exists only to be picked by the next ternary). closeWith's new third parameter is passed a literal `undefined` at ledger.ts:647 and :655, which reads as a missing argument. The loop body also gained ~15 lines of canonical linking inline, mixing 'find the canonical match' with 'build the obligation'.",
+      "impact": "Readability only.",
+      "suggested_fix": "`const hit = byReviewer.length === 1 ? byReviewer : canonicalByObligation(id);`; make defaultLink an optional last parameter; consider extracting `resolveCanonical(reviewer, fid, id)`.",
+      "evidence": "src/review/ledger.ts:625-628, 647, 655",
+      "principle": "Clean Code B2/B3",
+      "confidence": "high"
+    },
+    {
+      "id": "CC-005",
+      "severity": "minor",
+      "file": "src/review/premise.ts",
+      "line": 373,
+      "quote": "claim.finding_id.includes(\"#\")",
+      "title": "premise.ts re-implements the display-id '#' test that display-id.ts exports",
+      "problem": "display-id.ts exists so that 'a display id holds no #' is stated once (displayIdHasHash, DISPLAY_ID_FORM). dispatch-check.ts, ledger.ts and managed.ts use it; mergePremises tests `.includes(\"#\")` inline, and hashInDisplayIdDetail (premise.ts:194) repeats the 'e.g. review-logic-w1:F-001' example and rule text already in DISPLAY_ID_FORM. Two statements of one rule drift.",
+      "impact": "Changing the id form updates the message in three modules but not here.",
+      "suggested_fix": "Use displayIdHasHash(claim.finding_id) and build the detail from DISPLAY_ID_FORM (or move hashInDisplayIdDetail into display-id.ts).",
+      "evidence": "src/review/premise.ts:194 and :373; src/review/display-id.ts",
+      "principle": "Clean Code E1/E2 (DRY, repeated rule string)",
+      "confidence": "high"
+    },
+    {
+      "id": "CC-006",
+      "severity": "minor",
+      "file": "src/review/premise.ts",
+      "line": 187,
+      "quote": "return [parsePremiseClaims(source) as ParsedPremiseClaims];",
+      "title": "`as ParsedPremiseClaims` casts away the undefined parsePremiseClaims can return",
+      "problem": "parsePremiseClaims returns ParsedPremiseClaims | undefined and both branches of parsePremiseClaimSets cast the result to the defined type. The early `source === undefined` return makes it true today, but the compiler stops checking it if parsePremiseClaims gains another undefined path.",
+      "impact": "A future undefined would reach mergePremises as an entry and throw at `parsed.claims`.",
+      "suggested_fix": "Give parsePremiseClaims an overload for defined input, or throw instead of casting.",
+      "evidence": "src/review/premise.ts:183-187",
+      "principle": "Clean Code D1 (type safety)",
+      "confidence": "medium"
+    },
+    {
+      "id": "CC-007",
+      "severity": "minor",
+      "file": "src/review/managed.ts",
+      "line": 265,
+      "quote": "export async function createManagedReviewPackage(",
+      "title": "createManagedReviewPackage and checkDispatch keep growing: this slice adds more gates inline",
+      "problem": "createManagedReviewPackage is already several hundred lines of mixed levels (allocation, normalising, locating, verifying, merging, rendering, writing). This slice adds a stub-report refusal, a '#' id refusal and a second normalizeCoverage call (line 279, which builds a whole coverage list only to take the names of the 'run' entries). checkDispatch (dispatch-check.ts:86) takes a 15-line nested-tuple id check inline in the same way.",
+      "impact": "Each flow adds another inline gate to functions that are hard to hold in mind; cost to the next editor.",
+      "suggested_fix": "Extract the pre-write refusals into one `refuseUnacceptableRound(...)`, the attribution names into `attributionReviewers(input)`, and the id extraction in dispatch-check into `findingIdsOf(payload)`.",
+      "evidence": "src/review/managed.ts:265, 279, 288-293; src/review/dispatch-check.ts:121-130",
+      "principle": "Clean Code B1 (function size, mixed abstraction)",
+      "confidence": "high"
+    },
+    {
+      "id": "CC-008",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "line": 42,
+      "quote": "export function unreadableInputClaim(result: object): string | undefined {",
+      "title": "unreadableInputClaim now takes `object` and reads `summary` through a cast",
+      "problem": "The parameter was ParsedResult (a typed shape with `summary?: string`); it is now `object` and the body does `(result as { summary?: unknown }).summary` plus a typeof check. A named type was traded for a cast; the signature no longer says what it reads.",
+      "impact": "A caller passing the wrong object compiles; the contract lives only in the body.",
+      "suggested_fix": "Type it as `{ summary?: unknown }` (documents the one field) instead of `object` plus a cast.",
+      "evidence": "src/review/ledger.ts:42-44",
+      "principle": "Clean Code A1 (intention-revealing signature)",
+      "confidence": "medium"
+    },
+    {
+      "id": "CC-009",
+      "severity": "info",
+      "file": "src/review/completion-gate.ts",
+      "line": 311,
+      "quote": "named: Partial<SessionReviewNames> = {},",
+      "title": "Partial<SessionReviewNames> is threaded through four functions, each defensive about every field",
+      "problem": "sessionReviewNames always returns all four fields, yet findReviewGateState, scanRoot, pickPackage and namedBySession take Partial<> and repeat `(named.packageDirs ?? [])`-style fallbacks. If the only reason is the `{}` default for callers with no history, one frozen empty-names constant removes every `?? []`. The eviction idiom `items.delete(items.keys().next().value as T)` (completion-gate.ts:113) also appears in coverage.ts processCache (:494): two sites, below the DRY threshold.",
+      "impact": "None today; a design observation, so info.",
+      "suggested_fix": "Default to an empty SessionReviewNames and take the full type; share a bounded-map helper if a third site appears.",
+      "evidence": "src/review/completion-gate.ts:113, 311; src/review/coverage.ts:494",
+      "principle": "Clean Code B2; DRY (2 sites)",
+      "confidence": "low"
+    }
+  ]
+}
+```
+
+Summary: slice-05 (completion-gate, coverage, dispatch-check, dispatch-usage, display-id, filter-stats, ledger, locate, managed, mutate, premise, prior-round) is clear; the new helpers are small and well named. No blocker or major. Eight minors: a comment contradicting its use (managed.ts:1239), a JSON-round-tripped cache key with a non-null assertion and redundant head parameter (coverage.ts:548), the canonical-id predicate repeated at three ledger sites (ledger.ts:607/611/785), a doubled branch and trailing-undefined arguments (ledger.ts:625), the display-id '#' rule re-implemented in premise.ts (373), a cast hiding undefined (premise.ts:187), growth of createManagedReviewPackage and checkDispatch, and a loosened `object` signature (ledger.ts:42). One info on Partial threading in completion-gate.

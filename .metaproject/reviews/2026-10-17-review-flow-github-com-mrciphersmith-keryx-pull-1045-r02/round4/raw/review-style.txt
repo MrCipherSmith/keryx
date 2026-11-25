@@ -1,0 +1,61 @@
+```json keryx:findings
+{
+  "findings": [
+    {
+      "id": "STY-R4-001",
+      "severity": "info",
+      "confidence": "medium",
+      "reviewer": "review-style",
+      "file": "docs/docs/cli-reference.md",
+      "quote": "`plan` | The round plan in one command, without dispatching",
+      "problem": "CHANGELOG.md says review start now reads the pull request's own base with gh and records it as target.base (no --base) or target.prBase (with --base), and the package schema gained prBase. cli-reference.md has no mention of either (no hit for prBase or target.base), so the review start and light-recheck rows do not say which base the depth gate measures.",
+      "impact": "A reader of the CLI reference cannot learn why a light round on a stacked PR is measured against more than --base; only the changelog and a schema description say so.",
+      "suggested_fix": "One sentence in the review start / required rows: the light recheck measures the widest of the recorded base, the PR's own base (target.prBase) and the default base.",
+      "evidence": "delta-docs.diff adds prBase only to managed-review-package.schema.json and CHANGELOG.md; docs/docs/cli-reference.md has no hit for prBase or target.base."
+    }
+  ],
+  "prior_dispositions": [
+    {"id":"r3-review-style-code:STY-R3-001","disposition":"closed","evidence":"managed.ts:1335-1347 attributionReviewers and refuseUnacceptableRound each carry one doc block; the stub text now sits on refuseStubReport."},
+    {"id":"r3-review-style-code:STY-R3-002","disposition":"closed","evidence":"coverage.ts:555-565 PackageTarget is {recordedBase, prBase, head}; nominalBase, kind, ref gone."},
+    {"id":"r3-review-style-code:STY-R3-003","disposition":"closed","evidence":"loop.ts:489 and flow/review-gate.ts:463 use const name = path.basename(packageDir)."},
+    {"id":"r3-review-style-code:STY-R3-005","disposition":"closed","evidence":"completion-gate.ts no longer declares SHELL_TOOLS; only the unrelated verify.ts:48 WRITE_OR_SHELL_TOOLS remains."},
+    {"id":"r3-review-style-code:STY-R3-006","disposition":"closed","evidence":"review-slice.ts:26,255 import deltaRoundCut from ../review/round-cut; keepLedgers: true appears once there."},
+    {"id":"r3-review-style-code:STY-R3-007","disposition":"open","evidence":"info; shellCommands (completion-gate.ts:169+) still hand-written, now with redirection handling."},
+    {"id":"r3-review-style-code:STY-R3-008","disposition":"open","evidence":"ledger.ts:29 still Pick<ParsedResult, inputs_unreadable|status|summary>."},
+    {"id":"r3-review-style-code:STY-R3-009","disposition":"open","evidence":"wave-drivers.ts:8 still import { type SliceManifest }."},
+    {"id":"r3-review-style-docs:r3-review-style-docs:DS-001","disposition":"closed","evidence":"SKILL.detail.md:699 delta row (bundled and .metaproject copies identical) lists review-security-code and the content roles."},
+    {"id":"r3-review-style-docs:r3-review-style-docs:DS-002","disposition":"open","evidence":"info; review-orchestrator SKILL.md:1226 BLOCKED bullet unchanged, larger-budget remedy still covers unreadable inputs."},
+    {"id":"r3-review-style-docs:r3-review-style-docs:DS-003","disposition":"open","evidence":"info; review-with-a-record.md:656 and :965 keep the long line."},
+    {"id":"r3-review-architecture-code:R3-ARCH-001","disposition":"closed","evidence":"review-slice.ts:26,255 import deltaRoundCut from round-cut."},
+    {"id":"r3-review-architecture-code:R3-ARCH-002","disposition":"open","evidence":"info, no change needed."},
+    {"id":"r3-review-clean-code-code:CC-R3-001","disposition":"closed","evidence":"as STY-R3-001."},
+    {"id":"r3-review-clean-code-code:CC-R3-002","disposition":"closed","evidence":"body moved to round-cut.ts, one keepLedgers site."},
+    {"id":"r3-review-clean-code-code:CC-R3-003","disposition":"open","evidence":"ledger.ts:29 Pick unchanged."},
+    {"id":"r3-review-clean-code-code:CC-R3-004","disposition":"open","evidence":"readiness.ts:29 still export { COVERAGE_MD_MARK }; readiness.test.ts:16 and managed.test.ts:2 import through it."},
+    {"id":"r3-review-clean-code-code:CC-R3-005","disposition":"closed","evidence":"slice.ts:418,427 uses the regionsByFile helper."},
+    {"id":"r3-review-clean-code-code:CC-R3-006","disposition":"closed","evidence":"coverage.ts PackageTarget has no kind/ref and no spread."},
+    {"id":"r3-review-core-boundaries-code:CB3-001","disposition":"closed","evidence":"as STY-R3-001."},
+    {"id":"r3-review-highload-code:HL-R3-001","disposition":"closed","evidence":"dispatch-usage.ts:64 pattern ends (.*?)\\r?$."},
+    {"id":"r3-review-highload-code:HL-R3-002","disposition":"closed","evidence":"package-location.ts:71,90 standalone heads read once and passed to each flowPackageDirs call."},
+    {"id":"r3-review-highload-code:HL-R3-003","disposition":"closed","evidence":"spawn-subagent-tool.ts:351 saves to one path serialised under a per-path chain."},
+    {"id":"r3-review-highload-code:HL-R3-004","disposition":"open","evidence":"info, accepted (PERF-002 same observation)."},
+    {"id":"r3-review-logic-code:LG-001","disposition":"closed","evidence":"non-final saves marked incomplete; partial replaces partial (cli-reference.md delta lines 5559-5565)."},
+    {"id":"r3-review-logic-code:LG-002","disposition":"closed","evidence":"completion-gate.ts:169-217 a redirection is neither separator nor word; doc :303."},
+    {"id":"r3-review-logic-code:LG-003","disposition":"closed","evidence":"coverage.ts:594-596 widestDiff takes the per-dimension maximum."},
+    {"id":"r3-review-logic-code:LG-004","disposition":"closed","evidence":"CHANGELOG, cli-reference plan row, review-orchestrator SKILL.md:685 and SKILL.detail.md:699, flow-orchestrator SKILL.md:529 name the content roles; bundled and .metaproject copies are byte-identical."},
+    {"id":"r3-review-logic-code:LG-005","disposition":"closed","evidence":"locate.ts:249 reason now says too short (under MIN_SUBSTRING_QUOTE_CHARS); kind stays absent per the schema enum."},
+    {"id":"r3-review-performance-code:PERF-R3-001","disposition":"closed","evidence":"as HL-R3-002."},
+    {"id":"r3-review-performance-code:PERF-R3-002","disposition":"closed","evidence":"as CC-R3-005."},
+    {"id":"r3-review-performance-code:PERF-R3-003","disposition":"open","evidence":"info; coverage.ts:594-615 still measures bases one after another."},
+    {"id":"r3-review-regression-code:RG3-001","disposition":"closed","evidence":"as LG-001."},
+    {"id":"r3-review-regression-code:RG3-002","disposition":"closed","evidence":"as LG-002."},
+    {"id":"r3-review-regression-code:RG3-003","disposition":"closed","evidence":"cli-reference.md:6684, contracts/review-finding.schema.json:195 and both reviewer-finding.schema.json copies state the 12-character floor."},
+    {"id":"r3-review-regression-code:RG3-004","disposition":"open","evidence":"info observation; widening to the default base stays by design."},
+    {"id":"r3-review-security-code-code:SEC-R3-001","disposition":"closed","evidence":"wave-drivers.ts:17 header keeps review-security-code wherever routing gave it a slice, light round too; CHANGELOG states it."},
+    {"id":"r3-review-testing-practices-code:NTP-001","disposition":"closed","evidence":"no toBeLessThan(500) left in ledger.test.ts."},
+    {"id":"review-clean-code-w3:CC-13","disposition":"closed","evidence":"managed.ts:1247 normalizeCoverage takes typed runs: readonly DispatchRun[]."}
+  ]
+}
+```
+
+Summary: the docs delta matches the code it describes, and the bundled and .metaproject skill copies are byte-identical. Prior records checked: 39 (28 closed, 11 open; all open ones are info or small style leftovers: ledger Pick, wave-drivers import, readiness re-export, DS-002, DS-003, shellCommands size). Earlier-round non-style records were not re-verified. One new info: cli-reference.md does not mention prBase / the recorded PR base.

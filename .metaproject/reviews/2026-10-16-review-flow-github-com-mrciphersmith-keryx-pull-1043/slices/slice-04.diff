@@ -1,0 +1,2511 @@
+--- docs/docs/cli-reference.md
+@@ 4723,4774 @@
+ 
+ Create and manage durable review packages. Managed reviews preserve target
+ identity, reviewer coverage, findings, decisions, learning candidates, and an
+ optional flow relationship instead of leaving review state only in chat output.
+ 
+ `--automatic` on `start`, `attach` and `ingest` marks the package as an
+ **automatic review** run (`manifest.automatic: true`; `review status` prints
+ `run mode: automatic review`). The mark is a run mode, not a permission mode and
+ not a way around the gate: `review complete` and every one of its refusals work
+ exactly as without it. Inside `keryx shell` it is what lets a turn run the
+ review's own commands without a prompt — see
+ [Automatic review](guides/permission-modes.md#automatic-review).
+ 
+ ```text
+ keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
+                     [--reviewers a,b] [--report <path>] [--automatic]
+ keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+                    [--memory-query "<query>"] [--automatic]
+ keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>] [--automatic]
+                     [--verifications <file|->] [--verification-mode off|annotate|filter]
++                    [--premises <file|->]
+                     [--scope <scope.json>] [--blast-radius <blast-radius.json>]
+                     [--refuted <file|->]
+                     [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
+                     [--parallel <n>] [--outstanding <n>]
+ keryx review run --autonomous --target pr --ref <pull request URL>
+                  [--budget-minutes N] [--budget-tokens N] [--stall-minutes N] [--out <dir>] [--no-notify] [--json]
+ keryx review budget [--spent <usd>] [--ceiling <usd>]
+                     [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
+ keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
+                   [--findings <n>] [--diff-lines <n>]
+-                  [--verifier execution|site-check|reasoning] [--security]
++                  [--verifier execution|site-check|reasoning] [--security] [--premise]
+                   [--session-provider <id>] [--session-model <id>]
+                   [--catalog <file|->] [--json]
+ keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
+                               [--self <login>] [--round <n>]
+                               [--out <findings.json>] [--json] [--fixtures <dir>]
+ keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
+                             --sha <head-sha> --final [--result <file>] [--review <review-id>]
+                             [--round <n>] [--dry-run] [--self <login>]
+                             [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
+                             [--flow-link <url>] [--allow-closed-pr] [--fixtures <dir>]
+ keryx review bot run --pr <n> [--repo <owner/repo>] [--max-diff-bytes <n>]
+                      [--provider <id>] [--model <id>] [--fixtures <dir>] [--json]
+ keryx review bot post --pr <n> [--repo <owner/repo>] [--sha <head-sha>] [--review <id>]
+                       [--post] [--fixtures <dir>] [--json]
+ keryx review metrics [--json] [--refresh] [--fixtures <dir>]
+ keryx review ci-triage --run <id> [--job <name>] [--test <name>] [--repo <owner/repo>]
+                        [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
+ keryx review conform --ref <doc> (--pr <n> | --report <dir> | --diff <ref>)
+                      [--repo <owner/repo>] [--explain] [--threshold <0..1>]
+                      [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
+
+--- docs/docs/cli-reference.md
+@@ 4782,4823 @@
+ keryx review learn --reviewer <id> [--dry-run] [--json]
+ keryx review loop --flow <flow-id> [--task <Tn>]
+ keryx review status <review-id-or-path>
+ keryx review report-parity <review-id-or-path>
+ keryx review complete <review-id-or-path>
+                       [--finding <id> --disposition <state> --evidence <ref>]...
+ keryx review lightweight
+ keryx review reviewers [--json]
+ keryx review required [--mode all|diff] [--scope <scope.json>] [--operator-quote "<words>"] [--blast-radius <blast-radius.json>] [--pr-context <pr-context.md>] [--json]
+ keryx review mutate --test "<command>" --package <review-dir> [--worktree <dir>] [--spec <mutants.json>] [--timeout-ms <n>] [--cap <n>] [--scratch repo|tmp] [--json]
+ keryx review severity-audit --package <review-dir> [--dry-run] [--json]
+ keryx review context-collect --repo <owner/repo> --pr <n> --package <review-dir> [--self <login>] [--checks <gh-checks.json>] [--json]
+ keryx review compare-reference --reference <report.md> --package <review-dir> [--input <dir>] [--json]
+ keryx review estimate --package <review-dir> [--manifest <slices/manifest.json>] [--confirm --quote "<words>"] [--json]
+ keryx review plan --target <pr-url|branch> [--ref <base>] [--head <sha>] [--host keryx-shell|claude-code|codex|other] [--memory-query "<query>"] [--unattended] [--json]
+ keryx review plan-eval --diff <file|base..head> [--findings <file>] [--roles a,b] [--json]
+ keryx review verdict <review-id-or-path> [--raw <dir>] [--json]
+ keryx review confirm-plan --package <review-dir>                                     (terminal; card review_confirm_plan)
+ keryx review waive-mutation --package <review-dir> --reason "<why>"                  (terminal; card review_waive_mutation)
+ keryx review override-reviewers --package <review-dir> --reason "<why>"              (terminal; card review_override_reviewers)
++keryx review decide-premise --package <review-dir> --finding <id> --answer uphold|dismiss --reason "<why>"
++                                                                                     (terminal; card review_decide_premise)
+ keryx review verify-run --package <review-dir> --finding <id> [--timeout <s>] -- <command…>
+ keryx review import --from <package-dir|tree> [--only <glob>]... [--dry-run] [--force] [--allow-flagged] [--json]
+ keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>] [--json|--scoped-diff] [--append <file>]
+ keryx review floor [--ref <base>] [--diff <file|->] [--context <n>] [--json] [--report-only]
+ keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
+                           [--no-related-tests] [--final] [--previous <blast-radius.json>]
+                           [--package <review-dir>] [--json|--brief] [--out <file>]
+ keryx review slice [--ref <base>] [--diff <file|->] [--context <n>] [--max-bytes <n>] [--wave-bytes <n>] [--out <dir> | --package <review-dir>] [--json]
+ keryx review dispatch-check --payload <file|-> [--manifest <file>] [--max-bytes <n>] [--package <review-dir>] [--json]
+ keryx review retry-plan --manifest <file> [--result <file|->] [--reviewer <id>] [--slices a,b] [--covered a,b] [--next-wave]
+                         [--state <file>] [--dry-run] [--json]
+ keryx review next --package <review-dir> [--reviewers a,b] [--apply] [--json]
+ keryx review ledger build <input-dir> [--package <review-dir>] [--mode all|diff] [--findings <file>] [--dispositions <file>] [--out <file>] [--dry-run] [--json]
+ keryx review layers refresh --package <review-dir> [--head <sha>] [--base <ref>] [--write-wiki] [--force] [--json]
+ keryx review layers status  --package <review-dir> [--json]
+ keryx review layers block   --package <review-dir> --files a,b [--max-bytes <n>] [--force] [--json]
+ keryx review chunks plan|estimate|next|record|merge --package <review-dir> [--chunk <id>] [--status <s> | --result <file|->] [--mode automatic|interactive] [--answer yes|no --quote "<words>"] [--json]
+ keryx review coverage --package <review-dir> [--json]
+ keryx review complete ... [--waive-coverage "<operator quote>"] [--head <sha>] [--waive <item> "<operator quote>"]...
+ keryx review readiness <review-id-or-path> [--json]
+
+--- docs/docs/cli-reference.md
+@@ 4872,4912 @@
+ | `comments` | Collect comments left on the PR by anyone else, and answer them — once, at the end. See below. |
+ | `ci-triage` | Advisory-only flaky/infra/real-regression triage for one failed CI run's job, scored by Jev (TypeSafe System One). See below. |
+ | `conform` | Check a PR, a review report, or a diff against a reference document's clauses, scored by Jev. See below. |
+ | `jev-risk` | ADDITIONAL orchestrator reviewer (`engine: jev`): a deterministic risk map of every changed hunk, ranked, with a routing hint. See below. |
+ | `jev-scenarios` | ADDITIONAL orchestrator reviewer (`engine: jev`): which user scenarios a diff likely changes. See below. |
+ | `jev-docs` | ADDITIONAL orchestrator reviewer (`engine: jev`): find doc sections that went stale because of a diff. See below. |
+ | `jev-comments` | ADDITIONAL orchestrator reviewer (`engine: jev`): check whether open PR review comments were addressed. See below. |
+ | `jev-contract` | ADDITIONAL orchestrator reviewer (`engine: jev`): check a PR description's own claims, and a linked flow's frozen acceptance criteria, against the diff. See below. |
+ | `jev-triage` | Advisory, annotate-only: severity calibration, duplicate-merge candidates, and verifier queue order over a review package's consolidated findings, scored by Jev. See below. |
+ | `learn` | Turn collected PR comments from the authors this project configured into a learning proposal for its own local review skill. Reads the collected record; never fetches. See below. |
+ | `reviewers` | List bundled and project-local reviewers (`keryx review reviewers [--json]`). The project half is `.metaproject/project-skills/review/<name>/`; each entry carries `paths` + `pathsSource`, `flags`, `flagWarnings`, `familyFlags`, `stackRequires`, `unresolvedRules`, `shadowedRules`, `unresolvedReferences` and `drift` for the orchestrator's filters and dispatch. `paths` come from `metadata.paths`, else from the globs in the description plus any literal file path named beside them; a description with no glob gives `pathsSource: none` (dispatched on every round) even when it names a file. `flags` come from `metadata.flags` when it has at least one non-empty entry — entries split on commas/whitespace, trimmed, lower-cased and `--`-prefixed; one that is still not `--name` is dropped and reported in `flagWarnings` (a `warning:` line in the text output), and the description's flags are not used even if none survives or the list holds only `--all` (no flags, and no warning for `--all`) — else from the description; an empty `metadata.flags` (`[]`, `''`) leaves the description's flags in force. `metadata.flags` and `metadata.paths` accept a comma-separated string, a flow list or a YAML block list; the frontmatter reader accepts a BOM and CRLF, drops trailing `#` comments, counts only keys directly under `metadata:`, and reads any shape outside that subset as not declared. `drift` is `clean`, `changed`, `missing`, or `none` when no origin was recorded (the text row reads `(no recorded origin)`). The top-level `bundledSource` says where the bundled half was read: `project` (this project's installed `.metaproject/skills/gdskills/review`), `package` (that directory is absent, so the keryx package's own review skills are listed — not evidence of what is installed here) or `not-found` (neither; exit `1`). |
+ | `required` | Print the reviewers a round must dispatch (`keryx review required [--mode all\|diff] [--scope <scope.json>] [--blast-radius <blast-radius.json>] [--pr-context <pr-context.md>] [--json]`). Mode `all` (the default) is every installed `review-*` reviewer plus the project reviewers, minus the router, verifier, regression, PR-contract, PR-feedback, greptile and strict entries, minus engine reviewers, minus those the stack scoping rules out, minus path-gated ones no scope-A file matches. Mode `diff` is the set derived from the changed files plus the project reviewers; it needs `--scope` with the file list. Each excluded reviewer prints with its reason. `keryx review start\|ingest --scope <scope.json>` stores the file list as `scope-files.json`, and `keryx review complete` refuses a `research.json` whose `dispatch.mode` is missing or whose `dispatch.selected` omits a required reviewer, unless `dispatch.override` carries `operatorQuote` and `reason`. `review-pr-contract` joins the set, in both modes, only when `pr-context.md` is in the package (`--pr-context` names it, as `--blast-radius` does for `review-regression`); without it the reviewer prints as excluded with that reason. The rule binds a package whose `research.json` was written by `review ledger build` of this version, which stamps `dispatch.roles` with the roles it knows; a `dispatch` without that stamp predates the role, so a package already in flight is not newly refused: the gate passes and `review complete` warns `review-pr-contract not run (package predates the role)`. |
+ | `mutate` | Run the reviewers' proposed mutants against the tests (`keryx review mutate --test "<command>" --package <review-dir>`). Each mutant is one exact-text replacement in a scratch copy of the worktree; the worktree is never written, and the baseline must pass first or no mutant runs. A mutant is `killed` (the tests failed), `survived` (they passed: no assertion pins that behaviour), `invalid` (the anchor is missing or not unique) or `timeout`. A mutant may carry `"kind": "behavior"` (the default; it changes what the code does) or `"presentation"` (it changes only how something looks or reads: copy, class names, the order of display rows); any other `kind` is refused when the spec is read. `--cap <n>` runs the first `<n>` candidates only: the record gets `cap` and `not_reached` (the candidates it was given but did not run), the table prints `Not run: <n> candidates (cap <c>)`, and those candidates stay pending, so they still block `review complete` for an attended run exactly as a candidate nobody ran does. Without `--cap` the pass runs every candidate and the record has neither field. The testing reviewers propose a `mutant_candidates` entry for every changed branch, and on a shell host, where a reviewer cannot write, the main session writes them to `mutants.json` unchanged. The default spec is `<review-dir>/research-evidence/mutants.json`; results go to `research-evidence/mutation-<n>.json` and `.md`. For an attended run, `review complete` refuses a package with proposed mutants no pass has run, unless `dispatch.mutationWaiver` carries `operatorQuote` and `reason`; a spec with `"runnable": false` says the tests cannot be run here. |
+ | `severity-audit` | Check the severity of findings against what the mutation pass proved (`keryx review severity-audit --package <review-dir> [--dry-run] [--json]`). A finding that cites `mutant:<id>` in its `evidence` is raised to `major` when that mutant survived a recorded run on a file the review changed, no mutant in that file was `killed` or `timeout` in any recorded pass, and the finding was rated `minor`, `nit`, `info` or `low`; the change is recorded as `severity_audit`. A survivor in a file where another mutant was killed is a gap in covered code, and a survivor of kind `presentation` changes no behaviour: in both cases the severity is held, the finding gets `severity_audit.held` (`mutant`, `kind` `covered` or `presentation`, `evidence`, `reason`; a covered note names the kill count), and the command prints `[held]` and counts it apart (`<n> held (survivor does not show wrong behaviour)`); a mutant with no `kind`, and a record written before the field existed, reads as `behavior`. A cited mutant no run executed leaves the finding as it is, labelled `unproven`. It never deletes a finding, and it is separate from the verifier. |
+ | `context-collect` | Collect what a reviewer cannot get from the diff (`keryx review context-collect --repo <owner/repo> --pr <n> --package <review-dir>`): every review comment in full, the round-1 intent, the CI status and the backend pins the pull request names, written to `pr-context.json` and `pr-context.md`. Comments by `--self` are left out. A pull-request review dispatches with `pr_context` set to the `.md`, and `dispatch-check --pr-context` refuses a payload without it. |
+ | `estimate` | Print the plan's reviewer dispatches and minutes from the slice manifest and roles, and flag a plan over the threshold: `dispatch-check` and `ledger` refuse such a plan until the operator confirms it (`confirm-plan` or `estimate --confirm --quote` at a terminal, or the `review_confirm_plan` card in keryx shell). Limits: `routing.config.json` `reviewPlan.maxDispatches` (default 40) and `reviewPlan.maxMinutes` (default 90). |
+ | `plan` | The round plan in one command, without dispatching (`keryx review plan --target <pr-url\|branch> [--ref <base>] [--head <sha>] [--host <host>] [--json]`): `review start` (which finds the previous round of the target in the local packages, git history, the PR's round block and comments, and the flow, and writes `round.json`), `scope`, `blast-radius --package`, `slice --package` (a delta round slices only prevHead..head; each slice is `kind: fix` with its `findingIds`, read deep by review-logic, review-regression, the reviewers that authored those findings and every role its own content routes, or `kind: new`, routed as in round 1), `required --depth auto --scope --package` and `estimate`. Writes `<review-dir>/plan.json` (round, slices by kind, roster, dispatches, minutes, `overThreshold`, `next`: `dispatch`, or confirm the plan with the `review_confirm_plan` card / `keryx review confirm-plan`) and prints a short summary. A fix slice is covered once every reviewer on its roster read it and every finding attached to it has a disposition (`closed`, `open`, `partial`, `regressed` or `withdrawn`, in the `prior_dispositions` of a finished result of that roster); findings carried over from the previous round keep their recorded disposition but cover no fix slice. A previous round is cut from only when it is ours and finished — a round block from our own login, or a package with completion evidence (published.json, a scopeReviewed ledger, a closed status) that no commit of merge-base..head added or changed; anything else is a full round with its findings as context. `--memory-query` and `--unattended` are passed to `review start`. |
+ | `plan-eval` | Compare the old and the new slicing plan offline for a diff (`--diff <file\|base..head>`): dispatches, chunks, and, with `--findings`, whether every ground-truth blocker/major lands in a slice its reviewer or a deep pass reads. Writes nothing. |
+ | `verdict` | Print the round's verdict as it stands: finding counts by severity, verified vs unverified (refuted excluded), open blockers and majors, and reviewers that have not reported. Reads the ingested `findings.json`, else the raw replies in `--raw <dir>` (default `<package>/raw`); writes `verdict-interim.md` into the package. |
+ | `confirm-plan`, `waive-mutation`, `override-reviewers` | Record the operator's own decision (plan confirmation, mutation-pass waiver, smaller reviewer set) in the package. Asks at the terminal and is refused without a TTY; inside keryx shell the agent calls the `review_confirm_plan`, `review_waive_mutation` or `review_override_reviewers` card instead. |
++| `decide-premise` | Answer the premise question on a finding the `review-premise` judge held (`challenged` or `owner-decision`): `--answer uphold` returns it to kept at its original severity, `--answer dismiss` records it `dismissed-incorrect` with your `--reason` as the evidence. Refused for an unknown finding, a finding that is not held and a missing reason. Asks at the terminal and is refused without a TTY; inside keryx shell the agent calls the `review_decide_premise` card. |
+ | `verify-run` | Run a verification command in the parent session and save its stdout, stderr and exit status to `<review-dir>/research-evidence/verify-<id>-<n>.txt`, for the verifier to cite as executed evidence. |
+ | `compare-reference` | Compare a reference report's items with a package (`keryx review compare-reference --reference <report.md> --package <review-dir> [--input <dir>] [--json]`), per item: **A** the role that would find it was not run, **B** the role ran and nothing matches, **C** it was seen and lost after the answer (`--input` supplies the raw reviewer replies), **D** it was kept, with its severity, **E** the reference ran a mutant and this package has no mutation pass. |
+ | `import` | The review-shaped spelling of `keryx skills import --module review`: same importer, same rules, module implied (`keryx review import --from <package-dir\|tree> [--only <glob>]... [--dry-run] [--force] [--allow-flagged] [--json]`). A tree of several packages is refused, with the candidate list, until `--only <glob>` (repeatable, matched against the package directory name as it is on disk; an empty value is an error) says which ones: every package in module `review` is dispatched as a reviewer. The package is written under the slug of its directory name, and two selected directories that slug to one destination are refused. A `deprecated: true` package is skipped in a tree import, a bundled name is skipped unless `--force`, and a reviewer with no path trigger — no `metadata.paths` and no glob in its description; a lone literal file path is not one — is imported with a `paths: none` warning. More warnings can follow a row: a `metadata.flags` entry dropped as not a flag; a flag that exactly one existing project reviewer carries, which becomes a family flag for both; and, on a `--force` overwrite, a family flag the new version drops that leaves one other reviewer its only carrier. A package directory with no letter or digit is refused, and so is any destination behind a symlink that resolves outside the project — before anything is written, `--dry-run` included. Also copies the `<dir>/<name>.mdc` rules the skills cite from the overlay's `rules/`: a rule the project lacks goes to `.metaproject/rules/<dir>/<name>.mdc`; one whose reference is already answered by a file with other content, or a `core/` rule keryx ships under the same name, goes to the reference's project slot `.metaproject/rules/project/<dir>/<name>.mdc` (statuses `differs`, `imported-project`; `core/x.mdc` → `rules/project/core/x.mdc`), which a reviewer's reference resolves to first. `rules/core` is rewritten by `keryx init`, `keryx update` and the legacy-profile `keryx skills install` (the manifest form with `--target keryx-shell` skips an existing file it did not record unless `--force`); `rules/project` is written by none of them. A file lying directly in `rules/project/` answers only a literal `project/<name>.mdc` citation. Re-run it over an existing import to fetch only the rules. The security gate runs on every `SKILL.md` and rule while the import is planned, `--dry-run` included: a secret is redacted and the row says so, and a file with a prompt-injection finding is `refused` (`would-refuse` on a dry run), writes nothing and leaves the rest of the import going, unless `--allow-flagged` is passed after you have read it (see [`skills import`](#skills)). That holds with the security module disabled too (the import runs the injection detector itself). A rule cited only by refused packages is not written (`skipped — cited only by a refused package`). A real run with any `refused` row prints every row and exits `1`; a dry run exits `0`. Undo with `keryx skills remove review/<name>`. |
+ 
+ Target kinds are validated by the runtime. Review packages are stored under the
+ linked flow when attached, or in the managed standalone review location selected
+ by the review service.
+ 
+ ### `review run` {#review-run}
+ 
+ ```text
+ keryx review run --autonomous --target pr --ref <pull request URL>
+                  [--budget-minutes N] [--budget-tokens N] [--stall-minutes N]
+                  [--out <dir>] [--provider p] [--model m] [--no-notify] [--json]
+ ```
+ 
+ One review of one pull request with nobody at the keyboard, in the `review-autonomous` profile
+ (`keryx shell --print` in `trust` mode under `--review-system review-auto`, source only). It needs no
+ terminal. It starts the review package, dispatches the reviewers, ingests their findings and closes
+ the package with `review complete`.
+
+--- docs/docs/cli-reference.md
+@@ 6544,6584 @@
+ keryx review tier --scope blast-radius --findings 12 --diff-lines 340 --json
+ ```
+ 
+ It sits beside `review scope`, `review blast-radius` and `review budget` for the
+ same reason those exist: all four are *compute this mechanically, before
+ dispatching, instead of eyeballing it*. The rule used to say an orchestrator
+ "calls `decideDispatchModel`" — but an orchestrator is an agent following prose
+ and cannot call a TypeScript function, so what actually happened was a model
+ reading a table of signals and doing the arithmetic in its head. This is the
+ entry point that removes that step.
+ 
+ | Flag | Description |
+ |---|---|
+ | `--scope <scope>` | The round's scope. `blast-radius` floors the tier at `deep`. |
+ | `--fix-attempt <n>` | 1-based attempt at the **same** finding. `>= 2` raises one tier. |
+ | `--forced-strategy-change` | A strategy change forced by hitting the loop cap. Floors at `deep`. |
+ | `--findings <n>` | Findings in scope for this dispatch. |
+ | `--diff-lines <n>` | Changed lines in the diff under review. `<= 3` findings **and** `<= 50` lines allow `light`. |
+ | `--verifier <method>` | `execution`, `site-check` or `reasoning`. The first two allow `light`: the evidence comes from running something. An unrecognised method is refused, not ignored. |
+ | `--security` | Any security finding in scope. Never below `standard`. |
++| `--premise` | The dispatch is the `review-premise` judge. Floors at `deep`, beating a `light` verifier method: the judge reasons about practice and intent instead of running something. |
+ | `--session-provider <id>`, `--session-model <id>` | The session's own provider/model. Omitted, they come from `KERYX_SESSION_PROVIDER`/`KERYX_SESSION_MODEL`; with neither, the block is adaptive. |
+ | `--from-shell-config` | Use the selection `keryx shell` persisted as the session. Off by default: it is `keryx shell`'s last choice, not the caller's model. |
+ | `--catalog <file\|->` | The candidate set, in the `detectProviders()` shape `[{"name": …, "models": [ … ]}]`. Omitted, providers are detected live. |
+ | `--json` | Print the `{"model": …}` block alone. |
+ 
+ Floors are applied after downgrades, so *at least `deep`* means at least: a
+ blast-radius round over a twelve-line diff is still a blast-radius round. The
+ output carries the ordered rule ids that produced the tier, so the answer can be
+ explained afterwards rather than re-derived.
+ 
+ **No model name exists in this command, and there is no `--tier` flag.** The
+ session's provider/model and the candidate set are both discovered at runtime;
+ `src/gdskills/model-tier.ts` places the tier relative to the session's own model
+ using size words in model names (`mini`, `haiku`, `pro`, `opus`, …), never a list
+ of models that exist. Accepting a hand-written tier would put the arithmetic
+ back in the caller's head, which is the defect.
+ 
+ **A model is named only when discovery found a different one; otherwise the block
+ is adaptive, and exits 0.** With no session named, an unrankable catalogue, a
+ session model carrying no size marker, or a tier that resolves to the session
+
+--- docs/docs/cli-reference.md
+@@ 6620,6669 @@
+ `attach`, `start` and `ingest` accept the output of the `review-verifier` skill
+ and merge it into the package. **The merge can only delete.** It cannot raise a
+ severity, add a finding, or change a finding's text: the merged record is built
+ from the finding as reported, and only the verdict is taken from the claim. A
+ claim that carries anything else is discarded whole and the attempt is recorded
+ in `scope.md`.
+ 
+ This replaced `review-strict`, which re-read consolidated findings and adjusted
+ their severity with no new evidence. That operation is measured to make accuracy
+ worse — GPT-4 on GSM8K falls 95.5 → 91.5 → 89.0 across self-correction rounds and
+ GPT-3.5 on CommonSenseQA falls 75.8 → 38.1 (Huang et al., ICLR 2024,
+ arXiv:2310.01798) — so it was removed rather than improved.
+ 
+ | Flag | Description |
+ |---|---|
+ | `--verifications <file\|->` | The verifier's result: an array of claims, or `{verifier, verifications}`. |
+ | `--verification-mode <mode>` | `off`, `annotate` (default), or `filter`. |
+ | `--scope <scope.json>` | The **whole** `--json` output of `keryx review scope`, so the record carries what the pre-filter dropped and why. Handing over only its `counts` object is refused: eight integers carry no reason for any individual drop. |
+ | `--tokens-in <n>`, `--tokens-out <n>` | What the round actually used. Recorded on the package; absent means **nobody reported**, which is not zero. |
+ 
++### Premise — `--premises`
++
++`ingest` also accepts the output of the `review-premise` skill, run after the verifier over the canonical findings. A finding can reproduce and still be no defect: the code may carry an explicit override, an exemption note or a sibling doing the same, and accepted platform practice may support it. The judge answers `upheld`, `downgraded`, `challenged` or `owner-decision` per finding. **The merge can only hold or lower.** It never adds a finding, raises a severity or edits a finding's text, and it never dismisses one: `challenged` and `owner-decision` hold the finding for the operator, who answers with `keryx review decide-premise`. A held finding is not an open blocker or major, is listed as "awaiting operator", and fails readiness and the flow review gate until it has an answer.
++
++Claims that name an unknown finding, come from the finding's own reporter, challenge without a cited intent signal or practice source, or hold without a question (an `owner-decision` without at least two options) are discarded whole and listed in `scope.md`. Accepted claims are stored in `research-evidence/premises.json` and on each finding record.
++
++| Flag | Description |
++|---|---|
++| `--premises <file\|->` | The judge's result: the bare `{judge, model?, premises}` object, or a reply or report holding it in one fenced ` ```json keryx:premises ` block. A bare array is refused: it names no judge. |
++
+ ### A finding points at the code it quotes
+ 
+ A finding does not report a line number. It reports `quote` — the code it is
+ about, copied out of `file` — and `review ingest` locates that quote at the
+ commit the round records, writing the line the match started on. `line` is
+ therefore **output**, and a number a reviewer puts there is overwritten.
+ 
+ The reason is the failure it replaces: nothing compared a reported line to
+ anything, so a number that had drifted travelled into `findings.json`, into the
+ report, and into the disposition somebody later recorded against it. On a fix
+ round the file has moved under the finding by construction, which is when the
+ reported number is least trustworthy and most acted upon.
+ 
+ Matching is exact first, then with whitespace collapsed, then it stops — nothing
+ fuzzy. Three outcomes, all recorded in `locator`:
+ 
+ | Outcome | What it means |
+ |---|---|
+ | `derived` | The quote was found; `line` is where, and `reported_line` keeps whatever the reviewer claimed. |
+ | `unlocatable` | It was not, and `line` is `null` rather than a number nobody checked. The `reason` says which: the file is absent at that commit, the quote does not appear, or it appears in more than one place. |
+
+--- docs/docs/guides/review-with-a-record.md
+@@ 12,52 @@
+ ## Start one
+ 
+ Standalone, or attached to a managed flow:
+ 
+ ```bash
+ keryx review start  --target branch --ref feature/example --reviewers a,b
+ keryx review attach --flow 001 --target pull-request --ref 42
+ ```
+ 
+ The full surface:
+ 
+ ```console
+ $ keryx review
+ Usage:
+   keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
+                       [--reviewers a,b] [--report <path>]
+   keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+                      [--memory-query "<query>"]
+   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
+                       [--verifications <file|->] [--verification-mode off|annotate|filter]
++                      [--premises <file|->]
+                       [--scope <scope.json>] [--refuted <file|->]
+                       [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
+                       [--parallel <n>] [--outstanding <n>]
+   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
+                      [--json | --scoped-diff] [--append <file>]
+   keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
+                             [--no-related-tests] [--final] [--previous <blast-radius.json>]
+                             [--package <review-dir>] [--json | --brief] [--out <file>]
+   keryx review budget [--spent <usd>] [--ceiling <usd>]
+                       [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
+   keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
+                                 [--self <login>] [--round <n>]
+                                 [--out <findings.json>] [--json] [--fixtures <dir>]
+   keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
+                               --review <review-id> --sha <head-sha> --final [--round <n>] [--dry-run]
+                               [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
+                               [--flow-link <url>] [--fixtures <dir>] [--allow-closed-pr]
+   keryx review loop --flow <flow-id> [--task <Tn>]
+   keryx review stack [--json]
+   keryx review status <review-id-or-path>
+
+--- docs/docs/guides/review-with-a-record.md
+@@ 563,635 @@
+ is measured to make accuracy worse: GPT-4 on GSM8K falls 95.5 → 91.5 → 89.0 across
+ self-correction rounds, GPT-3.5 on CommonSenseQA falls 75.8 → 38.1 (Huang et al.,
+ ICLR 2024, arXiv:2310.01798).
+ 
+ `review-verifier` replaced it and **can only delete**. It checks a finding by
+ running something that fails if the finding is real, and merges through:
+ 
+ ```bash
+ keryx review ingest --report round7.md --ref round7 \
+   --verifications verifier-result.json \
+   --scope scope.json
+ ```
+ 
+ The merge cannot raise a severity, add a finding, or rewrite one; a finding is
+ never verified by the reviewer that raised it; and a verdict reached by reasoning
+ alone is capped at `unverifiable`. The default mode is `annotate` — verdicts are
+ recorded and **nothing is removed** — so the drop rate is a measured number before
+ it costs a real finding. Every package's `scope.md` carries the stage counts:
+ dropped by the pre-filter, refuted by the verifier, retained.
+ 
++## Ask whether the finding is a defect at all
++
++A finding can reproduce and still be wrong: the code may carry an explicit
++override, an exemption note or a sibling doing the same thing, and accepted
++platform practice may back it (media controls and timelines do not mirror in
++right-to-left layouts). The verifier cannot see that, because it checks facts.
++`review-premise` runs after it, on a clean context, and answers `upheld`,
++`downgraded`, `challenged` or `owner-decision` for each finding. Like the
++verifier it **can only hold or lower**, and it never dismisses anything.
++
++```bash
++keryx review ingest --report round7.md --ref round7 \
++  --verifications verifier-result.json \
++  --premises premise-result.json
++```
++
++`--premises` takes the judge's JSON, or a reply that holds it in one
++`` ```json keryx:premises `` block. A `challenged` or `owner-decision` finding is
++**held**: it is not an open blocker or major, it is not handed to a fixer, the
++verdict lists it as "awaiting operator", and readiness and the flow review gate
++fail until you answer. You decide it, at a terminal:
++
++```bash
++keryx review decide-premise --package .metaproject/reviews/round7 \
++  --finding LY-003 --answer dismiss --reason "platforms do not mirror media controls"
++```
++
++`--answer uphold` returns the finding to kept at its original severity;
++`--answer dismiss` records it `dismissed-incorrect` with your reason as the
++evidence. In keryx shell the agent asks you the same question as a
++`review_decide_premise` card. An agent's shell cannot answer for you: the command
++is refused without a terminal.
++
+ ## Ingest a report someone already wrote
+ 
+ ```bash
+ keryx review ingest --target report --ref round6-review.md --report path/to/report.md
+ ```
+ 
+ **The parser has a shape, and it will refuse rather than guess.** Two things
+ that cost real time when they are learned the hard way:
+ 
+ - A finding must be a `## F-nnn — title` heading with `severity: <level>` in its
+   block. A heading like `## F-040 (blocker) — …` is read as **prose**, and the
+   ingest reports success having recorded **zero findings** — a ten-finding
+   review stored as an empty package.
+ - A `blocker` or `major` finding **without a `class_scope`** is refused. The
+   scope must name the sites and the enumeration method: *how* you established
+   that this is the whole class, not just the instance you happened to see.
+ 
+ The second is the more useful constraint. It is the difference between "I found
+ a bug here" and "I know where else this shape occurs, and here is how I looked."
+ 
+
+--- src/commands/automatic-review.ts
+@@ 183,223 @@
+       flags.set(name, []);
+     }
+   }
+   return flags;
+ }
+ 
+ /** `review mutate --test` runs a command: only the repository's own `bun test`, as the routine table allows. */
+ function isBunTest(command: string): boolean {
+   const words = command.trim().split(/\s+/);
+   const args = words.slice(2);
+   return (
+     words[0] === "bun" &&
+     words[1] === "test" &&
+     words.every((word) => /^[A-Za-z0-9_@%+=,.:/-]+$/.test(word)) &&
+     !words.some((word) => word.split("/").includes("..")) &&
+     args.every((word) => !word.startsWith("-") || /^--(?:bail|timeout=\d+)$/.test(word))
+   );
+ }
+ 
+ /** Flags of `review start|attach|ingest` that read a file the model names. */
+-const CREATE_PATH_FLAGS = ["--research", "--report", "--refuted", "--verifications"] as const;
++const CREATE_PATH_FLAGS = ["--research", "--report", "--refuted", "--verifications", "--premises"] as const;
+ 
+ /** What an approved `apply_patch` may write inside the package: data, never anything runnable. */
+ const PACKAGE_DATA_EXTENSIONS: ReadonlySet<string> = new Set([".md", ".json", ".jsonl", ".txt"]);
+ 
+ /**
+  * The state of one automatic-review turn: which package it is bound to, whether
+  * the completion gate has refused, and the count of inputs the operator gave
+  * versus ones the shell supplied.
+  *
+  * It lowers exactly two prompts and nothing else. A shell command is approved
+  * without asking only when it is a literal `keryx review <subcommand>` of the
+  * closed set above aimed at THIS run's package; an `apply_patch` only when every
+  * target lies inside that package. Every hard floor (credentials, destructive,
+  * human confirmation, publish lease, read-only, untrusted content, a hook's ask)
+  * is checked by the caller before this is consulted.
+  */
+ export class AutomaticReviewRun {
+   private binding: { id: string; dir: string } | undefined;
+   private gateRefused = false;
+   private readonly entries: DisclosureEntry[] = [];
+
+--- src/commands/operator-confirm-review.ts
+@@ 1,63 @@
+ // Operator-confirmed gate tools (review gates) — flow 456. Each spec is registered through operatorConfirmSpecs().
+ //
+ // Four decisions only the operator may take, each asked as a yes/no card in the shell and applied in process through the
+ // SAME library function its CLI counterpart calls (the CLI path needs a TTY, which `shell_exec` does not have):
+ //
+ //   review_chunks_answer    keryx review chunks estimate --answer yes|no --quote   -> answerChunkEstimate
+ //   review_publish          keryx review publish [--partial]                       -> publishReview
+ //   review_waive_coverage   keryx review complete --waive-coverage "<quote>"       -> recordCoverageWaiver
+ //   review_waive_readiness  keryx review complete --waive <item> "<quote>"         -> waiveReadiness
+ //
+ // Flow 457 (T7) adds four more, each with a terminal counterpart that refuses without a TTY:
+ //
+ //   review_waive_mutation      keryx review waive-mutation --package --reason          -> recordOperatorDecision
+ //   review_override_reviewers  keryx review override-reviewers --package --reason      -> recordOperatorDecision
+ //   review_comments_reply      keryx review comments reply --final                     -> commentsReplyPass
+ //   review_confirm_plan        keryx review confirm-plan --package                     -> recordPlanConfirmation
+ //
++// Flow 459 adds one more: review_decide_premise (keryx review decide-premise --package --finding --answer --reason ->
++// recordPremiseDecision), the operator's answer to a finding the premise judge held.
++//
+ // The waiver tools record the waiver only. Closing the review is still `keryx review complete`, which finds the waiver in
+ // the package and passes the gate; the CLI flags record the waiver and close in one run.
+ //
+ // Every card is built from the package on disk, never from the model's input alone, and `apply` refuses when the package
+ // moved between the card and the yes.
+ 
+ import { existsSync, statSync } from "node:fs";
+ import path from "node:path";
+ import { cardSafe } from "../trigger/schedules";
+ import { githubAdapter, githubPostReview, githubPrFiles } from "../flow/service";
+ import { placeReviewPath } from "../lib/review-path-flags";
+ import { DEFAULT_BLAST_RADIUS_MAX_FILES } from "../review/blast-radius";
+ import { readChunkPlan } from "../review/chunks";
+ import { answerChunkEstimate, chunkModeOf, estimateChunkRun, recordChunkEstimate } from "../review/chunks-estimate";
+ import { computeCoverage, recordCoverageWaiver } from "../review/coverage-complete";
+ import { resolveReviewPackagePath } from "../review/managed";
+ import { publishReview, reviewEvent, type PostResult, type ReviewEvent } from "../review/publish";
+ import { computeReadiness, readinessItemId, waiveReadiness, type ReadinessOptions } from "../review/readiness";
+ import type { PrLookup } from "../review/complete-head-gate";
+ import type { OperatorApplyResult, OperatorCardResult, OperatorConfirmSpec } from "./operator-confirm-tools";
+ import { operatorDecisionSubject, reviewersLeftOut } from "../review/coverage";
+-import { recordOperatorDecision, type OperatorDecisionKind, type OperatorDecisionSubject } from "../review/operator-decisions";
++import { recordOperatorDecision, recordPremiseDecision, type OperatorDecisionKind, type OperatorDecisionSubject } from "../review/operator-decisions";
++import { findHeldFinding } from "../review/premise-question";
+ import { estimatePlan, planKeyOf, planOverThreshold, recordPlanConfirmation } from "../review/plan-confirmation";
+ 
+ /** What the specs read outside the package: the PR tracker. Tests replace these; the defaults are the CLI's. */
+ export interface ReviewConfirmSeams {
+   prLookup?: PrLookup;
+   prFiles?: (ref: string) => Promise<string[] | null>;
+   postReview?: (ref: string, event: ReviewEvent, body: string) => Promise<PostResult>;
+ }
+ 
+ const LISTED_FILES = 15;
+ const BODY_PREVIEW_LINES = 8;
+ const BODY_PREVIEW_CHARS = 140;
+ 
+ async function trackerPrLookup(ref: string): Promise<Awaited<ReturnType<PrLookup>>> {
+   if (!(await githubAdapter.detect())) return null;
+   return githubAdapter.prStatus(ref);
+ }
+ 
+ const packageSchema = { type: "string", description: "The review package: its directory or its review id." } as const;
+ 
+
+--- src/commands/operator-confirm-review.ts
+@@ 541,645 @@
+             ...estimate.perRole.slice(0, LISTED_FILES).map((role) => `  ${cardSafe(role.role)}: ${role.slices} slice(s), ${role.waves} wave(s)`),
+             "yes: this plan may run; a re-cut plan asks again",
+           ],
+           subject: `package ${name}`,
+           prepared: { dir, planKey: planKeyOf(estimate) },
+         };
+       } catch (error) {
+         return failed(error);
+       }
+     },
+     async apply(_input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
+       if (prepared === undefined) return { output: "review_confirm_plan: nothing prepared for this card", isError: true };
+       const estimate = await estimatePlan(prepared.dir);
+       if (planKeyOf(estimate) !== prepared.planKey) return { output: "The plan changed after the card was shown; nothing was recorded. Ask again.", isError: true };
+       const record = await recordPlanConfirmation(prepared.dir, estimate, { quote: confirmation.quote, confirmedVia: confirmation.confirmedVia, at: confirmation.at });
+       return { output: `plan confirmed by the operator (${record.confirmedVia}, ${record.at}): ${record.dispatches} dispatch(es), ${record.minutes[0]}-${record.minutes[1]} min` };
+     },
+   };
+ }
+ 
++// ---------------------------------------------------------------------------------------------------------------------
++// 9. review_decide_premise (flow 459)
++
++type PremisePrepared = { dir: string; finding: string; answer: "uphold" | "dismiss"; reason: string; severity: string; verdict: string };
++
++function decidePremiseSpec(): OperatorConfirmSpec<PremisePrepared> {
++  return {
++    name: "review_decide_premise",
++    description:
++      "Record the operator's answer to a finding the premise judge held (verdict challenged or owner-decision): uphold keeps it at its original severity, dismiss records it dismissed-incorrect with the reason as evidence. " +
++      "Pass the review package, the finding (its global_id or id), the answer you are asking for and the reason. Same effect as `keryx review decide-premise` at a terminal. A held finding never goes to a fixer before this is answered.",
++    inputSchema: {
++      type: "object",
++      properties: {
++        package: packageSchema,
++        finding: { type: "string", description: "The held finding: its global_id or id." },
++        answer: { type: "string", enum: ["uphold", "dismiss"], description: "The answer to record if the operator confirms." },
++        reason: { type: "string", description: "Why, in a sentence the operator will read." },
++      },
++      required: ["package", "finding", "answer", "reason"],
++      additionalProperties: false,
++    },
++    async buildCard(input, ctx): Promise<OperatorCardResult<PremisePrepared>> {
++      const ref = packageRef(input);
++      const reason = reasonOf(input);
++      const finding = typeof input["finding"] === "string" ? input["finding"].trim() : "";
++      const answer = input["answer"];
++      if (ref === undefined) return { refusal: "package is required" };
++      if (finding === "") return { refusal: "finding is required" };
++      if (answer !== "uphold" && answer !== "dismiss") return { refusal: 'answer must be "uphold" or "dismiss"' };
++      if (reason === undefined) return { refusal: "reason is required" };
++      try {
++        const dir = await resolvePackage(ref, ctx.projectRoot);
++        const held = await findHeldFinding(dir, finding);
++        if (!held.ok) return { refusal: held.refusal };
++        const found = held.finding;
++        const name = label(dir, ctx.projectRoot);
++        return {
++          title: answer === "uphold" ? `Uphold finding ${cardSafe(found.key)} in ${name} at ${cardSafe(found.severity)}?` : `Dismiss finding ${cardSafe(found.key)} in ${name} as incorrect?`,
++          lines: [
++            `finding: ${cardSafe(found.key)} (${cardSafe(found.severity)}): ${cardSafe(found.problem)}`,
++            `premise judge: ${cardSafe(found.verdict)}: ${cardSafe(found.question)}`,
++            ...(found.answered === undefined ? [] : [`already answered: ${found.answered}; this answer replaces it`]),
++            `reason: ${cardSafe(reason)}`,
++            answer === "uphold"
++              ? `yes: the finding is kept at ${cardSafe(found.severity)} and goes to the fixer again`
++              : "yes: the finding is recorded dismissed-incorrect with your reason as the evidence",
++          ],
++          subject: `package ${name}, finding ${cardSafe(found.key)}`,
++          prepared: { dir, finding: found.key, answer, reason, severity: found.severity, verdict: found.verdict },
++        };
++      } catch (error) {
++        return failed(error);
++      }
++    },
++    async apply(_input, _ctx, confirmation, prepared): Promise<OperatorApplyResult> {
++      if (prepared === undefined) return { output: "review_decide_premise: nothing prepared for this card", isError: true };
++      const again = await findHeldFinding(prepared.dir, prepared.finding);
++      if (!again.ok || again.finding.severity !== prepared.severity || again.finding.verdict !== prepared.verdict) {
++        return { output: "The finding changed after the card was shown; nothing was recorded. Ask again.", isError: true };
++      }
++      await recordPremiseDecision(prepared.dir, { kind: "premise-question", finding: prepared.finding, answer: prepared.answer, reason: prepared.reason, at: confirmation.at, actor: "operator", confirmedVia: confirmation.confirmedVia });
++      return { output: `premise question on ${prepared.finding} answered ${prepared.answer} by the operator (${confirmation.confirmedVia}, ${confirmation.at}) in operator-decisions.json` };
++    },
++  };
++}
++
+ /** The specs with the tracker seams a test replaces; `reviewConfirmSpecs()` is this with the CLI's defaults. */
+ export function buildReviewConfirmSpecs(seams: ReviewConfirmSeams = {}): readonly OperatorConfirmSpec[] {
+   return [
+     chunksAnswerSpec(),
+     publishSpec(seams),
+     waiveCoverageSpec(),
+     waiveReadinessSpec(seams),
+     decisionSpec("mutation-waiver"),
+     decisionSpec("reviewer-override"),
+     replySpec(),
+     confirmPlanSpec(),
++    decidePremiseSpec(),
+   ] as readonly OperatorConfirmSpec[];
+ }
+ 
+ export function reviewConfirmSpecs(): readonly OperatorConfirmSpec[] {
+   return buildReviewConfirmSpecs();
+ }
+
+--- src/commands/review-operator.ts
+@@ 1,82 @@
+ // Terminal counterparts of the flow-457 operator cards, and `verify-run` (flow 457, T7).
+ //
+ //   keryx review waive-mutation      --package <dir> --reason "<why>"     (TTY; card: review_waive_mutation)
+ //   keryx review override-reviewers  --package <dir> --reason "<why>"     (TTY; card: review_override_reviewers)
+ //   keryx review confirm-plan        --package <dir>                      (TTY; card: review_confirm_plan)
++//   keryx review decide-premise      --package <dir> --finding <id> --answer uphold|dismiss --reason "<why>"  (TTY; card: review_decide_premise)
+ //   keryx review verify-run          --package <dir> --finding <id> [--timeout <s>] -- <command…>
+ //
+-// The first three record the operator's own decision, so each asks at the terminal and refuses when stdin or stdout
++// The first four record the operator's own decision, so each asks at the terminal and refuses when stdin or stdout
+ // is not a TTY: an agent's shell cannot answer for the operator. verify-run only runs a command and saves its output.
+ 
+ import { createInterface } from "node:readline/promises";
+ import { optionValue } from "../lib/args";
+ import { operatorDecisionSubject } from "../review/coverage";
+-import { recordOperatorDecision, type OperatorDecisionKind } from "../review/operator-decisions";
++import { recordOperatorDecision, recordPremiseDecision, type OperatorDecisionKind } from "../review/operator-decisions";
+ import { estimatePlan, recordPlanConfirmation } from "../review/plan-confirmation";
++import { findHeldFinding } from "../review/premise-question";
+ import { verifyRun } from "../review/verify-run";
+ import { resolvePackageDir } from "./review-layers";
+ 
+-export const OPERATOR_COMMANDS = ["waive-mutation", "override-reviewers", "confirm-plan", "verify-run"] as const;
++export const OPERATOR_COMMANDS = ["waive-mutation", "override-reviewers", "confirm-plan", "decide-premise", "verify-run"] as const;
+ export type OperatorCommand = (typeof OPERATOR_COMMANDS)[number];
+ 
+ export type OperatorCommandSeams = {
+   isTerminal?: () => boolean;
+   /** The operator's answer to the question; default reads a line from the terminal. */
+   ask?: (question: string) => Promise<string>;
+   cwd?: string;
+   log?: (line: string) => void;
+ };
+ 
+ const CARD: Record<Exclude<OperatorCommand, "verify-run">, string> = {
+   "waive-mutation": "review_waive_mutation",
+   "override-reviewers": "review_override_reviewers",
+   "confirm-plan": "review_confirm_plan",
++  "decide-premise": "review_decide_premise",
+ };
+ 
+ export function printOperatorCommandHelp(command: OperatorCommand): void {
+   const lines: Record<OperatorCommand, string> = {
+     "waive-mutation": `keryx review waive-mutation --package <review-dir> --reason "<why>"
+ 
+ Records the operator's waiver of the mutation pass in <review-dir>/operator-decisions.json: the review may
+ record \`Not run: mutation pass\` with unrun mutants. Asks at the terminal; refused without a TTY. In keryx
+ shell the review_waive_mutation tool asks the same as a card.`,
+     "override-reviewers": `keryx review override-reviewers --package <review-dir> --reason "<why>" [--selected a,b]
+ 
+ Records the operator's decision to run a smaller reviewer set than \`keryx review required\` names (an
+ override or mode diff) in <review-dir>/operator-decisions.json. Asks at the terminal; refused without a TTY.
+ In keryx shell the review_override_reviewers tool asks the same as a card.`,
+     "confirm-plan": `keryx review confirm-plan --package <review-dir>
+ 
+ Shows the plan's dispatches and minutes (\`keryx review estimate\`) and records the operator's yes in
+ <review-dir>/plan-confirmation.json for exactly this plan. Asks at the terminal; refused without a TTY. In
+ keryx shell the review_confirm_plan tool asks the same as a card.`,
++    "decide-premise": `keryx review decide-premise --package <review-dir> --finding <id> --answer uphold|dismiss --reason "<why>"
++
++Answers the premise question on a finding the premise judge held (verdict challenged or owner-decision) and
++records it in <review-dir>/operator-decisions.json. uphold returns the finding to kept at its original
++severity; dismiss records it dismissed-incorrect with your reason as the evidence. Refused for an unknown
++finding, a finding that is not held, or a missing reason. Asks at the terminal; refused without a TTY. In
++keryx shell the review_decide_premise tool asks the same as a card.`,
+     "verify-run": `keryx review verify-run --package <review-dir> --finding <id> [--timeout <seconds>] -- <command…>
+ 
+ Runs a verification command in this (the parent's) session and saves its stdout, stderr and exit status to
+ <review-dir>/research-evidence/verify-<id>-<n>.txt. Hand that file to the verifier as context; a verification
+ claim whose evidence cites it is recorded as executed (method execution), not reasoning. One argument after --
+ runs through sh -c. Default timeout 600 s.`,
+   };
+   console.log(lines[command]);
+ }
+ 
+ async function terminalAsk(question: string): Promise<string> {
+   const rl = createInterface({ input: process.stdin, output: process.stdout });
+   try {
+     return await rl.question(question);
+   } finally {
+     rl.close();
+   }
+ }
+ 
+ function requireTerminal(command: Exclude<OperatorCommand, "verify-run">, isTerminal: () => boolean): void {
+
+--- src/commands/review-operator.ts
+@@ 114,169 @@
+   const isTerminal = seams.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true);
+   requireTerminal(command, isTerminal);
+   const ask = seams.ask ?? terminalAsk;
+   const at = new Date().toISOString();
+ 
+   if (command === "confirm-plan") {
+     const estimate = await estimatePlan(packageDir);
+     const question = `Run ${estimate.dispatches} reviewer dispatches (${estimate.minutes.min}-${estimate.minutes.max} min) for ${packageDir}?`;
+     const answer = (await ask(`${question} [y/N] `)).trim();
+     if (!/^y(es)?$/i.test(answer)) {
+       log("not confirmed; nothing was recorded");
+       return 1;
+     }
+     const record = await recordPlanConfirmation(packageDir, estimate, { quote: `${question}: ${answer}`, confirmedVia: "terminal", at });
+     log(`plan confirmed (terminal, ${record.at}): ${record.dispatches} dispatch(es), ${record.minutes[0]}-${record.minutes[1]} min`);
+     return 0;
+   }
+ 
+   const reason = optionValue(own, "--reason");
+   if (reason === undefined || reason.trim() === "") throw new Error(`Missing --reason "<why>". See \`keryx review ${command} --help\`.`);
++
++  if (command === "decide-premise") {
++    const ref = optionValue(own, "--finding");
++    if (ref === undefined || ref.trim() === "") throw new Error("Missing --finding <id>. See `keryx review decide-premise --help`.");
++    const answerArg = optionValue(own, "--answer");
++    if (answerArg !== "uphold" && answerArg !== "dismiss") throw new Error("--answer must be uphold or dismiss. See `keryx review decide-premise --help`.");
++    const held = await findHeldFinding(packageDir, ref);
++    if (!held.ok) throw new Error(held.refusal);
++    const finding = held.finding;
++    const effect = answerArg === "uphold" ? `keep it at ${finding.severity}` : "dismiss it as incorrect";
++    const question = `Premise question on ${finding.key} (${finding.severity}: ${finding.problem}; judge ${finding.verdict}: ${finding.question}): ${effect} (${reason.trim()})?`;
++    const answer = (await ask(`${question} Type your own words to confirm, or nothing to decline: `)).trim();
++    if (answer === "" || /^n(o)?$/i.test(answer)) {
++      log("not confirmed; nothing was recorded");
++      return 1;
++    }
++    await recordPremiseDecision(packageDir, { kind: "premise-question", finding: finding.key, answer: answerArg, reason: reason.trim(), at, actor: process.env["USER"] ?? "operator", confirmedVia: "terminal" });
++    log(`premise-question ${answerArg} recorded for ${finding.key} (terminal, ${at}) in operator-decisions.json`);
++    return 0;
++  }
+   const kind: OperatorDecisionKind = command === "waive-mutation" ? "mutation-waiver" : "reviewer-override";
+   const selectedArg = optionValue(own, "--selected");
+   const selected = selectedArg === undefined ? undefined : selectedArg.split(",").map((item) => item.trim()).filter(Boolean);
+   // Security review M4: the record binds to what this question shows (head, mutant ids or reviewers left out).
+   const subject = await operatorDecisionSubject(packageDir, kind, kind === "mutation-waiver" ? undefined : selected);
+   const shown = `head ${subject.head ?? "not recorded"}; ${kind === "mutation-waiver" ? "unrun mutants" : "reviewers left out"}: ${subject.items.join(", ") || "none"}`;
+   const question = command === "waive-mutation" ? `Waive the mutation pass for ${packageDir} (${reason.trim()}; ${shown})?` : `Run a smaller reviewer set than required for ${packageDir} (${reason.trim()}; ${shown})?`;
+   const answer = (await ask(`${question} Type your own words to confirm, or nothing to decline: `)).trim();
+   if (answer === "" || /^n(o)?$/i.test(answer)) {
+     log("not confirmed; nothing was recorded");
+     return 1;
+   }
+   await recordOperatorDecision(packageDir, { kind, quote: answer, reason: reason.trim(), confirmedVia: "terminal", at, subject });
+   log(`${kind} recorded (terminal, ${at}) in operator-decisions.json`);
+   return 0;
+ }
+
+--- src/commands/review.ts
+@@ 8,48 @@
+ // Through the security facade, not `security/redact` directly — same
+ // discipline as `src/review/conform-jev.ts`/`conform-clauses.ts`.
+ import { redactSensitiveText } from "../security/service";
+ import { learnProjectSkill } from "../gdskills/learn";
+ import { applyReviewerProfile, parseLearnArgs } from "../learning/service";
+ import { loadSchema, validateJson } from "../gdskills/contracts";
+ import {
+   learningRecordPath,
+   learningSourcePath,
+   loadReviewLearningConfig,
+   renderLearningRecord,
+   renderLearningSource,
+   reviewLearningConfigPath,
+   selectLearnableComments,
+   type LearningSelection,
+ } from "../review/review-learning";
+ import {
+   completeManagedReview,
+   createManagedReviewPackage,
+   getManagedReviewStatus,
++  parseEmbeddedPremises,
+   resolveGitHead,
+   resolveReviewPackagePath,
+   upsertPreFilterScopeBlock,
+   type FindingDispositionRecord,
+   type ManagedReviewIngestInput,
+ } from "../review/managed";
+ import { parityLines, readReviewParity, renderParityReport } from "../review/parity";
+ import type { PrLookup, PrSnapshot } from "../review/complete-head-gate";
+ import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
+ import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
+ import { auditPackage } from "../review/severity-audit";
+ import { type CheckSummary, collectPrContext, parseGhChecks } from "../review/context-collect";
+ import { unjudgedMutants, runMutation, parseMutantSpec, renderMutationTable, writeMutationEvidence, MUTANTS_SPEC, EVIDENCE_DIR, BaselineError, SCRATCH_MODES, type ScratchMode } from "../review/mutate";
+ import { compareReference, loadPackageEvidence, parseReferenceReport, renderComparison } from "../review/compare-reference";
+ import { DEPTH_REQUESTS, ROUND_DEPTH_FILE, decideRoundDepth, packageChangedLines, packageDepthBasis, packageHasBlastRadius, packageHasPrContext, packageScopeFiles, requiredReviewers, type DepthRequest } from "../review/coverage";
+ import { CONFIRM_PLAN_TOOL, estimatePackage, planConfirmationFor, planConfirmed, renderEstimate, writePlanConfirmation } from "../review/estimate";
+ import { readJsonFileOr } from "../lib/json";
+ import type { SliceManifest } from "../review/slice";
+ import { fixSliceRoles } from "../review/round-split";
+ import { printPlanHelp, runPlan } from "./review-plan";
+
+--- src/commands/review.ts
+@@ 156,196 @@
+   type BlastRadiusScreenInput,
+ } from "../review/blast-radius";
+ import { loadGraph } from "../gdgraph/query";
+ import type { GraphData } from "../gdgraph/types";
+ import { withLiveCodexModels } from "./live-codex-models";
+ import { detectProviders } from "./select";
+ import { resolveCallerSession, type SessionSource } from "../lib/caller-session";
+ import { envWithSavedApiKeys } from "../lib/shell-config";
+ import {
+   decideDispatchModel,
+   decideDispatchModelWithAgent,
+   type DiscoveredProvider,
+   type DispatchModelDecision,
+   type SessionModelContext,
+   type TierSignals,
+ } from "../gdskills/model-tier";
+ import { createTierRankHost, type TierRankHost } from "../harness/routing/tier-rank-agent";
+ import { TEST_FILE_RE } from "../testing/selection";
+ import { isVerificationMode, verificationClaims } from "../review/verification";
+ import { writeVerdict } from "../review/verdict";
++import { parsePremiseClaims } from "../review/premise";
+ import {
+   buildReplyPass,
+   collectPrComments,
+   createFixturePort,
+   createGhPort,
+   describePullRequest,
+   externalFindingsFromComments,
+   postReplyPass,
+   shaMatchesHead,
+   prCommentsStatePath,
+   readPrCommentState,
+   recordSeenComments,
+   renderPrCommentsMarkdown,
+   unansweredComments,
+   writePrCommentState,
+   DEFAULT_MAX_REPLIES_TOTAL,
+   DEFAULT_MAX_REPLY_CHARS,
+   DEFAULT_MAX_SENTENCES_PER_REPLY,
+   type CommentOutcome,
+   type GitHubPort,
+
+--- src/commands/review.ts
+@@ 314,354 @@
+  * cosmetic: `keryx review complete <pkg> --disposition acted-on --evidence
+  * "commit abc" --finding F-001` printed `status: closed` and wrote no
+  * disposition at all. The operator's only signal that the mechanism had not run
+  * was its absence from a file they had no reason to open — which is the same
+  * shape as the `keryx:findings` block falling through to the prose parser, and
+  * the same shape as `dismissed-out-of-scope: 0` meaning "not written down".
+  *
+  * A misspelling here is always a mistake: there is no case where a review
+  * command should do LESS than the operator asked and say nothing.
+  */
+ export const CREATE_FLAGS = [
+   "--target",
+   "--ref",
+   "--target-ref",
+   "--head",
+   "--flow",
+   "--review-id",
+   "--reviewers",
+   "--report",
+   "--verifications",
++  "--premises",
+   "--research",
+   "--verification-mode",
+   "--scope",
+   "--blast-radius",
+   // Flow 209 AC2. The `cross_family_review` block, as
+   // `keryx providers cross-family --json` prints it. Without a way in, the
+   // command computed a decision nothing could ever record — and a record nothing
+   // holds is a record nothing reads.
+   "--cross-family-review",
+   "--refuted",
+   "--max-findings",
+   "--spent",
+   "--spend-ceiling",
+   "--tokens-in",
+   "--tokens-out",
+   "--parallel",
+   "--outstanding",
+   "--memory-query",
+   "--graph-timeout",
+   AUTOMATIC_REVIEW_FLAG,
+
+--- src/commands/review.ts
+@@ 546,586 @@
+   "--final",
+   "--previous",
+   "--json",
+   "--brief",
+   "--out",
+   "--package",
+   "--reach",
+   "--no-text-links",
+ ] as const;
+ 
+ const TIER_FLAGS = [
+   "--help",
+   "-h",
+   "--scope",
+   "--fix-attempt",
+   "--forced-strategy-change",
+   "--findings",
+   "--diff-lines",
+   "--verifier",
+   "--security",
++  "--premise",
+   "--session-provider",
+   "--session-model",
+   "--from-shell-config",
+   "--catalog",
+   "--json",
+ ] as const;
+ 
+ const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence", "--waive-coverage", "--head", "--waive"] as const;
+ 
+ const STACK_FLAGS = ["--json"] as const;
+ const REVIEWERS_FLAGS = ["--json"] as const;
+ const COMPARE_REFERENCE_FLAGS = ["--reference", "--package", "--input", "--json"] as const;
+ const MUTATE_FLAGS = ["--worktree", "--spec", "--test", "--package", "--timeout-ms", "--cap", "--scratch", "--json"] as const;
+ const SEVERITY_AUDIT_FLAGS = ["--package", "--dry-run", "--json"] as const;
+ const CONTEXT_COLLECT_FLAGS = ["--repo", "--pr", "--package", "--self", "--checks", "--fixtures", "--json"] as const;
+ export const REQUIRED_FLAGS = ["--mode", "--scope", "--operator-quote", "--blast-radius", "--pr-context", "--depth", "--diff-lines", "--all", "--gating", "--package", "--json"] as const;
+ export const ESTIMATE_FLAGS = ["--package", "--manifest", "--confirm", "--quote", "--json"] as const;
+ const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--allow-flagged", "--json", "--help"] as const;
+ 
+ /**
+
+--- src/commands/review.ts
+@@ 1034,1074 @@
+     isTerminal: createSeams.isTerminal ?? (() => process.stdin.isTTY === true && process.stdout.isTTY === true),
+   });
+   if (unattendedRefusal !== undefined) throw new Error(unattendedRefusal);
+   if (mode !== "ingest" && args.includes("--no-prior-round") && optionValue(args, "--prior") !== undefined) {
+     throw new Error("--prior and --no-prior-round contradict each other: give one.");
+   }
+   const cwd = process.cwd();
+   const head = await resolveCreateHead(args, targetKind, targetRef, cwd);
+   const input: ManagedReviewIngestInput = {
+     cwd,
+     mode,
+     target: { kind: targetKind, ref: targetRef, ...(head === undefined ? {} : { head }) },
+     flowId: optionValue(args, "--flow"),
+     reviewId: optionValue(args, "--review-id"),
+     ...(args.includes(AUTOMATIC_REVIEW_FLAG) ? { automatic: true } : {}),
+     memoryQuery: optionValue(args, "--memory-query")?.trim() || undefined,
+     reviewers,
+     reportPath: optionValue(args, "--report"),
+     refuted: await readRefuted(optionValue(args, "--refuted")),
+     verifications: await readVerifications(optionValue(args, "--verifications"), optionValue(args, "--review-id")),
++    premises: await readPremises(optionValue(args, "--premises")),
+     research: optionValue(args, "--research") ? JSON.parse(await readFile(path.resolve(cwd, optionValue(args, "--research")!), "utf8")) : undefined,
+     verificationMode: parseVerificationMode(optionValue(args, "--verification-mode")),
+     scope: await readScope(optionValue(args, "--scope")),
+     blastRadius: await readBlastRadiusRecord(optionValue(args, "--blast-radius")),
+     crossFamilyReview: await readCrossFamilyReview(optionValue(args, "--cross-family-review")),
+     maxFindingsPerReviewer: parseNonNegativeInteger(optionValue(args, "--max-findings"), "--max-findings"),
+     spend: parseMoney(optionValue(args, "--spent"), "--spent"),
+     spendCeiling: parseMoney(optionValue(args, "--spend-ceiling"), "--spend-ceiling"),
+     concurrency: parseConcurrency(args),
+     // What the round actually used. `--spent` already existed and went only into
+     // the ceiling evaluation, which is why `review budget` could print a ceiling
+     // beside `spent: not recorded` forever. Recorded on the package now, so the
+     // number outlives the terminal it was printed on.
+     cost: costFrom({
+       inputTokens: parseNonNegativeInteger(optionValue(args, "--tokens-in"), "--tokens-in"),
+       outputTokens: parseNonNegativeInteger(optionValue(args, "--tokens-out"), "--tokens-out"),
+       spentUsd: parseMoney(optionValue(args, "--spent"), "--spent"),
+     }),
+   };
+   const result = await createManagedReviewPackage(input);
+
+--- src/commands/review.ts
+@@ 1629,1669 @@
+ /** The §4.4 signals, read from flags an orchestrator already has the answers to. */
+ function tierSignalsFromArgs(args: string[]): TierSignals {
+   const scope = optionValue(args, "--scope");
+   const verifier = optionValue(args, "--verifier");
+   if (verifier !== undefined && !(VERIFICATION_METHODS as readonly string[]).includes(verifier)) {
+     // Refused rather than passed through. An unrecognised method changes nothing
+     // in `assignTier`, so a typo would silently produce `standard` and read as a
+     // considered answer — the same failure shape as a silently dropped flag.
+     throw new Error(
+       `Invalid --verifier: ${verifier}. Expected one of ${VERIFICATION_METHODS.join(", ")}. Refused rather than ignored: an unrecognised method would silently leave the tier at its default and read as a decision.`,
+     );
+   }
+   return {
+     ...(scope === undefined ? {} : { scope }),
+     ...(verifier === undefined ? {} : { verifierMethod: verifier }),
+     fixAttempt: parseNonNegativeInteger(optionValue(args, "--fix-attempt"), "--fix-attempt"),
+     findingCount: parseNonNegativeInteger(optionValue(args, "--findings"), "--findings"),
+     diffLines: parseNonNegativeInteger(optionValue(args, "--diff-lines"), "--diff-lines"),
+     forcedStrategyChange: args.includes("--forced-strategy-change"),
+     hasSecurityFinding: args.includes("--security"),
++    premiseJudge: args.includes("--premise"),
+   };
+ }
+ 
+ /** What the host does with `inherit: true`, per tier. Names no model. */
+ const SESSION_SOURCE_LABELS: Readonly<Record<SessionSource, string>> = {
+   flags: "flags (--session-provider/--session-model)",
+   env: "environment (KERYX_SESSION_PROVIDER/KERYX_SESSION_MODEL)",
+   "shell-config": "the selection `keryx shell` persisted (--from-shell-config)",
+   none: "none — the caller named no model, so the block is adaptive",
+ };
+ 
+ const ADAPTIVE_GUIDANCE: Readonly<Record<string, string>> = {
+   light:
+     "dispatch on a lighter model your own runtime offers (its fast/small class), or on your session model if it offers no choice",
+   standard: "dispatch on your session model",
+   deep: "dispatch on the most capable model your own runtime offers, or on your session model if it offers no choice",
+ };
+ 
+ /** The caller's session for `review tier`; see `resolveCallerSession`. */
+ export function sessionModelFromArgs(
+
+--- src/commands/review.ts
+@@ 3592,3646 @@
+ async function readVerifications(source: string | undefined, reviewId: string | undefined): Promise<ManagedReviewInput["verifications"]> {
+   if (source === undefined) {
+     return undefined;
+   }
+   const raw = source === "-" ? await Bun.stdin.text() : await Bun.file(source).text();
+   let parsed: unknown;
+   try {
+     parsed = JSON.parse(raw);
+   } catch (error) {
+     // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
+     throw new Error(
+       `--verifications ${source} is not JSON: ${error instanceof Error ? error.message : String(error)}. Nothing was merged.`,
+     );
+   }
+   // Flow 457 (T7): a claim citing a `keryx review verify-run` record of its own finding, in the package this ingest
+   // writes (`--review-id`), ran in the parent: execution. Without a review id no record can be bound to a package.
+   const packageDir = reviewId === undefined || !/^[\w.-]+$/.test(reviewId) ? undefined : path.join(resolveProjectRoot(process.cwd()), ".metaproject", "reviews", reviewId);
+   return promoteParentExecutions(verificationClaims(parsed as VerificationSource), packageDir);
+ }
+ 
++/**
++ * `review-premise`'s own output (flow 459): `{ judge, model?, premises: [...] }`, read from a file or stdin. The shape is
++ * checked here so a malformed file refuses the ingest before anything is written; the per-claim rules run in the merge.
++ */
++async function readPremises(source: string | undefined): Promise<ManagedReviewInput["premises"]> {
++  if (source === undefined) {
++    return undefined;
++  }
++  const raw = source === "-" ? await Bun.stdin.text() : await Bun.file(source).text();
++  // The bare object, or a report / judge reply holding one fenced `keryx:premises` block.
++  const parsed = parseEmbeddedPremises(raw, `--premises ${source}`);
++  parsePremiseClaims(parsed);
++  return parsed as ManagedReviewInput["premises"];
++}
++
+ /**
+  * The pre-filter stage, from `keryx review scope --json` — WHOLE.
+  *
+  * It used to take the eight counts and discard `drops`, and that discard is what
+  * left AC5 with no supported path: "a reason per drop" cannot survive a
+  * projection to eight integers. The rows travelled instead by `keryx review
+  * scope --append <package>/scope.md`, which `review ingest` then overwrote.
+  */
+ async function readScope(source: string | undefined): Promise<ReviewScopeRecordLike | undefined> {
+   if (source === undefined) {
+     return undefined;
+   }
+   const raw = source === "-" ? await Bun.stdin.text() : await Bun.file(source).text();
+   const parsed = JSON.parse(raw) as Partial<ReviewScopeRecordLike>;
+   if (parsed.counts === undefined) {
+     throw new Error(`--scope ${source} carries no \`counts\`. Pass the output of \`keryx review scope --json\`.`);
+   }
+   if (!Array.isArray(parsed.drops)) {
+     // Refused rather than defaulted to `[]`. An empty drop list is the positive
+     // claim "the pre-filter dropped nothing", and a document that simply lacks
+
+--- src/commands/review.ts
+@@ 4235,4276 @@
+   const { verdict, markdown, file } = await writeVerdict(packageDir, path.basename(packageDir), { rawDir: placed("--raw") });
+   if (args.includes("--json")) {
+     console.log(JSON.stringify({ ...verdict, file: path.relative(process.cwd(), file) }, null, 2));
+     return;
+   }
+   console.log(markdown.trimEnd());
+   console.log(`written: ${path.relative(process.cwd(), file)}`);
+ }
+ 
+ function printVerdictHelp(): void {
+   console.log(`keryx review verdict
+ 
+ Usage:
+   keryx review verdict <review-id-or-path> [--raw <dir>] [--json]
+ 
+ The verdict of a review round as it stands: finding counts by severity, verified vs
+ unverified (refuted excluded), open blockers and majors, and the reviewers that have
+ not reported. Reads the ingested round (findings.json) when there is one, else the raw
+ reviewer results in --raw <dir> (default <package>/raw, where every host keeps them; the shared
+ .metaproject/data/review/raw is read only when passed explicitly, since it holds other rounds' replies). Verifier results in research-evidence/verifications.json are applied
+-first, so a refuted finding is excluded; a finding whose disposition is acted-on is not open. Works before ledger, mutation and complete. Writes
++first, so a refuted finding is excluded; premise results in research-evidence/premises.json hold a challenged finding
++out of the open counts ("awaiting operator") until keryx review decide-premise answers it; a finding whose disposition is acted-on is not open. Works before ledger, mutation and complete. Writes
+ verdict-interim.md into the package. A package with no findings says so and exits 0.
+ `);
+ }
+ 
+ async function runStatus(args: string[]): Promise<void> {
+   rejectUnknownFlags(args, [], "status <review-id-or-path>");
+   const ref = args[0];
+   if (!ref) {
+     throw new Error("Usage: keryx review status <review-id-or-path>");
+   }
+   const manifest = await getManagedReviewStatus(process.cwd(), ref);
+   console.log(`# managed review: ${manifest.reviewId}`);
+   console.log("");
+   console.log(`mode: ${manifest.mode}`);
+   console.log(`status: ${manifest.status}`);
+   console.log(`target: ${manifest.target.kind} ${manifest.target.ref}`);
+   console.log(`head: ${manifest.target.head ?? "not recorded (`flow complete` will refuse this round)"}`);
+   console.log(`flow: ${manifest.flow?.id ?? "none"}`);
+   console.log(`coverage: ${manifest.coverage.length}`);
+   // What a round leaves behind that no count shows: Not run candidates, held severities, open follow-ups. Prints nothing when there are none.
+
+--- src/commands/review.ts
+@@ 4626,4672 @@
+   console.log(`keryx review scope — usage:
+ 
+   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
+                      [--json | --scoped-diff] [--append <file>] [--reviewers a,b]
+ 
+ Deterministic pre-filter, no model call. Drops generated, lockfile, snapshot,
+ vendored and minified paths, drops whitespace-only and comment-only change
+ blocks, and bounds each retained change to +/-${DEFAULT_CONTEXT_LINES} lines.
+ Prints the retained scope AND every drop with its reason. --json is the document
+ review ingest --scope reads. --scoped-diff is what a reviewer is handed.
+ --append replaces an existing ## Pre-filter scope block. --reviewers only scales
+ the printed cost estimate.
+ `);
+ }
+ 
+ function printTierHelp(): void {
+   console.log(`keryx review tier — usage:
+ 
+   keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
+                     [--findings <n>] [--diff-lines <n>]
+-                    [--verifier ${VERIFICATION_METHODS.join("|")}] [--security]
++                    [--verifier ${VERIFICATION_METHODS.join("|")}] [--security] [--premise]
+                     [--session-provider <id>] [--session-model <id>]
+                     [--from-shell-config] [--catalog <file|->] [--json]
+ 
+ Computes the dispatch model block from signals the orchestrator already holds.
+-There is no --tier flag. Base tier is standard. --scope blast-radius and
+---forced-strategy-change floor at deep. --fix-attempt >= 2 raises one tier.
++There is no --tier flag. Base tier is standard. --scope blast-radius,
++--forced-strategy-change and --premise (the dispatch is review-premise) floor at deep. --fix-attempt >= 2 raises one tier.
+ A small diff, or verifier execution/site-check, may allow light. --security
+ never goes below standard. Reviewer name is not a signal.
+ 
+ A model id is printed only when discovery assigned one other than the session model.
+ Otherwise the block carries the tier and inherit: true. Exit status is 0.
+ 
+ tier_resolution is discovered, session-ranked, session-fallback or agent-ranked.
+ agent-ranked means the size words and version could not settle the tier and a
+ one-shot fallback on the session provider's light tier compared the discovered
+ model ids and prices; it never rates the task. A failed or malformed answer keeps
+ the session model.
+ `);
+ }
+ 
+ /** Is `--help`/`-h` among this subcommand's own arguments? */
+ function asksForHelp(args: readonly string[]): boolean {
+   return args.includes("--help") || args.includes("-h");
+ }
+ 
+ /**
+
+--- src/commands/review.ts
+@@ 4787,4827 @@
+                    [--graph-timeout <seconds>] [--unattended] [--host keryx-shell|claude-code|codex|other]
+                    [--no-prior-round | --prior <package|reviewId>]
+ 
+ The previous round of the same target is found in the local packages, the packages in git history (any branch), the
+ keryx round block on the pull request, other PR comments (prior findings with no head) and the flow's rounds; the newest
+ reviewed head that is an ancestor of --head makes this a delta round over prevHead..head, a non-ancestor (force-push)
+ a full round over merge-base..head with the prior findings attached. Written to <package>/round.json and
+ prior_findings.json. --no-prior-round: round 1 without searching. --prior: use that package or review id.
+ 
+ --unattended: nobody is at the keyboard, so an unrun mutation pass is recorded as \`Not run\` instead of refused
+ (default: attended). --host: the agent host (default: detected). Both go to <package>/run-profile.json, with the
+ caller token \`start\` prints; a package created before run-profile.json keeps the earlier operator-quote rules.
+ 
+ Starts a managed review package for a flow. Also accepted: ${CREATE_FLAGS.join(" ")} (--target-ref is an alias of --ref).
+ ${GRAPH_TIMEOUT_HELP}`);
+ }
+ 
+ function printIngestHelp(): void {
+   console.log(`keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>] [--research <ledger.json>]
+                     [--review-id <id>] [--automatic] [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
++                    [--premises <file|->]
+                     [--scope <scope.json>] [--blast-radius <blast-radius.json>] [--cross-family-review <file|->]
+                     [--refuted <file|->] [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
+                     [--tokens-in <n>] [--tokens-out <n>] [--parallel <n>] [--outstanding <n>]
+                     [--target <kind>] [--target-ref <ref>] [--memory-query "<query>"] [--graph-timeout <seconds>]
+ 
+ Records a finished review report as a package. All accepted flags: ${CREATE_FLAGS.join(" ")}.
+ Without --research the package stays PENDING and \`review complete\` refuses.
+ ${GRAPH_TIMEOUT_HELP}`);
+ }
+ 
+ function printMutateHelp(): void {
+   console.log(`keryx review mutate --test "<command>" --package <review-dir> [--worktree <dir>] [--spec <mutants.json>]
+                     [--timeout-ms <n>] [--cap <n>] [--scratch repo|tmp] [--json]
+ 
+ Runs the reviewers' proposed mutants (default spec: <review-dir>/research-evidence/mutants.json) in a scratch copy of
+ the worktree; the worktree is never written. The baseline must pass first. --cap bounds the mutants run.
+ Writes mutation-<n>.json and .md to research-evidence/.`);
+ }
+ 
+ function printBlastRadiusHelp(): void {
+
+--- src/commands/review.ts
+@@ 4865,4910 @@
+ }
+ 
+ function printHelp(): void {
+   console.log(reviewHelpText());
+ }
+ 
+ function reviewHelpText(): string {
+   return `keryx review
+ 
+ Usage:
+   keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
+                       [--reviewers a,b] [--report <path>] [--research <ledger.json>]
+                       [--automatic] [--no-prior-round | --prior <package|reviewId>]
+   keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
+                      [--research <ledger.json>] [--review-id <id>] [--memory-query "<query>"] [--automatic]
+                      [--graph-timeout <seconds>] [--unattended] [--host keryx-shell|claude-code|codex|other]
+                      [--no-prior-round | --prior <package|reviewId>]  (writes <package>/round.json)
+   keryx review waive-mutation --package <dir> --reason "<why>"       (terminal; card review_waive_mutation)
+   keryx review override-reviewers --package <dir> --reason "<why>"   (terminal; card review_override_reviewers)
+   keryx review confirm-plan --package <dir>                          (terminal; card review_confirm_plan)
++  keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason "<why>"
++                                                                     (terminal; card review_decide_premise)
+   keryx review verify-run --package <dir> --finding <id> -- <command…>
+   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
+                       [--research <ledger.json>] [--review-id <id>] [--automatic]
+-                      [--verifications <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
++                      [--verifications <file|->] [--premises <file|->] [--verification-mode ${VERIFICATION_MODES.join("|")}]
+                       [--scope <scope.json>] [--blast-radius <blast-radius.json>]
+                       [--cross-family-review <file|->]
+                     [--refuted <file|->]
+                       [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
+                       [--tokens-in <n>] [--tokens-out <n>]
+                       [--parallel <n>] [--outstanding <n>] [--graph-timeout <seconds>]
+                       --research is the research ledger {version, scopeReviewed, rawReconciled,
+                       obligations, dispatch}; without it the package stays PENDING and
+                       \`review complete\` refuses on scope, raw reconciliation and dispatch evidence.
+   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
+                      [--json | --scoped-diff] [--append <file>]
+   keryx review slice [--ref <base>] [--diff <file|->] [--context <n>]
+                      [--max-bytes <n>] [--wave-bytes <n>] [--out <dir>] [--json]
+                      Cuts scope A into reviewer-sized slice files plus a manifest;
+                      ledgers (csv, lockfiles, snapshots) are omitted with a reason.
+                      --wave-bytes is the most one reviewer dispatch carries.
+   keryx review mutate --test "<command>" --package <review-dir> [--worktree <dir>]
+                         [--spec <mutants.json>] [--timeout-ms <n>] [--scratch repo|tmp] [--json]
+                         Runs the reviewers' proposed mutants (default spec:
+                         <review-dir>/research-evidence/mutants.json) in a scratch
+
+--- src/commands/review.ts
+@@ 5006,5046 @@
+                      reported as this branch's removals. Uncommitted work is
+                      still scanned, with or without --ref.
+   keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
+                             [--no-related-tests] [--final] [--previous <blast-radius.json>]
+                             [--package <review-dir>] [--json | --brief] [--out <file>]
+   keryx review layers refresh --package <review-dir> [--head <sha>] [--base <ref>] [--write-wiki] [--force] [--json]
+   keryx review layers status  --package <review-dir> [--json]
+   keryx review layers block   --package <review-dir> --files a,b [--max-bytes <n>] [--force] [--json]
+                       Graph, wiki and memory for one review; no model is called. An intact graph at
+                       the same head is reused (--force rebuilds); a second refresh waits up to 16 min.
+   keryx review chunks plan|estimate|next|record|merge --package <review-dir>
+                       [--chunk <id>] [--status <s> | --result <file|->] [--mode automatic|interactive]
+                       [--answer yes|no --quote "<words>"] [--json]
+                       The blast-radius files the per-pass cap dropped, one chunk at a time.
+   keryx review coverage --package <review-dir> [--json]
+                       In scope, covered, omitted, uncovered; writes coverage.json.
+   keryx review budget [--spent <usd>] [--ceiling <usd>]
+                       [--reviewers a,b] [--parallel <n>] [--outstanding <n>] [--full]
+   keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
+                     [--findings <n>] [--diff-lines <n>]
+-                    [--verifier ${VERIFICATION_METHODS.join("|")}] [--security]
++                    [--verifier ${VERIFICATION_METHODS.join("|")}] [--security] [--premise]
+                     [--session-provider <id>] [--session-model <id>]
+                     [--catalog <file|->] [--json]
+ ${COMMENTS_USAGE}
+   keryx review ci-triage --run <id> [--job <name>] [--test <name>] [--repo <owner/repo>]
+                          [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
+   keryx review conform --ref <doc> (--pr <n> | --report <dir> | --diff <ref>)
+                        [--repo <owner/repo>] [--explain] [--threshold <0..1>]
+                        [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
+                        [--max-hunks <n>] [--max-hunk-calls <n>] [--detail]
+   keryx review jev-rules (--diff <ref> | --pr <n> | --scope <scope.json>)
+                          [--rules <paths>] [--max-calls <n>] [--threshold <0..1>]
+                          [--repo <owner/repo>] [--model <jev-1.13|jev-latest>]
+                          [--fixtures <dir>] [--json]
+                          An ADDITIONAL reviewer, engine: jev. Checks every changed hunk
+                          against every applicable project rule clause. Opt-in via
+                          review.jev.rules in .metaproject/tasks.config.json.
+   keryx review jev-risk (--diff <ref> | --pr <n> | --scope <scope.json>)
+                         [--max-calls <n>] [--threshold <0..1>]
+                         [--repo <owner/repo>] [--model <jev-1.13|jev-latest>]
+                         [--fixtures <dir>] [--json]
+
+--- src/commands/review.ts
+@@ 5270,5313 @@
+   --finding/--disposition/--evidence record what became of a named finding, and
+   are repeatable. States: ${FINDING_DISPOSITION_STATES.join(", ")}.
+   Everything except \`unknown\` must cite where the outcome is written down. A
+   recorded verdict — and its citation — cannot be overwritten by a later close.
+ 
+ ingest --refuted:
+   What the round RAISED AND THEN DISMISSED, in the same finding shape, each with
+   a dismissal disposition and its evidence. Without it a package keeps only the
+   survivors of an unlogged triage, and precision measured over survivors is 100%
+   whatever the reviewers got right.
+ 
+ verification (attach/start/ingest):
+   --verifications takes what review-verifier returned. The merge is DELETE-ONLY:
+   it cannot raise a severity, add a finding, or change a finding's text, and a
+   claim carrying any of those is discarded whole with the attempt recorded. A
+   finding is never verified by the reviewer that raised it. A verdict reached by
+   reasoning alone is capped at unverifiable.
+   --verification-mode defaults to \`${DEFAULT_VERIFICATION_MODE}\`: verdicts are recorded and
+   NOTHING is removed, so the drop rate is measured before it bites. Only
+   \`filter\` removes a refuted finding.
++  --premises takes what review-premise returned: the bare \`{ judge, model?, premises }\`
++  object, or a reply / report holding it in one \`\`\`json keryx:premises block. The merge is
++  DELETE-ONLY too: it holds a challenged finding for the operator (never dismisses it) and can
++  only lower a severity. The operator answers with \`keryx review decide-premise\`.
+   --scope takes the WHOLE \`keryx review scope --json\` document — counts and the
+   per-drop reasons — so the package records what the pre-filter dropped and why.
+   Omitted, a \`## Pre-filter scope\` block already in the package's scope.md is
+   carried forward verbatim; with neither, that stage reads \`not recorded\`, which
+   is not the same fact as \`dropped 0\`.
+ 
+ caps (attach/start/ingest):
+   Findings are capped at ${DEFAULT_MAX_FINDINGS_PER_REVIEWER} per reviewer by default (--max-findings), with
+   \`blocker\` and \`blocking_merge\` findings EXEMPT and not consuming the budget.
+   The cap runs over reported findings only, never over the dismissal records:
+   truncating those would rebuild the unlogged triage the --refuted channel
+   exists to end. Everything it truncates is named, by reviewer and by id, in
+   \`scope.md\` under \`## Caps\` and on this terminal.
+   --spent/--spend-ceiling record the round's cost against a ${DEFAULT_SPEND_CEILING_USD} USD default
+   ceiling; over it, the package is still written and the command exits non-zero.
+   --parallel/--outstanding record the dispatch plan. Every cap that is not given
+   reads \`not recorded\`, never \`0\`.
+ 
+ comments:
+   External PR comments, collected EVERY round and answered ONCE at the end.
+
+--- src/commands/review.ts
+@@ 5336,5376 @@
+   beyond it. --max-sentences and --max-chars refuse a value below 1: a reply of
+   zero sentences or zero characters is silence with extra steps. --max-replies 0
+   is legal and means "one summary comment stands for everybody". Nothing
+   here can resolve, hide or dismiss a thread: those endpoints are unreachable
+   through the port. --dry-run and --fixtures rehearse the whole pass offline.
+ 
+ budget:
+   The gate to run BEFORE dispatching, where stopping is still possible. Exits
+   non-zero when spend has reached the ceiling (default ${DEFAULT_SPEND_CEILING_USD} USD) so the
+   orchestrator asks the operator instead of proceeding. Also prints the reviewer
+   dispatch waves for the concurrency cap (default ${MAX_REVIEWERS_PER_WAVE_FULL} in flight; split by diff domain, never above ${MAX_REVIEWERS_PER_WAVE_FULL} for a full review).
+   --parallel <n> sets the wave size; with --full it can only lower it, because
+   --full holds the wave to ${MAX_REVIEWERS_PER_WAVE_FULL}. --outstanding <n> is how many subagents the main
+   session still has running. WITHOUT it the cap bounds this plan only: keryx
+   cannot observe those subagents, and it says so rather than implying otherwise.
+ 
+ tier:
+   The \`model\` block a dispatch document carries, COMPUTED — run this instead of
+   working the tier out by hand. The signals are ones the orchestrator already
+   holds: --scope, --fix-attempt, --forced-strategy-change, --findings,
+-  --diff-lines, --verifier and --security. Prints the tier, the ordered rule ids
++  --diff-lines, --verifier, --security and --premise (the review-premise judge: deep). Prints the tier, the ordered rule ids
+   that produced it, the resolved provider/model, \`tier_resolution\`, and what was
+   on the table when it resolved; --json prints the block alone.
+   NO MODEL NAME EXISTS IN THIS COMMAND. The session's provider/model come from
+   the caller: --session-provider / --session-model, else KERYX_SESSION_PROVIDER /
+   KERYX_SESSION_MODEL, else (only with --from-shell-config) the selection
+   \`keryx shell\` persisted. The candidate set comes from live provider detection
+   (override with --catalog, the \`detectProviders()\` shape). A model is named
+   only when discovery assigned one other than the session's; otherwise the block
+   says \`inherit\` with the tier, and the host picks its own model for that tier
+   (standard: the session model). Never a non-zero exit. Detection is skipped
+   entirely when the session names no provider and model, because ranking is
+   refused without an anchor whatever the catalogue holds.
+ 
+ learn:
+   The join between collected comments and this project's own review skill.
+   Reads \`.metaproject/review-learning.config.json\` — which local skill, which
+   repository, which comment authors — then reads the record
+   \`review comments collect\` already wrote and NEVER fetches from GitHub. Keeps
+   only comments whose author the config names; an author it does not name
+   contributes nothing to any proposal. Writes a proposal under
+
+--- src/commands/routing-corpus.ts
+@@ 204,245 @@
+  * NOT a new positive did appear while `deprecation-path` was being measured and
+  * was closed rather than recorded: a draft of its catalog text carried the
+  * words "about" and "over", which put it level with `review-highload` at 20 on
+  * *that* skill's own paraphrase and took it on the alphabetical tie-break. The
+  * two words were removed from the description and the workflow. A skill winning
+  * a query on `d` < `r` is not routing, and the pair must never absorb one.
+  *
+  * Flow 295 added `scheduled-tasks` with three positives, all ranking first:
+  * 305/307 + 3 = 308/310.
+  *
+  * Flow 332 added `review-jev-risk` and `review-jev-scenarios` cases, and
+  * flow 333 added `review-jev-docs` and `review-jev-comments` with four
+  * positives each, all ranking first.
+  *
+  * Flow 335 added `review-jev-contract` with four positives, all ranking
+  * first: 328/330 + 4 = 332/334.
+  *
+  * Raise `RANK1_FIRST` (and `RANK1_TOTAL` if the corpus grew) when routing
+  * improves; never lower either without saying which cases regressed.
+  */
+-export const RANK1_FIRST = 334;
+-export const RANK1_TOTAL = 337;
++export const RANK1_FIRST = 338;
++export const RANK1_TOTAL = 341;
+ 
+ /**
+  * Human-readable form of the ratchet above, derived rather than pinned
+  * separately — there is exactly one place the two integers are allowed to
+  * live, and this is not it.
+  */
+ export const RANK1_ACCURACY = RANK1_FIRST / RANK1_TOTAL;
+ 
+ export const ROUTING_CORPUS: readonly RoutingCase[] = [
+   // ---------------------------------------------------------------- core
+   {
+     skill: "metaproject-router",
+     positives: [
+       "no idea which skill should be used for this, route it",
+       "this is an ordinary product-development request, where does it go",
+       "pick the metaproject module that owns this before we start work",
+       "just route this to whichever agent should decide on tools and context here",
+     ],
+     negatives: [
+       { prompt: "what should I inspect first to understand this code", owner: "context-router" },
+
+--- src/commands/routing-corpus.ts
+@@ 717,769 @@
+       "does this hunk violate any of our written-down rules, score it with jev",
+     ],
+     negatives: [
+       { prompt: "review my code", owner: "review-orchestrator" },
+       { prompt: "style review, naming and readability only", owner: "review-style" },
+     ],
+   },
+   {
+     skill: "review-verifier",
+     positives: [
+       "check these findings before they get reported",
+       "run a verification pass over the consolidated findings",
+       "verify the findings and drop the ones that cannot be reproduced",
+       "can we run a pass over these findings and verify none of them are wrong before we check in",
+     ],
+     negatives: [
+       { prompt: "run lint and the tests and the type-check before I call this done", owner: "code-verifier" },
+       { prompt: "review my code", owner: "review-orchestrator" },
+     ],
+   },
++  {
++    skill: "review-premise",
++    positives: [
++      "judge the premise of these findings before anyone fixes them",
++      "is this standard practice, or is the finding itself wrong",
++      "does this finding hold up, or is the code doing it deliberately, judge the premise before the fix loop acts on it",
++      "the code overrides this on purpose and a sibling does the same, so is the finding a defect at all",
++    ],
++    negatives: [
++      { prompt: "check these findings before they get reported", owner: "review-verifier" },
++      { prompt: "review my code", owner: "review-orchestrator" },
++    ],
++  },
+   {
+     skill: "review-frontend-conventions",
+     positives: [
+       "review frontend conventions against our CLAUDE.md",
+       "check this against our local frontend rules",
+       "do these components follow the conventions our frontend guide lays out",
+       "these widgets might be breaking some of our frontend team's own conventions, can you check them against what's written down",
+     ],
+     negatives: [
+       { prompt: "frontend review of these components", owner: "review-frontend" },
+       { prompt: "review my code", owner: "review-orchestrator" },
+     ],
+   },
+   {
+     skill: "review-pr-feedback",
+     positives: [
+       "what did reviewers say on my PR",
+       "go through the PR comments and explain each one",
+       "address the review comments on my pull request",
+       "can you go through my pr and explain what these comments actually mean",
+
+--- src/commands/operator-confirm-review-tools.test.ts
+@@ 1,34 @@
+ // Flow 456 (AC2, AC4): the four review gates as operator-confirmed tools. Each is driven the way the agent loop drives it:
+ // `confirmation` builds the card from the package on disk, and `invoke` with the card's token applies the effect in process.
+ // A "no" never reaches `invoke`, so the package must be byte-for-byte what it was.
+ 
+ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+ import { existsSync, mkdirSync, readdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+ import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
+ import { ensureChunkPlan } from "../review/chunks";
+ import { readChunkEstimate } from "../review/chunks-estimate";
+ import { computeCoverage, readCoverageWaiver } from "../review/coverage-complete";
++import { computeReadiness } from "../review/readiness";
++import { computeVerdict } from "../review/verdict";
+ import type { PostResult, ReviewEvent } from "../review/publish";
+ import { buildReviewConfirmSpecs, reviewConfirmSpecs } from "./operator-confirm-review";
+ import { operatorConfirmTool, operatorConfirmToolNames } from "./operator-confirm-tools";
+ 
+ const NOW = new Date("2026-10-15T19:00:00.000Z");
+ const PR = "https://github.com/Presight-AI/vantage-frontend/pull/7932";
+ 
+ let root: string;
+ let pkg: string;
+ const posts: Array<{ ref: string; event: ReviewEvent; body: string }> = [];
+ 
+ const post = async (ref: string, event: ReviewEvent, body: string): Promise<PostResult> => {
+   posts.push({ ref, event, body });
+   return { ok: true, detail: "ok" };
+ };
+ 
+ function tool(name: string): InteractiveTool {
+   const spec = buildReviewConfirmSpecs({ prLookup: async () => null, prFiles: async () => null, postReview: post }).find((entry) => entry.name === name);
+   if (spec === undefined) throw new Error(`no spec ${name}`);
+   return operatorConfirmTool(spec, { projectRoot: root, now: () => NOW, env: {} });
+
+--- src/commands/operator-confirm-review-tools.test.ts
+@@ 66,106 @@
+   mkdirSync(path.join(root, ".git"));
+   mkdirSync(path.join(root, ".metaproject"));
+   pkg = path.join(root, ".metaproject", "reviews", "pr7932-r1");
+   mkdirSync(pkg, { recursive: true });
+ });
+ afterEach(() => {
+   rmSync(root, { recursive: true, force: true });
+ });
+ 
+ test("the review gates are registered and listed for the unattended refusal", () => {
+   const names = reviewConfirmSpecs().map((spec) => spec.name);
+   expect(names).toEqual([
+     "review_chunks_answer",
+     "review_publish",
+     "review_waive_coverage",
+     "review_waive_readiness",
+     "review_waive_mutation",
+     "review_override_reviewers",
+     "review_comments_reply",
+     "review_confirm_plan",
++    "review_decide_premise",
+   ]);
+   for (const name of names) expect(operatorConfirmToolNames()).toContain(name);
+ });
+ 
+ describe("review_chunks_answer", () => {
+   function dropFiles(count: number): void {
+     const dropped = Array.from({ length: count }, (_, index) => ({ file: `src/d-${String(index).padStart(4, "0")}.ts`, hop: 1, fanIn: 1, via: "src/a.ts", source: "graph", reason: "cap", detail: "over the cap" }));
+     put("blast-radius.json", { schemaVersion: 1, changedFiles: ["src/a.ts"], files: [], dropped });
+   }
+ 
+   test("the card shows the pass count over the ceiling; yes records the answer, the card quote and confirmedVia", async () => {
+     dropFiles(1100);
+     await ensureChunkPlan(pkg, root);
+     const t = tool("review_chunks_answer");
+     const result = await yes(t, { package: pkg, answer: "yes" });
+     expect(result.card[0]).toBe("Allow 28 review passes, over the 25-pass ceiling, for .metaproject/reviews/pr7932-r1?");
+     expect(result.card.join("\n")).toContain("passes requested: 28");
+     expect(result.card.join("\n")).toContain("ceiling: 25 passes (1000 files), from the default; 3 over");
+     expect(result.card.at(-1)).toBe("subject: package .metaproject/reviews/pr7932-r1");
+     expect(result.isError).toBe(false);
+
+--- src/commands/operator-confirm-review-tools.test.ts
+@@ 342,441 @@
+ 
+   test("a no changes nothing", async () => {
+     makePackage();
+     const manifest = read("manifest.json");
+     const report = read("report.md");
+     const t = tool("review_waive_readiness");
+     t.confirmationDeclined!(asked(await ask(t, { package: pkg, item: "4" })).token);
+     expect(read("manifest.json")).toBe(manifest);
+     expect(read("report.md")).toBe(report);
+   });
+ 
+   test("an item that passes, an unknown item and an already waived item are refusals", async () => {
+     makePackage();
+     const t = tool("review_waive_readiness");
+     expect(await ask(t, { package: pkg, item: "coverage-md" })).toEqual({ error: expect.stringContaining("nothing to waive") });
+     expect(await ask(t, { package: pkg, item: "no-such-item" })).toEqual({ error: expect.stringContaining("not a readiness item") });
+     await yes(t, { package: pkg, item: "verifier" });
+     expect(await ask(t, { package: pkg, item: "verifier" })).toEqual({ error: expect.stringContaining("already waived") });
+   });
+ });
++
++// Flow 459 (AC3): review_decide_premise, the operator's answer to a finding the premise judge held.
++describe("review_decide_premise", () => {
++  const held = {
++    id: "LY-003",
++    global_id: "pr7932-r1#LY-003",
++    reviewer: "review-layout",
++    severity: "major",
++    problem: "timeline pinned LTR",
++    premise: { verdict: "challenged", judge: "review-premise", question: "Should the timeline mirror?" },
++  };
++
++  function makePackage(findings: unknown[] = [held]): void {
++    put("manifest.json", {
++      schemaVersion: 1,
++      reviewId: "pr7932-r1",
++      mode: "review-flow",
++      status: "draft",
++      target: { kind: "pr", ref: PR },
++      artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md" },
++      coverage: [],
++    });
++    put("findings.json", findings);
++  }
++  const readiness = async () => (await computeReadiness(pkg)).items.find((item) => item.id === "premise-decisions");
++
++  test("the card shows the finding and the judge's question; yes records the answer with confirmedVia and clears readiness", async () => {
++    makePackage();
++    expect((await readiness())?.status).toBe("fail");
++    const t = tool("review_decide_premise");
++    const result = await yes(t, { package: pkg, finding: "LY-003", answer: "dismiss", reason: "platforms do not mirror media controls" });
++    const text = result.card.join("\n");
++    expect(result.card[0]).toBe("Dismiss finding pr7932-r1#LY-003 in .metaproject/reviews/pr7932-r1 as incorrect?");
++    expect(text).toContain("finding: pr7932-r1#LY-003 (major): timeline pinned LTR");
++    expect(text).toContain("premise judge: challenged: Should the timeline mirror?");
++    expect(text).toContain("reason: platforms do not mirror media controls");
++    expect(result.isError).toBe(false);
++    expect(readJson("operator-decisions.json").decisions).toEqual([
++      { kind: "premise-question", finding: "pr7932-r1#LY-003", answer: "dismiss", reason: "platforms do not mirror media controls", at: NOW.toISOString(), actor: "operator", confirmedVia: "tui-card" },
++    ]);
++    expect((await readiness())?.status).toBe("pass");
++  });
++
++  test("uphold keeps the original severity and a remote yes is recorded as remote-card", async () => {
++    makePackage();
++    const t = tool("review_decide_premise");
++    const result = await yes(t, { package: pkg, finding: "pr7932-r1#LY-003", answer: "uphold", reason: "mirror it" }, "remote");
++    expect(result.card[0]).toBe("Uphold finding pr7932-r1#LY-003 in .metaproject/reviews/pr7932-r1 at major?");
++    expect(readJson("operator-decisions.json").decisions[0]).toMatchObject({ answer: "uphold", confirmedVia: "remote-card" });
++    expect((await computeVerdict(pkg)).open.map((entry) => [entry.id, entry.severity])).toEqual([["LY-003", "major"]]);
++  });
++
++  test("a no records nothing", async () => {
++    makePackage();
++    const t = tool("review_decide_premise");
++    t.confirmationDeclined!(asked(await ask(t, { package: pkg, finding: "LY-003", answer: "dismiss", reason: "r" })).token);
++    expect(existsSync(path.join(pkg, "operator-decisions.json"))).toBe(false);
++    expect((await readiness())?.status).toBe("fail");
++  });
++
++  test("an unknown finding, a finding that is not held, a missing reason and a bad answer are refusals", async () => {
++    makePackage([held, { ...held, id: "LY-004", global_id: "pr7932-r1#LY-004", premise: { verdict: "upheld", judge: "review-premise" } }]);
++    const t = tool("review_decide_premise");
++    expect(await ask(t, { package: pkg, finding: "LY-999", answer: "dismiss", reason: "r" })).toEqual({ error: expect.stringContaining("No finding") });
++    expect(await ask(t, { package: pkg, finding: "LY-004", answer: "dismiss", reason: "r" })).toEqual({ error: expect.stringContaining("not held") });
++    expect(await ask(t, { package: pkg, finding: "LY-003", answer: "dismiss" })).toEqual({ error: expect.stringContaining("reason is required") });
++    expect(await ask(t, { package: pkg, finding: "LY-003", answer: "maybe", reason: "r" })).toEqual({ error: expect.stringContaining("uphold") });
++  });
++
++  test("the answer is refused when the finding changed after the card was shown", async () => {
++    makePackage();
++    const t = tool("review_decide_premise");
++    const input = { package: pkg, finding: "LY-003", answer: "dismiss", reason: "r" };
++    const card = asked(await ask(t, input));
++    put("findings.json", [{ ...held, severity: "minor" }]);
++    const result = await t.invoke(input, { confirmationToken: card.token } as never);
++    expect(result.isError).toBe(true);
++    expect(existsSync(path.join(pkg, "operator-decisions.json"))).toBe(false);
++  });
++});
+
+--- src/commands/operator-confirm-rosters.test.ts
+@@ 1,37 @@
+ // Flow 456: the operator card tools exist in ONE roster — the interactive TUI shell's. They are absent from
+ // the MCP tool registry, ACP sessions, spawn_subagent child rosters and the readline (non-TUI) shell, so a
+ // second surface never grows a way to put a decision to the operator that it cannot render or protect.
+ 
+ import { expect, test } from "bun:test";
+ import { readFileSync } from "node:fs";
+ import { buildAcpSessionTools } from "../acp/roster";
+ import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
+ import type { NormalizedEvent, NormalizedRequest, ProviderDescription, ProviderPort } from "../harness/provider/types";
+ import { buildToolRegistry } from "../mcp/tools";
+ import { OPERATOR_CONFIRM_TOOL_NAMES } from "../trigger/unattended";
+ import { operatorConfirmToolNames } from "./operator-confirm-tools";
+ 
+ const NAMES = operatorConfirmToolNames();
+ 
+-test("there are 17 operator card tools to keep out of the other rosters", () => {
+-  expect(NAMES).toHaveLength(17);
++test("there are 18 operator card tools to keep out of the other rosters", () => {
++  expect(NAMES).toHaveLength(18);
+ });
+ 
+ test("the unattended exclusion list names exactly the registered operator card tools", () => {
+   expect([...OPERATOR_CONFIRM_TOOL_NAMES].sort()).toEqual([...NAMES].sort());
+ });
+ 
+ test("the MCP tool registry offers none of them", () => {
+   const names = buildToolRegistry().map((entry) => entry.name);
+   for (const name of NAMES) expect(names).not.toContain(name);
+ });
+ 
+ test("an ACP session roster offers none of them", () => {
+   const names = buildAcpSessionTools({
+     root: "/nonexistent-root",
+     clientCapabilities: undefined,
+     readViaClient: async () => "",
+   }).map((tool) => tool.definition.name);
+   for (const name of NAMES) expect(names).not.toContain(name);
+ });
+ 
+
+--- src/commands/review-operator-cli.test.ts
+@@ 1,142 @@
+ // Flow 457 review B1: the operator commands (confirm-plan, verify-run, waive-mutation, override-reviewers) must be
+ // reachable through the real CLI. They were missing from the `review` subcommand allowlist, so every call ended in
+ // "Unknown command" before reaching review-operator.ts. Run through `bun src/cli.ts` in a scratch repository.
+ 
+-import { afterAll, expect, test } from "bun:test";
++import { afterAll, describe, expect, test } from "bun:test";
+ import { execFileSync } from "node:child_process";
+-import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync } from "node:fs";
++import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+ import { tmpdir } from "node:os";
+ import path from "node:path";
+-import { OPERATOR_COMMANDS } from "./review-operator";
++import { isTrustRoutineCommand } from "../lib/trust-routine-command";
++import { readPremiseDecisions } from "../review/operator-decisions";
++import { computeReadiness } from "../review/readiness";
++import { computeVerdict } from "../review/verdict";
++import { OPERATOR_COMMANDS, runOperatorCommand } from "./review-operator";
+ 
+ const CLI = path.join(import.meta.dir, "..", "cli.ts");
+ const repo = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-review-operator-cli-")));
+ afterAll(() => rmSync(repo, { recursive: true, force: true }));
+ execFileSync("git", ["init", "-q"], { cwd: repo, stdio: "ignore" });
+ const pkg = path.join(repo, "pkg");
+ mkdirSync(pkg, { recursive: true });
+ 
+ function run(...args: string[]): { exitCode: number; output: string } {
+   const child = Bun.spawnSync(["bun", CLI, ...args], { cwd: repo, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+   return { exitCode: child.exitCode ?? -1, output: `${child.stdout.toString()}${child.stderr.toString()}` };
+ }
+ 
+ for (const command of OPERATOR_COMMANDS) {
+   test(`keryx review ${command} --help reaches the command`, () => {
+     const result = run("review", command, "--help");
+     expect(result.output).not.toContain("Unknown command");
+     expect(result.output).toContain(`keryx review ${command}`);
+     expect(result.exitCode).toBe(0);
+   });
+ }
+ 
+ test("decision commands reach the command and refuse without a TTY, naming the card", () => {
+   const cards: Record<string, string[]> = {
+     "confirm-plan": ["--package", "pkg"],
+     "waive-mutation": ["--package", "pkg", "--reason", "slow"],
+     "override-reviewers": ["--package", "pkg", "--reason", "slow"],
++    "decide-premise": ["--package", "pkg", "--finding", "LY-003", "--answer", "dismiss", "--reason", "slow"],
+   };
+   for (const [command, args] of Object.entries(cards)) {
+     const result = run("review", command, ...args);
+     expect(result.output).not.toContain("Unknown command");
+     expect(result.output).toContain(`review_${command.replace("-", "_")}`);
+     expect(result.exitCode).not.toBe(0);
+   }
+ });
+ 
+ test("verify-run runs the command and saves its output", () => {
+   const result = run("review", "verify-run", "--package", "pkg", "--finding", "F1", "--", "echo", "hi");
+   expect(result.output).not.toContain("Unknown command");
+   expect(result.output).toContain("verify-run: exit 0");
+   const evidence = path.join(pkg, "research-evidence");
+   expect(existsSync(evidence)).toBe(true);
+   expect(readdirSync(evidence).some((name) => name.startsWith("verify-F1-"))).toBe(true);
+ });
++
++// Flow 459 (AC3): `keryx review decide-premise`, the operator's answer to a finding the premise judge held.
++
++describe("decide-premise at a terminal", () => {
++  const heldFinding = {
++    id: "LY-003",
++    global_id: "r1#LY-003",
++    reviewer: "review-layout",
++    severity: "major",
++    problem: "timeline pinned LTR",
++    impact: "i",
++    suggested_fix: "f",
++    evidence: "e",
++    confidence: "high",
++    premise: { verdict: "challenged", judge: "review-premise", question: "mirror it?" },
++  };
++
++  function heldPackage(findings: unknown[] = [heldFinding]): string {
++    const dir = mkdtempSync(path.join(repo, "held-"));
++    mkdirSync(path.join(dir, "raw"), { recursive: true });
++    writeFileSync(
++      path.join(dir, "manifest.json"),
++      JSON.stringify({ schemaVersion: 1, reviewId: "r1", mode: "ingest", status: "draft", target: { kind: "report", ref: "r.md" }, artifacts: { scope: "scope.md", coverage: "coverage.md", report: "report.md", findings: "findings.json", learning: "learning.md", decisions: "decisions.md" }, coverage: [] }),
++    );
++    writeFileSync(path.join(dir, "findings.json"), JSON.stringify(findings));
++    return dir;
++  }
++
++  const readiness = async (dir: string) => (await computeReadiness(dir)).items.find((item) => item.id === "premise-decisions");
++  const seams = (answer: string, lines: string[] = []) => ({ isTerminal: () => true, ask: async () => answer, cwd: repo, log: (line: string) => void lines.push(line) });
++  const argv = (dir: string, over: Record<string, string> = {}): string[] =>
++    Object.entries({ "--package": dir, "--finding": "LY-003", "--answer": "dismiss", "--reason": "platforms do not mirror media controls", ...over }).flatMap(([flag, value]) => [flag, value]);
++
++  test("dismiss records the operator's answer and readiness and the verdict pass for that finding", async () => {
++    const dir = heldPackage();
++    expect((await readiness(dir))?.status).toBe("fail");
++    expect((await computeVerdict(dir)).held.map((entry) => entry.id)).toEqual(["LY-003"]);
++    const lines: string[] = [];
++    expect(await runOperatorCommand("decide-premise", argv(dir), seams("agreed, keep it LTR", lines))).toBe(0);
++    expect(lines.join("\n")).toContain("premise-question dismiss recorded for r1#LY-003");
++    const [decision] = await readPremiseDecisions(dir);
++    expect(decision).toMatchObject({ kind: "premise-question", finding: "r1#LY-003", answer: "dismiss", reason: "platforms do not mirror media controls", confirmedVia: "terminal" });
++    expect((await readiness(dir))?.status).toBe("pass");
++    const verdict = await computeVerdict(dir);
++    expect(verdict.held).toEqual([]);
++    expect(verdict.dismissed).toBe(1);
++  });
++
++  test("uphold returns the finding to open at its original severity", async () => {
++    const dir = heldPackage();
++    expect(await runOperatorCommand("decide-premise", argv(dir, { "--answer": "uphold", "--finding": "r1#LY-003" }), seams("yes, mirror it"))).toBe(0);
++    expect((await readiness(dir))?.status).toBe("pass");
++    const verdict = await computeVerdict(dir);
++    expect(verdict.held).toEqual([]);
++    expect(verdict.open.map((entry) => [entry.id, entry.severity])).toEqual([["LY-003", "major"]]);
++  });
++
++  test("declining records nothing", async () => {
++    const dir = heldPackage();
++    expect(await runOperatorCommand("decide-premise", argv(dir), seams(""))).toBe(1);
++    expect(await readPremiseDecisions(dir)).toEqual([]);
++    expect((await readiness(dir))?.status).toBe("fail");
++  });
++
++  test("refuses an unknown finding, a finding that is not held, a missing reason and a bad answer", async () => {
++    const dir = heldPackage([heldFinding, { ...heldFinding, id: "LY-004", global_id: "r1#LY-004", premise: { verdict: "upheld", judge: "review-premise" } }]);
++    await expect(runOperatorCommand("decide-premise", argv(dir, { "--finding": "LY-999" }), seams("yes"))).rejects.toThrow("No finding");
++    await expect(runOperatorCommand("decide-premise", argv(dir, { "--finding": "LY-004" }), seams("yes"))).rejects.toThrow("not held");
++    await expect(runOperatorCommand("decide-premise", argv(dir, { "--reason": "  " }), seams("yes"))).rejects.toThrow("--reason");
++    await expect(runOperatorCommand("decide-premise", argv(dir, { "--answer": "maybe" }), seams("yes"))).rejects.toThrow("uphold or dismiss");
++    expect(await readPremiseDecisions(dir)).toEqual([]);
++  });
++
++  test("refused without a terminal, naming the card, and records nothing", async () => {
++    const dir = heldPackage();
++    await expect(runOperatorCommand("decide-premise", argv(dir), { isTerminal: () => false, cwd: repo })).rejects.toThrow("review_decide_premise");
++    expect(await readPremiseDecisions(dir)).toEqual([]);
++  });
++
++  test("it is not on the no-prompt routine-command list", () => {
++    expect(isTrustRoutineCommand('keryx review decide-premise --package p --finding F --answer dismiss --reason "x"', { cwd: repo })).toBe(false);
++  });
++});
+
+--- src/commands/review.test.ts
+@@ 904,953 @@
+ 
+ /** The `{"model": …}` document `--json` prints. */
+ function modelBlock(): Record<string, unknown> {
+   return (JSON.parse(logs.join("\n")) as { model: Record<string, unknown> }).model;
+ }
+ 
+ test("`review tier` floors a blast-radius round at deep and names the rule that did it", async () => {
+   // A blast-radius round over a twelve-line diff is still a blast-radius round:
+   // the floor is applied AFTER the small-scope downgrade.
+   await tier("--scope", "blast-radius", "--findings", "1", "--diff-lines", "12");
+ 
+   expect(process.exitCode).toBe(0);
+   const out = logs.join("\n");
+   expect(out).toContain("tier: deep");
+   expect(out).toContain("light:small-scope");
+   expect(out).toContain("floor:blast-radius");
+   expect(out).toContain("model: demo-large");
+   expect(out).toContain("tier_resolution: discovered");
+ });
+ 
++test("`review tier --premise` gives the review-premise judge the deep tier, even over a light verifier method", async () => {
++  await tier("--premise", "--verifier", "execution", "--findings", "1", "--diff-lines", "5", "--json");
++
++  expect(process.exitCode).toBe(0);
++  const model = modelBlock();
++  expect(model.tier).toBe("deep");
++  expect(model.tier_reasons).toContain("floor:premise-judge");
++  expect(model.model).toBe("demo-large");
++});
++
+ test("`review tier --json` prints the model block a dispatch document carries", async () => {
+   await tier("--findings", "2", "--diff-lines", "20", "--json");
+ 
+   expect(process.exitCode).toBe(0);
+   const model = modelBlock();
+   expect(model.tier).toBe("light");
+   expect(model.tier_reasons).toEqual(["base:standard", "light:small-scope", "resolve:picked-below"]);
+   expect(model.provider).toBe("demo");
+   expect(model.model).toBe("demo-mini");
+   expect(model.tier_resolution).toBe("discovered");
+   expect((model.model_discovery as { candidates: string[] }).candidates).toEqual([
+     "demo-large",
+     "demo-medium",
+     "demo-mini",
+   ]);
+ });
+ 
+ test("`review tier` never runs a security finding below standard, even when verified by execution", async () => {
+   await tier("--verifier", "execution", "--security", "--json");
+ 
+
+--- src/commands/shell.test.ts
+@@ 861,901 @@
+     "graph_query",
+     "graph_symbol",
+     "health_status",
+     // Flow 393: working-memory recall (read-only) and the Notes writer.
+     "history_search",
+     "learn_accept",
+     "learn_graduate",
+     "learn_promote",
+     "list_dir",
+     "memory_search",
+     "plan_get",
+     "plan_set",
+     "plan_update",
+     "read_file",
+     "read_wiki",
+     "recall_step",
+     "repomap",
+     "review_chunks_answer",
+     "review_comments_reply",
+     "review_confirm_plan",
++    "review_decide_premise",
+     "review_override_reviewers",
+     "review_publish",
+     "review_waive_coverage",
+     "review_waive_mutation",
+     "review_waive_readiness",
+     // Flow 295: operator-confirmed scheduling — schedule_create always asks and shows
+     // the card; schedule_list is read-only. TUI roster only.
+     "schedule_create",
+     "schedule_list",
+     "schedule_pause",
+     "schedule_remove",
+     "schedule_resume",
+     "schedule_run",
+     "search_code",
+     // The MCP consumer pair (keryx-mcp-servers P0). TWO entries however many
+     // servers the operator has connected — if a qualified name like
+     // `linear__create_issue` ever appears in this list, the package's whole
+     // premise has been reversed.
+     "search_tool",
+     "shell_exec",
+
+--- src/commands/skills.bundled-verify.test.ts
+@@ 20,78 @@
+   // A temp HOME so nothing reads or writes the operator's own configuration.
+   const home = mkdtempSync(path.join(tmpdir(), "keryx-bundled-verify-home-"));
+   const env: Record<string, string> = {};
+   for (const [key, value] of Object.entries(process.env)) {
+     if (value !== undefined) env[key] = value;
+   }
+   env.HOME = home;
+   env.XDG_DATA_HOME = home;
+ 
+   const proc = Bun.spawn(["bun", CLI, ...args], { env, stdout: "pipe", stderr: "pipe" });
+   const [out, err] = await Promise.all([
+     new Response(proc.stdout).text(),
+     new Response(proc.stderr).text(),
+   ]);
+   return { code: await proc.exited, out, err };
+ }
+ 
+ describe("keryx skills verify --bundled", () => {
+   test("the shipped tree passes, over a non-zero denominator, and exits 0", async () => {
+     const result = await runCli(["skills", "verify", "--bundled"]);
+-    // 79: flow 446 added review-pr-contract; before it 78: flow 330 added review-jev-rules, flow 332 added
++    // 80: flow 459 added review-premise; before it 79: flow 446 added review-pr-contract; before it 78: flow 330 added review-jev-rules, flow 332 added
+     // review-jev-risk/review-jev-scenarios, flow 333 added
+     // review-jev-docs/review-jev-comments, and flow 335 added
+     // review-jev-contract.
+-    expect(result.out).toContain("skills_evaluated: 79");
++    expect(result.out).toContain("skills_evaluated: 80");
+     expect(result.out).toContain("findings: 0");
+     expect(result.code).toBe(0);
+   });
+ 
+   test("--json emits the evaluation, both denominators included", async () => {
+     const result = await runCli(["skills", "verify", "--bundled", "--json"]);
+     expect(result.code).toBe(0);
+     const parsed = JSON.parse(result.out) as {
+       skills: number;
+       documents: number;
+       findings: unknown[];
+       skillNames: string[];
+     };
+-    expect(parsed.skills).toBe(79);
++    expect(parsed.skills).toBe(80);
+     // The harness builds are read too, and the count says so. `skills` alone
+     // read as full coverage while 100-odd builds went unopened.
+     expect(parsed.documents).toBeGreaterThan(parsed.skills);
+     expect(parsed.findings).toEqual([]);
+     expect(parsed.skillNames).toContain("review-orchestrator");
+   });
+ 
+   test("a tree with a defect is reported and exits 1", async () => {
+     const root = mkdtempSync(path.join(tmpdir(), "keryx-bundled-verify-"));
+     const dir = path.join(root, "skills", "quality", "broken-command-fixture");
+     mkdirSync(dir, { recursive: true });
+     writeFileSync(
+       path.join(dir, "SKILL.md"),
+       `---
+ name: broken-command-fixture
+ description: Deliberately broken, to prove the exit code is wired.
+ metadata:
+   version: 1.0.0
+ ---
+ 
+
+--- src/flow/review-fixtures.ts
+@@ 40,81 @@
+ 
+ /**
+  * The commit the gate suites treat as "the PR head".
+  *
+  * Exported and shared so a fixture's `collected_sha` and a suite's `HEAD`
+  * constant cannot drift apart: condition 4 now compares them, and two equal
+  * string literals in two files are a coincidence a later edit is free to break.
+  */
+ export const FIXTURE_PR_HEAD = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678";
+ 
+ export type ReviewFixtureFinding = {
+   id: string;
+   severity?: string;
+   reviewer?: string;
+   problem?: string;
+   file?: string | null;
+   global_id?: string;
+   dedupe_key?: string;
+   disposition?: { state: string; evidence?: string };
+   verification?: { verdict: string; method?: string; evidence?: string; verifier?: string };
++  /** Flow 459: what the premise judge found, as `findings.json` records it. */
++  premise?: Record<string, unknown>;
+   source?: string;
+   external_ref?: Record<string, unknown>;
+ };
+ 
+ export type ReviewFixtureOptions = {
+   cwd: string;
+   flowDir: string;
+   reviewId: string;
+   createdAt?: string;
+   /** `manifest.target.head` — the commit the round ran against. */
+   head?: string | null;
+   mode?: string;
+   coverage?: Array<{ reviewer: string; status: string; reason: string }>;
+   findings?: ReviewFixtureFinding[];
+   /** `null` writes a `scope.md` with NO `verification_mode:` line at all. */
+   verificationMode?: string | null;
+   /**
+    * `claims_received:` in the stage counts. Default 1 — a verifier that was
+    * given something.
+    *
+
+--- src/flow/review-fixtures.ts
+@@ 121,161 @@
+       updatedAt: options.createdAt ?? "2026-08-29T10:00:00.000Z",
+     };
+     await writeFileAtomic(path.join(dir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+   }
+ 
+   if (options.omitFindings !== true) {
+     const findings = (options.findings ?? []).map((finding) => ({
+       id: finding.id,
+       reviewer: finding.reviewer ?? "review-logic",
+       severity: finding.severity ?? "major",
+       problem: finding.problem ?? `problem for ${finding.id}`,
+       impact: "impact",
+       suggested_fix: "fix",
+       evidence: "evidence",
+       confidence: "high",
+       ...(finding.global_id === undefined ? {} : { global_id: finding.global_id }),
+       ...(finding.dedupe_key === undefined ? {} : { dedupe_key: finding.dedupe_key }),
+       ...(finding.file === undefined ? {} : { file: finding.file }),
+       ...(finding.disposition === undefined ? {} : { disposition: finding.disposition }),
+       ...(finding.verification === undefined ? {} : { verification: finding.verification }),
++      ...(finding.premise === undefined ? {} : { premise: finding.premise }),
+       ...(finding.source === undefined ? {} : { source: finding.source }),
+       ...(finding.external_ref === undefined ? {} : { external_ref: finding.external_ref }),
+     }));
+     await writeFileAtomic(path.join(dir, "findings.json"), `${JSON.stringify(findings, null, 2)}\n`);
+   }
+ 
+   if (options.omitScope !== true) {
+     const mode = options.verificationMode === undefined ? "filter" : options.verificationMode;
+     const verificationBlock =
+       mode === null
+         ? "_no verifier ran against this round_"
+         : [
+             `verification_mode: ${mode}`,
+             `claims_received: ${options.claimsReceived ?? 1}`,
+             "claims_applied: 1",
+             "claims_rejected: 0",
+             "verdicts_capped_to_unverifiable: 0",
+             "confirmed: 1",
+             "refuted: 0",
+             "unverifiable: 0",
+
+--- src/flow/review-gate.ts
+@@ 1,24 @@
+ import { packageRecordsCoverage } from "../review/coverage-complete";
+ import { packageResearchErrors } from "../review/research";
++import { premiseDecisionFor, readPremiseDecisions } from "../review/operator-decisions";
++import { isHeldVerdict } from "../review/premise";
+ /**
+  * The review gate (flow 204, AC5-AC7 / specification §2).
+  *
+  * # Why a sixth gate
+  *
+  * `flow complete` gated on acceptance criteria, PR-or-merge, tasks, health and
+  * security. Nothing checked that the last review round came back clean, so a
+  * flow could close with open findings — which is the opposite of what the review
+  * loop exists to produce.
+  *
+  * # The one rule everything here is built on
+  *
+  * **A finding disappearing from round N+1 is not evidence it was fixed.** It is
+  * equally consistent with the reviewer not looking, the context being fuller, or
+  * the sampling differing. Flow 202 measured exactly this shape: the review
+  * corpus reported 100% precision because nothing in it could record a finding as
+  * wrong — a corpus of survivors from an unlogged triage. The number was refused
+  * as a baseline for that reason (see the flow 202 package's `baseline.md`).
+  *
+  * Two consequences run through this whole file:
+
+--- src/flow/review-gate.ts
+@@ 237,281 @@
+ /** One finding, as this gate reads it out of `findings.json`. */
+ export type GateFinding = {
+   id: string;
+   globalId?: string | undefined;
+   reviewer?: string | undefined;
+   severity: string;
+   problem?: string | undefined;
+   file?: string | null | undefined;
+   symbol?: string | null | undefined;
+   line?: number | null | undefined;
+   dedupeKey?: string | null | undefined;
+   disposition?: { state?: string | undefined; evidence?: string | undefined } | undefined;
+   verification?:
+     | {
+         verdict?: string | undefined;
+         method?: string | undefined;
+         evidence?: string | undefined;
+         verifier?: string | undefined;
+       }
+     | undefined;
++  /**
++   * What the premise judge found (flow 459), and the operator's answer when there is one: from the record's own
++   * `premise.operator` or from the package's `premise-question` decisions, whichever is present.
++   */
++  premise?: { verdict?: string | undefined; operatorAnswer?: string | undefined } | undefined;
+   /**
+    * `external` when the finding came from a comment somebody else left on the PR
+    * (specification §3.1 / AC9).
+    *
+    * Read defensively because the field does not exist yet: the external-comment
+    * collection is being built alongside this gate, and this reader must not
+    * require its shape before it lands, nor break when it does.
+    */
+   source?: string | undefined;
+   externalRef?: Record<string, unknown> | undefined;
+   /** Where it was read from, for the failure message. */
+   round: string;
+ };
+ 
+ export type VerificationStats = {
+   mode: string;
+   claimsReceived: number | null;
+   claimsApplied: number | null;
+   refuted: number | null;
+   findingsIn: number | null;
+
+--- src/flow/review-gate.ts
+@@ 291,442 @@
+   /**
+    * Whether the round is INGESTED: a durable record of what it found exists.
+    *
+    * Read as "manifest.json and findings.json are both on disk and readable",
+    * not as `manifest.mode === "ingest"`. What §2.2 condition 1 is protecting
+    * against is a round that "cannot be cited — nothing durable records what it
+    * found", and a `review-flow` package records exactly as durably as an
+    * `ingest` one. Keying on the mode string would reject a real record and
+    * accept an empty directory written by the right verb.
+    */
+   ingested: boolean;
+   /** Why it is not ingested. Empty when it is. */
+   problems: string[];
+   /** `manifest.target.head` — the commit the round ran against. */
+   head: string | null;
+   mode: string | null;
+   coverage: Array<{ reviewer: string; status: string; reason: string }>;
+   findings: GateFinding[];
+   /** Parsed out of `scope.md`. `null` when the round recorded none. */
+   verification: VerificationStats | null;
++  /** Flow 459: the premise check's stage counts out of `scope.md`; `null` when the round recorded none. Absent on a hand-built record. */
++  premise?: PremiseStats | null | undefined;
++};
++
++export type PremiseStats = {
++  claimsReceived: number | null;
++  claimsApplied: number | null;
++  claimsRejected: number | null;
++  held: number | null;
+ };
+ 
+ function readRecord(value: unknown): Record<string, unknown> | null {
+   return typeof value === "object" && value !== null && !Array.isArray(value)
+     ? (value as Record<string, unknown>)
+     : null;
+ }
+ 
+ function readString(value: unknown): string | undefined {
+   return typeof value === "string" && value.trim() !== "" ? value : undefined;
+ }
+ 
+ function toGateFinding(raw: unknown, round: string, index: number): GateFinding {
+   const record = readRecord(raw) ?? {};
+   const disposition = readRecord(record["disposition"]);
+   const verification = readRecord(record["verification"]);
++  const premise = readRecord(record["premise"]);
+   return {
+     id: readString(record["id"]) ?? `#${index + 1}`,
+     globalId: readString(record["global_id"]),
+     reviewer: readString(record["reviewer"]),
+     severity: readString(record["severity"]) ?? "blocker",
+     problem: readString(record["problem"]),
+     file: typeof record["file"] === "string" ? record["file"] : null,
+     symbol: typeof record["symbol"] === "string" ? record["symbol"] : null,
+     line: typeof record["line"] === "number" ? record["line"] : null,
+     dedupeKey: typeof record["dedupe_key"] === "string" ? record["dedupe_key"] : null,
+     ...(disposition
+       ? {
+           disposition: {
+             state: readString(disposition["state"]),
+             evidence: readString(disposition["evidence"]),
+           },
+         }
+       : {}),
+     ...(verification
+       ? {
+           verification: {
+             verdict: readString(verification["verdict"]),
+             method: readString(verification["method"]),
+             evidence: readString(verification["evidence"]),
+             verifier: readString(verification["verifier"]),
+           },
+         }
+       : {}),
++    ...(premise
++      ? { premise: { verdict: readString(premise["verdict"]), operatorAnswer: readString(readRecord(premise["operator"])?.["answer"]) } }
++      : {}),
+     ...(readString(record["source"]) ? { source: readString(record["source"]) } : {}),
+     ...(readRecord(record["external_ref"]) ? { externalRef: readRecord(record["external_ref"]) as Record<string, unknown> } : {}),
+     round,
+   };
+ }
+ 
+ /**
+  * The verification stage counts, out of the `### Refuted by the verifier` and
+  * `### Retained` blocks of `scope.md`.
+  *
+  * Parsed rather than read from a JSON field because `scope.md` is where
+  * `createManagedReviewPackage` writes them and this flow does not own
+  * `src/review/`. The parse is deliberately tolerant of everything except
+  * `verification_mode`: that line is the one that says whether a verifier ran at
+  * all, and a record without it is `null` rather than a zeroed stat block —
+  * "the verifier removed nothing" and "no verifier ran" are different facts.
+  */
+ export function parseVerificationStats(scopeMarkdown: string): VerificationStats | null {
+   const mode = matchLine(scopeMarkdown, "verification_mode");
+   if (mode === null) {
+     return null;
+   }
+   return {
+     mode,
+     claimsReceived: matchNumber(scopeMarkdown, "claims_received"),
+     claimsApplied: matchNumber(scopeMarkdown, "claims_applied"),
+     refuted: matchNumber(scopeMarkdown, "refuted"),
+     findingsIn: matchNumber(scopeMarkdown, "findings_in"),
+     findingsRetained: matchNumber(scopeMarkdown, "findings_retained"),
+     findingsRemoved: matchNumber(scopeMarkdown, "findings_removed_by_verifier"),
+   };
+ }
+ 
++/** The `## Premise check` counts out of `scope.md`; `null` when the block is not there (no premise judge ran). */
++export function parsePremiseStats(scopeMarkdown: string): PremiseStats | null {
++  if (matchLine(scopeMarkdown, "premise_claims_received") === null) {
++    return null;
++  }
++  return {
++    claimsReceived: matchNumber(scopeMarkdown, "premise_claims_received"),
++    claimsApplied: matchNumber(scopeMarkdown, "premise_claims_applied"),
++    claimsRejected: matchNumber(scopeMarkdown, "premise_claims_rejected"),
++    held: matchNumber(scopeMarkdown, "premise_held"),
++  };
++}
++
++/** `awaiting`: held with no operator answer (blocks, at any severity); `dismissed`: the operator dismissed it; otherwise `none`. */
++function premiseGateState(finding: GateFinding): "none" | "awaiting" | "dismissed" {
++  if (!isHeldVerdict(finding.premise?.verdict)) {
++    return "none";
++  }
++  const answer = finding.premise?.operatorAnswer;
++  return answer === "dismiss" ? "dismissed" : answer === "uphold" ? "none" : "awaiting";
++}
++
+ function matchLine(text: string, key: string): string | null {
+   const match = new RegExp(`^${key}:\\s*(.+)$`, "m").exec(text);
+   return match?.[1]?.trim() ?? null;
+ }
+ 
+ function matchNumber(text: string, key: string): number | null {
+   const raw = matchLine(text, key);
+   if (raw === null) {
+     return null;
+   }
+   const value = Number(raw);
+   return Number.isFinite(value) ? value : null;
+ }
+ 
+ /**
+  * Every review package in the flow's directory, oldest first.
+  *
+  * Deliberately parallel to `readFlowReviewRounds` in `review/loop.ts` and not
+  * shared with it: that reader answers "what did the rounds report" for loop
+  * detection and drops the manifest, the coverage and the stage counts, all three
+
+--- src/flow/review-gate.ts
+@@ 482,544 @@
+         })
+       : [];
+ 
+     const scopePath = path.join(packageDir, "scope.md");
+     const scope = (await pathExists(scopePath)) ? await readScopeMarkdown(scopePath) : null;
+ 
+     // A closed round passed the close-time gate of its day, and a round cut before the coverage accounting existed
+     // records none of it; the coverage-completeness gate decides open rounds that kept the record.
+     const completeness = readString(manifest?.["status"]) !== "closed" && (await packageRecordsCoverage(packageDir));
+     problems.push(...await packageResearchErrors(packageDir, manifest?.["artifacts"], rawFindings, { completeness }));
+     rounds.push({
+       reviewId,
+       dir: path.relative(cwd, packageDir),
+       sortKey: readString(manifest?.["createdAt"]) ?? entry.name,
+       ingested: problems.length === 0,
+       problems,
+       head: readString(target?.["head"]) ?? null,
+       mode: readString(manifest?.["mode"]) ?? null,
+       coverage,
+       findings: Array.isArray(rawFindings)
+-        ? rawFindings.map((item, index) => toGateFinding(item, reviewId, index))
++        ? withPremiseAnswers(rawFindings.map((item, index) => toGateFinding(item, reviewId, index)), await readPremiseDecisions(packageDir))
+         : [],
+       verification: scope === null ? null : parseVerificationStats(scope),
++      premise: scope === null ? null : parsePremiseStats(scope),
+     });
+   }
+   rounds.sort((a, b) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0));
+   return rounds;
+ }
+ 
++/** Put the operator's recorded answer on the held findings it names, so the gate reads one shape whichever store holds it. */
++function withPremiseAnswers(findings: GateFinding[], decisions: Awaited<ReturnType<typeof readPremiseDecisions>>): GateFinding[] {
++  if (decisions.length === 0) {
++    return findings;
++  }
++  return findings.map((finding) => {
++    const decision = premiseDecisionFor(decisions, finding.globalId, finding.id);
++    return decision === undefined || finding.premise === undefined
++      ? finding
++      : { ...finding, premise: { ...finding.premise, operatorAnswer: decision.answer } };
++  });
++}
++
+ async function readJson(file: string): Promise<unknown> {
+   if (!(await pathExists(file))) {
+     return null;
+   }
+   try {
+     return JSON.parse(await readFile(file, "utf8")) as unknown;
+   } catch {
+     return null;
+   }
+ }
+ 
+ /**
+  * `scope.md`'s content, or `null` when it is missing OR could not be read.
+  *
+  * Same shape as {@link readJson} just above, and for the same reason:
+  * `pathExists` is a TOCTOU check, not a guarantee, so the file can vanish,
+  * lose read permission, or turn out to be a directory between the check and
+  * the read. Before this existed, the call site below read `scope.md`
+  * directly with no `try` of its own — unlike `manifest.json` and
+  * `findings.json`, which `readJson` already wraps — so a failure there threw
+
+--- src/flow/review-gate.ts
+@@ 652,707 @@
+  * `answered-disagree` was missing from this table and from the code, and the
+  * omission was not cosmetic: it is the state AC10 REQUIRES the pipeline to
+  * produce when the verifier refutes an external comment, `managed.ts` writes it
+  * on exactly that path, and eight other files know it. Reaching it therefore
+  * left the finding permanently non-terminal, failing conditions 2 and 4 forever
+  * — the gate refused every flow whose review worked as designed. What makes it
+  * terminal is the reply, not the disagreement: a machine deciding a human's
+  * question was invalid is not an answer to the human, so the obligation this
+  * state carries is discharged by having spoken, not by having been right.
+  *
+  * The `fixed` rule is the strict one and it is strict on purpose: AC-C3 says a
+  * finding marked `fixed` without a verifier verdict against the fixing commit is
+  * rejected at gate time. Since `ReviewFindingVerification` carries no SHA field,
+  * "against that SHA" is checked by requiring the SHA to appear in the
+  * verification's own evidence — the only durable link between the two records
+  * that exists today. A `refuted` verdict can never have been reached by
+  * reasoning alone (`mergeVerifications` caps reasoning at `unverifiable`), so
+  * this also inherits that floor without restating it.
+  */
+ export function findingVerdict(finding: GateFinding): FindingVerdict {
++  // Flow 459. A finding the premise judge held is a question, and it stays open until the operator answers it. The
++  // answer `dismiss` is the operator's own decision (`keryx review decide-premise`), which is what the
++  // `dismissed-incorrect` disposition it records would otherwise need a verifier verdict to justify; `uphold` falls
++  // through to the ordinary rules at the finding's original severity.
++  const hold = premiseGateState(finding);
++  if (hold === "awaiting") {
++    return {
++      terminal: false,
++      reason:
++        "held by the premise judge and awaiting an operator decision — answer it with " +
++        "`keryx review decide-premise --package <dir> --finding <id> --answer uphold|dismiss --reason \"<why>\"`",
++    };
++  }
++  if (hold === "dismissed") {
++    return { terminal: true, kind: "dismissed" };
++  }
+   const state = finding.disposition?.state;
+   const evidence = finding.disposition?.evidence;
+   if (state === undefined || state === "unknown") {
+     return {
+       terminal: false,
+       reason:
+         state === "unknown"
+           ? "disposition is `unknown` — nothing was recorded about what became of it"
+           : "no disposition recorded",
+     };
+   }
+   if (evidence === undefined) {
+     return { terminal: false, reason: `disposition \`${state}\` carries no evidence` };
+   }
+ 
+   if (state === "acted-on") {
+     const shas = shasIn(evidence);
+     if (shas.length === 0) {
+       return {
+         terminal: false,
+
+--- src/flow/review-gate.ts
+@@ 1418,1460 @@
+               `${ingested.length} of ${rounds.length} round(s) ingested; ${unreadable.length} cannot be read: ` +
+               unreadable.map((round) => `${round.reviewId} (${round.problems.join("; ")})`).join(", ") +
+               ". A round that cannot be read is not a round that found nothing — repair or remove the package, " +
+               "but do not complete over it.",
+           },
+     );
+   }
+ 
+   // 2. No finding without a terminal disposition, at or above the floor.
+   //
+   // Over the LATEST STATE OF EVERY FINDING EVER RAISED, not over the last file
+   // written — see `latestFindingStates`.
+   if (latestRound === undefined) {
+     conditions.push({
+       id: "terminal-dispositions",
+       status: "unobserved",
+       detail: "no ingested round to read findings from",
+     });
+   } else {
+     const states = latestFindingStates(rounds);
+-    const blocking = states.filter((finding) => blocksAtFloor(finding.severity, config.severityFloor));
++    // A held finding blocks at ANY severity: it is a question the operator has not answered, and a `minor` question
++    // left unanswered is still an unanswered question (flow 459).
++    const blocking = states.filter((finding) => blocksAtFloor(finding.severity, config.severityFloor) || premiseGateState(finding) === "awaiting");
+     const open = blocking.flatMap((finding) => {
+       const verdict = findingVerdict(finding);
+       return verdict.terminal
+         ? []
+         : [`${finding.globalId ?? finding.id} (${finding.severity}, round ${finding.round}): ${verdict.reason}`];
+     });
+     conditions.push(
+       open.length === 0
+         ? {
+             id: "terminal-dispositions",
+             status: "pass",
+             detail:
+               `${blocking.length} finding(s) at or above \`${config.severityFloor}\` across ${ingested.length} ` +
+               `ingested round(s), every one terminal with the evidence its disposition requires ` +
+               `(${states.length - blocking.length} below the floor, not blocking)`,
+           }
+         : {
+             id: "terminal-dispositions",
+             status: "violated",
+             detail:

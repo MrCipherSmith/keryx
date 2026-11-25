@@ -1,0 +1,116 @@
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Style review of slice-05: naming and structure are consistent with the surrounding code; findings are duplication of small predicates and wording, one very long line, and a few readability nits.",
+  "slices": [
+    "slice-05"
+  ],
+  "findings": [
+    {
+      "id": "ST-001",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "quote": "const dispatch = { version: 1, mode: input.mode, ...(superseded.length === 0 ? {} : { superseded })",
+      "problem": "The `dispatch` record is built as one line of roughly 900 characters with a dozen conditional spreads, and this diff adds to the pattern (depth/notRun already, now more fields around it).",
+      "impact": "Hard to read, review and diff; a one-field change rewrites the whole line.",
+      "suggested_fix": "Build it with a small helper or incremental `const optional = {...}` pieces, one per line.",
+      "evidence": "ledger.ts, the `const dispatch = {` statement in the hunk at diff lines 1240-1250.",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "ST-002",
+      "severity": "minor",
+      "file": "src/review/ledger.ts",
+      "quote": "const resolvesOnce = (key: string | undefined): key is string => text(key) && input.canonical.filter((f) => f.id === key || f.global_id === key).length === 1;",
+      "problem": "The predicates `f.id === key || f.global_id === key` (in resolvesOnce, canonicalByObligation, and closeWith's `matching`) and `m === oid || (typeof m === \"string\" && m.endsWith(`#${oid}`))` (in absorbedInto and canonicalByObligation) are written out repeatedly. Sites: ledger.ts resolvesOnce, canonicalByObligation, closeWith.matching, absorbedInto.",
+      "impact": "Duplicated matching rules drift: a change to what counts as the same finding must be made in four places.",
+      "suggested_fix": "Extract `matchesKey(f, key)` and `mergedFromHas(f, id)` helpers at module level and use them in all sites.",
+      "evidence": "Diff lines 1254-1270 and 1436.",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "ST-003",
+      "severity": "minor",
+      "file": "src/review/premise.ts",
+      "quote": "? `this round reported no such finding: ${hashInDisplayIdDetail(claim.finding_id)}`",
+      "problem": "The new display-id rule lives in display-id.ts (`displayIdHasHash`, `DISPLAY_ID_FORM`), but premise.ts re-tests with an inline `.includes(\"#\")` and defines `hashInDisplayIdDetail` with its own wording of the same rule, a second statement of DISPLAY_ID_FORM.",
+      "impact": "Two sources of the rule's wording and predicate; they can diverge.",
+      "suggested_fix": "Use `displayIdHasHash` for the test and build the message from `DISPLAY_ID_FORM` (or export the detail builder from display-id.ts).",
+      "evidence": "premise.ts diff lines 2359-2364 and 2467-2472 against display-id.ts lines 813-820.",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "ST-004",
+      "severity": "minor",
+      "file": "src/review/premise.ts",
+      "quote": "const sets: readonly ParsedPremiseClaims[] = parsedInput === undefined ? [] : Array.isArray(parsedInput) ? (parsedInput as readonly ParsedPremiseClaims[]) : [parsedInput as ParsedPremiseClaims];",
+      "problem": "A ternary chain with two casts normalises the input; parsePremiseClaimSets likewise casts `parsePremiseClaims(entry) as ParsedPremiseClaims` where the function returns a union with undefined.",
+      "impact": "Nested ternary with casts is hard to read and hides a type narrowing the compiler could check.",
+      "suggested_fix": "Extract `toSets(input)` using an early return and a type guard, or have parsePremiseClaims return a non-undefined overload.",
+      "evidence": "Diff lines 2352-2355 and 2433.",
+      "confidence": "medium",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "ST-005",
+      "severity": "info",
+      "file": "src/review/filter-stats.ts",
+      "quote": "lines.push(`merged_duplicates: ${stats.merged_duplicates ?? 0}`);",
+      "problem": "The default `merged_duplicates ?? 0` is spelled in three places (buildFilterStats via `duplicatesMerged ?? 0`, renderFilterStatsMarkdown, renderFilterStatsLine) while checkFilterStats validates the field separately.",
+      "impact": "Minor: the 'absent reads as 0' rule is repeated rather than named.",
+      "suggested_fix": "Add a `mergedDuplicatesOf(stats)` accessor used by the two renderers.",
+      "evidence": "Diff lines 953, 1099, 1128.",
+      "confidence": "low",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "ST-006",
+      "severity": "info",
+      "file": "src/review/managed.ts",
+      "quote": "`Refusing to ingest ${reportLabel(input)}: it is ${report.trim() === \"\" ? \"empty\"",
+      "problem": "`refuseStubReport` computes `const text = report.trim();` and then calls `report.trim()` again inside the message template.",
+      "impact": "Small redundancy that makes the reader wonder if `text` and `report.trim()` differ.",
+      "suggested_fix": "Use `text === \"\"` in the template.",
+      "evidence": "Diff lines 2096 and 2099.",
+      "confidence": "high",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "ST-007",
+      "severity": "info",
+      "file": "src/review/dispatch-usage.ts",
+      "quote": "usage = usageOfLine(match[1]!) ?? usage;",
+      "problem": "The comment `A malformed line states nothing; it is still removed from the body.` was left above the call after the try/catch moved into usageOfLine; the call site no longer shows why a malformed line yields undefined, and the 'removed from the body' part is done later by `raw.replace`.",
+      "impact": "Comment is detached from the code it describes.",
+      "suggested_fix": "Move the first half into usageOfLine's doc and keep a one-line pointer to the replace below.",
+      "evidence": "Diff lines 728-735.",
+      "confidence": "low",
+      "reviewer": "review-style"
+    },
+    {
+      "id": "ST-008",
+      "severity": "info",
+      "file": "src/review/ledger.ts",
+      "quote": "export function unreadableInputClaim(result: object): string | undefined {",
+      "problem": "The parameter was widened from `ParsedResult` to `object` and the function re-reads `summary` through a cast, discarding the type the rest of the file uses.",
+      "impact": "Loses type checking on a field that ParsedResult already declares; the reason for widening is not stated.",
+      "suggested_fix": "Keep `ParsedResult` (or a `{ summary?: unknown }` type) and drop the cast, or comment why callers pass raw objects.",
+      "evidence": "Diff lines 1158-1167.",
+      "confidence": "low",
+      "reviewer": "review-style"
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 4,
+    "info": 4
+  }
+}
+```
+
+Summary: review-style, slice-05 (new). 0 blocker, 0 major, 4 minor, 4 info. Main themes: repeated finding-key and merged_from predicates in ledger.ts, the '#' display-id rule restated in premise.ts, a ~900 char dispatch line.

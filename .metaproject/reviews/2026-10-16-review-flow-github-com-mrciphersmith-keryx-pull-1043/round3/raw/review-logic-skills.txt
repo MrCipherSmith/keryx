@@ -1,0 +1,75 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-logic",
+  "summary": "Round 3 skills delta (f47ebb0ec..8a9ae3d20). The host-conditional git wording is now consistent in all 17 reviewer skills, the reviewer-input schema and review-premise, in both the bundled and the .metaproject copies, so LG2-001 and LG-003 are closed. Display id versus global_id now matches the code (LG2-002 closed). The premise constraint and the skip clause close LG2-004. LG2-003 is partial: the by-hand refusal list still leaves out the severity-shape refusals. The delta adds three minors and one info. No blocker and no major.",
+  "findings": [
+    {
+      "id": "LG3-001",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "renumber a collision before dispatch. A claim names the `id`; it names the `global_id` only when a carried finding shares a new one's display id.",
+      "problem": "The two sentences give opposite instructions for the one case the second sentence exists for: a new finding whose display id equals a carried finding's. 'Renumber a collision' does not cover it, because ingest keys by global_id (managed.ts:1679-1683): carried `<oldReview>#F-001` and new `<thisReview>#F-001` do not collide, so ingest never refuses them. The second sentence then lets the carried one be named by its global_id. That leaves the new one named by bare `F-001`. claimTargets matches `finding.id === id` for both (premise.ts:219), so that claim is rejected as ambiguous-finding (premise.ts:325). The text also says the new finding has no global_id to name. review-premise's `findings` row (review-premise/SKILL.md:63) repeats the same rule.",
+      "impact": "Trigger: in a delta round, a carried finding with no carried premise and a new finding share a display id. The judge's claim on the new finding is rejected and listed in scope.md. That finding goes on unjudged, which fails safe but loses the premise check on it (it can still be held or lowered on a rerun). The final state is not wrong.",
+      "suggested_fix": "Count a new finding that shares a carried finding's display id as a collision too, and renumber the new one before dispatch. Then every claim can name the display id, except one that targets the carried finding, which names its global_id. Or say the orchestrator may pass the new finding's future key `<reviewId>#<id>` as its global_id. Use the same wording in the review-premise `findings` row.",
+      "evidence": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:1127; src/gdskills/bundled/skills/review/review-premise/SKILL.md:63; src/review/managed.ts:1670-1683 (assignGlobalIds keeps carried keys; findingKeyCollisions keys by global_id); src/review/premise.ts:218-221, :325.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "LG3-002",
+      "severity": "minor",
+      "file": "src/gdskills/bundled/skills/orchestration/feature-dev/SKILL.md",
+      "line": null,
+      "quote": "with none, its claims object goes into the Implementation Spec under **Premise**",
+      "problem": "Step 1 sends the judge's claims to a **Premise** section of the Implementation Spec. Step 3 (lines 44-50) is the list of fields that spec has, and it holds no Premise field: What, Why, Scope, Acceptance criteria, Approach, Test strategy. Step 4 saves the spec to `.feature-spec.md` and gitignores it, so where no flow exists that file is the only record of the premise.",
+      "impact": "A spec writer following Step 3's list leaves the section out, so the judge's claims and the operator's answer are not recorded anywhere. Phase 7 fix cycles then cannot cite them, and a dismissed premise can come back as a requirement.",
+      "suggested_fix": "Add `- **Premise** (only for an input sourced from a finding): the review-premise claims object and the operator's answer, in their words` to the Step 3 list.",
+      "evidence": "src/gdskills/bundled/skills/orchestration/feature-dev/SKILL.md:42 (new text), :44-51 (spec fields, .gitignore). The .metaproject copy is identical.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "LG3-003",
+      "severity": "info",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "line": null,
+      "quote": "you run `git log -L <start>,<end>:<file>` and `git blame -L <start>,<end> <file>` for each deliberate-looking site a reviewer must judge and pass the output in `context_files`",
+      "problem": "On keryx shell, `context_files` takes paths only. Each must be a regular file under the project root, with at most 40 files and 400 KB in total (spawn-subagent-tool.ts:197-241). The new text says to pass 'the output'. It does not say to save that output to a file first, or where (for example `<package>/research-evidence/history-<n>.txt`), or that the history files count against the cap the slices already use. Lines 110 and 1127 and the reviewer-input schema use the same phrasing.",
+      "impact": "If the output is passed inline, the dispatch is refused loudly ('not a regular file'). Nothing goes wrong silently; the cost is a retry. With many slices, the history files can push a dispatch over the 40-file cap.",
+      "suggested_fix": "Say: save each excerpt as a file under the package (e.g. `research-evidence/history-<file>-<start>.txt`) and pass its path in `context_files`, within the host's file cap.",
+      "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:197-198, :217-241; review-orchestrator/SKILL.md:110, :1127; reviewer-input.schema.json allowed_tools description.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    }
+  ],
+  "prior_dispositions": [
+    { "id": "r2-review-logic-skills#LG2-001", "disposition": "closed", "evidence": "review-orchestrator/SKILL.md:110 makes git conditional on the host, states the keryx-shell fact and has the orchestrator pass history in context_files. :1127 does the same for the judge. Every one of the 17 reviewer skills (e.g. review-logic/SKILL.md:31, :72), review-premise :66 and :112, and reviewer-input.schema.json now carry the 'where the host gives a read-only child git' clause. rg finds no old phrasing left in src/ or .metaproject/." },
+    { "id": "review-logic-skills#LG-003", "disposition": "closed", "evidence": "The keryx-shell fallback this item lacked in round 2 is now in place: review-orchestrator/SKILL.md:110 (the orchestrator runs git log -L/blame and passes the output), and each reviewer's 'Supplied text first' tells it to read the supplied excerpts or say the history was not read (e.g. review-logic/SKILL.md:72)." },
+    { "id": "r2-review-logic-skills#LG2-002", "disposition": "closed", "evidence": "review-orchestrator/SKILL.md:1127 and review-premise/SKILL.md:63 now say a new finding carries only its display id and global_id is minted at ingest, which matches managed.ts:304/:1658. The claim example uses a bare id (review-premise/SKILL.md:135), which premise.ts:219-221 resolves, merged_from included. A residual gap remains for a carried and a new finding that share a display id; it is filed as LG3-001." },
+    { "id": "r2-review-logic-skills#LG2-003", "disposition": "partial", "evidence": "flow-orchestrator/SKILL.md:277 and review-pr-feedback/SKILL.md:366 now point at the full rule set, PREMISE_REJECTION_REASONS. The list they defer to, the review-premise/SKILL.md:65 'For one finding those are' row, still leaves out not-a-downgrade (premise.ts:365, :373), raise-severity (:369), severity-without-downgrade (:350) and below-minor (:334). Because callers apply refusals 'as that source row lists them', a by-hand applier accepts a `downgraded` claim with an equal, higher or missing severity." },
+    { "id": "r2-review-logic-skills#LG2-004", "disposition": "closed", "evidence": "review-pr-feedback/SKILL.md:528 adds the 'premise: ... do not run review-premise again before freeze' constraint to the Step 9 dispatch. flow-orchestrator/SKILL.md:277 adds 'Skip it when the dispatch says the premise is already recorded'." },
+    { "id": "r2-review-style-skills#R2-002", "disposition": "partial", "evidence": "Verified for the caller; this is not a review-logic finding. b8ed54038 moved the dry-run, post-mortem and metrics blocks verbatim into job-orchestrator/SKILL.detail.md, and SKILL.md links each one (:1955, :2156, :2197). Against origin/main, the 2.6/Step 7/ingest/HELD paragraphs keep main's hard wrap. Two untouched paragraphs are still re-flowed: the arXiv bound paragraph (:1274-1279) and 'The bound is a ceiling' (:1282-1285)." }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 1 }
+}
+```
+
+## Logic Review: PR #1043 round 3, skills delta
+
+- Scope: f47ebb0ec..8a9ae3d20, as in round3/delta-skills.diff. The bundled and .metaproject copies of every changed skill are identical (diff -q).
+- Spec compliance gate: skipped. No issue was given; prior findings were used as the spec.
+
+**Prior findings:** 4 closed (LG2-001, LG-003, LG2-002, LG2-004), 1 partial (LG2-003: the `source` row still leaves out not-a-downgrade, raise-severity and severity-without-downgrade). R2-002 (style, owner-decided) checked: the move to SKILL.detail.md is verbatim, but two paragraphs are still re-flowed against main, so it is partial.
+
+**New findings:** blocker 0, major 0, minor 2, info 1.
+- LG3-001 (minor): when a carried finding and a new one share a display id, the new finding cannot be named (ambiguous-finding).
+- LG3-002 (minor): feature-dev sends the claims to a **Premise** spec section that the spec's field list does not have.
+- LG3-003 (info): `context_files` takes file paths only, so the history output has to be saved to a file first.
+
+Checked with no defect found: readiness item 11 is non-waivable in the code (readiness.ts:468, operator-confirm-review.ts:319) and in the docs. The `.premise.json` file beside the pr-comments record is harmless to the one directory reader (reviewer-comment.ts:25; it parses to an empty `seen`). Removing review-premise Step 1 is backed by the Iron Law at :108 and by the merge's self-judgement refusal.
+
+Routing audit: graph_used: no (not-relevant: the delta is skill text, and caller sites were enumerated with rg); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg); raw_rg_used: yes (ctx rg summaries truncate file lists; complete enumeration was needed for the class checks).

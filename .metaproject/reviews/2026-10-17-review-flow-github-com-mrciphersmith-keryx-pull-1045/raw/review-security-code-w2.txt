@@ -1,0 +1,64 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "slices": ["slice-02"],
+  "summary": "slice-02 (flow 460: override-decision coverage test, review plan e2e test, quote_unlocated schema/docs, spawn_subagent empty-reply error and KERYX_USAGE line) introduces no exploitable vulnerability. save_result_to confinement is unchanged; the usage suffix is JSON.stringify-built from numbers and the provider/model id; the override path still binds the decision to the package head and to every reviewer left out. Two info observations: a KERYX_USAGE line is not host-only provenance, and the new empty-reply branch leaves an earlier save_result_to file in place.",
+  "findings": [
+    {
+      "id": "SEC-W2-001",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": 1901,
+      "quote": "      const childUsage = { tokens_in: 0, tokens_out: 0, known: false };",
+      "problem": "When the provider reports no usage (childUsage.known stays false) spawn_subagent saves the child's raw text with no host KERYX_USAGE line. splitUsage (src/review/dispatch-usage.ts) accepts the last well-formed `KERYX_USAGE {...}` line anywhere at a line start, so a line the child wrote itself is then read as the dispatch's measured spend. On Claude Code / Codex the reviewer writes raw/<reviewer>.txt itself, so the same holds whenever the orchestrator appends nothing. dispatch-usage.ts states the line wins over the envelope `usage` 'because the host measured it and the reviewer cannot' - that holds only when the host's line is present (appended last, it wins).",
+      "impact": "Integrity of the token-spend figure only: a reviewer (for example one steered by text in the PR under review) can state any spend when the host reported none. No gate, coverage or verdict reads usage, so there is no attack vector above info; the reviewer-supplied envelope `usage` is already an accepted fallback of the same trust.",
+      "suggested_fix": "Optional hardening: when the host has no measured usage, strip child-authored KERYX_USAGE lines before saving (or write a `KERYX_USAGE_UNKNOWN` marker the parser treats as authoritative), and correct the dispatch-usage.ts comment to say the line is host-measured only when the host appended it.",
+      "evidence": "Read spawn-subagent-tool.ts usageSuffix() (returns \"\" unless childUsage.known) and the saveChildResult call with `${raw}${usageSuffix()}`; read splitUsage/USAGE_LINE in src/review/dispatch-usage.ts (last match wins, no provenance) and parseReviewResult in src/review/ledger.ts.",
+      "confidence": "high"
+    },
+    {
+      "id": "SEC-W2-002",
+      "reviewer": "review-security-code",
+      "severity": "info",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": 2316,
+      "quote": "        if (status === \"Completed\" && raw === \"(subagent produced no text)\" && turnResult?.submittedResult === undefined) {",
+      "problem": "The new empty-reply branch returns an Error before saveChildResult runs, and nothing clears save_result_to at dispatch start. If raw/<reviewer>.txt already holds an earlier dispatch's reply for the same reviewer in the same package, that file survives, and the orchestrator contract says the result is the file, never the tool output.",
+      "impact": "No attacker path: an empty child reply is not attacker-chosen in a way that selects which stale file is read. Correctness concern (a re-dispatch that came back empty could leave a previous reply to be ingested as current); belongs to review-logic. Recorded so the empty-reply fix (D/E) is not assumed to also guarantee the file reflects this dispatch.",
+      "suggested_fix": "On the empty-reply path, remove or rename an existing save_result_to file (or write an explicit empty-reply marker the ledger reads as no result).",
+      "evidence": "Read the branch at the cited line (returns before the saveNote/saveChildResult block) and the save path handling at resolveSaveResultPath (line 1248): no pre-dispatch removal.",
+      "confidence": "medium"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 0, "info": 2 }
+}
+```
+
+## Security Review - slice-02 (PR #1045, flow 460)
+
+### Scope
+- Slice: slice-02 (8 hunks: src/commands/review-ledger.test.ts, src/commands/review-plan.test.ts, review-orchestrator SKILL.md / SKILL.detail.md, src/gdskills/contracts/review-finding.schema.json, src/harness/tool/builtin/spawn-subagent-tool.ts and its test)
+- Context read: src/review/coverage.ts (overrideRecorded, skipDecision, unconfirmedDecision), src/review/operator-decisions.ts, src/review/dispatch-usage.ts, src/review/ledger.ts parseReviewResult
+- History: not needed; no deliberate override was challenged
+
+### Summary
+- Blockers: 0
+- Major: 0
+- Minor: 0
+- Info: 2
+
+### Findings
+- SEC-W2-001 (info): a KERYX_USAGE line is trusted with no provenance; when the host reports no usage, a child-written line becomes the recorded spend. It affects only how accurate the reported spend is, and no gate reads it.
+- SEC-W2-002 (info): the empty-reply error path leaves an earlier save_result_to file in place. This is a correctness issue for review-logic, not a security one.
+
+### Clean areas (checked)
+- Authz / gate bypass: the flow 460 (B) change lets a recorded `reviewer-override` decision account for missing reviewers with no dispatch `override` field. It is still bound to the package head (`decisionCovers`) and to every item in `reviewersLeftOut ∪ missing`, so a decision for another head or for a smaller left-out set counts for nothing. Trust is no weaker than before: on a gated package the decision file was already the only accepted record, and on an ungated one it replaces an agent-written dispatch quote.
+- Path traversal: `save_result_to` confinement is unchanged, and the existing test still rejects `../`, symlinked dirs, `.env.local`, `.git/hooks` and empty values.
+- Injection: the usage suffix is built with JSON.stringify from finite numbers and the provider/model id. The new test's git calls use Bun.spawnSync with argument arrays and no shell.
+- Secrets: none. The test's noreply email is an existing fixture pattern also used in other test helpers.
+- Schema: the `quote_unlocated` object has `additionalProperties: false`, an enum `reason` and integer `candidate_lines`. Ingest never relocates a quote by similarity, so no guessed anchor is accepted.
+- Crypto, CSRF, open redirect, React/NestJS patterns: not present in this slice.

@@ -1,0 +1,83 @@
+REVIEW_RESULT
+```json keryx:findings
+{
+  "reviewer": "review-highload",
+  "status": "DONE",
+  "summary": "All nine r2 highload minors and nine of twelve earlier not-closed highload records are closed at HEAD; three stay partial (usage self-report on hosts that append no line, candidate collection in the gate). The delta adds three minors and one info; none is a blocker or major.",
+  "prior_dispositions": [
+    {"id": "r2-review-highload-w1:HL-001", "disposition": "closed", "evidence": "src/review/completion-gate.ts:251-325 SessionReviewTracker keeps no command text: scan() (:284-314) stores only ids and dirs through remember() into capped Maps (:52-56, :233-237). namedBySession (:345-350) is a Map/array membership test, not an indexOf over argument strings."},
+    {"id": "r2-review-highload-w1:HL-002", "disposition": "closed", "evidence": "completion-gate.ts:277-282 rescan() resets only cursor, last and pendingCalls; roots, packageDirs, reviewIds, runSeen and startedAt (:254-260, :286) survive a compaction. agent.ts uses named.startedAt ?? sessionStartedAt(history) (diff of src/commands/agent.ts)."},
+    {"id": "r2-review-highload-w1:HL-004", "disposition": "closed", "evidence": "src/review/locate.ts:62-68: the LocateMethod doc sits above LocateMethod, and the 'How a finding's line was arrived at' sentence (:68) now sits directly above LocatorRecord."},
+    {"id": "r2-review-highload-w1:HL-005", "disposition": "closed", "evidence": "src/review/completion-gate.test.ts:448-480 'which package the gate is on' adds pointer cases: named nothing / pointer wins over newest-mtime (:461), named both / pointer picks among them (:467), concurrent session's pointer loses (:473). Removing the pointer read in pickPackage (completion-gate.ts:391-394, 395-401) now fails them."},
+    {"id": "r2-review-highload-w2:HL-001", "disposition": "closed", "evidence": "docs/docs/cli-reference.md:6679-6685 now reads 'exact first, then with whitespace collapsed, then - for a one-line quote only - as an exact substring of exactly one line' and lists locator.method exact | whitespace-normalised | substring."},
+    {"id": "r2-review-highload-w3:HL-001", "disposition": "closed", "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:344-363 saveDispatchRecord: a non-final record replaces an empty one (isEmptyRecord(existing) at :348, so the placeholder no longer blocks a retry's partial), the earlier dispatch's usage is carried as KERYX_USAGE_OTHER (:350, :359), and every exit (timeout :2303, rate-limited :2343, empty reply :2368, stopped/completed :2407) goes through saveRecord."},
+    {"id": "r2-review-highload-w4:HL-001", "disposition": "closed", "evidence": "Same fix as w1:HL-001: completion-gate.ts:284-314 extracts ids at scan time; no per-stop re-scan of command text exists (namedBySession :345-350)."},
+    {"id": "r2-review-highload-w4:HL-002", "disposition": "closed", "evidence": "src/review/coverage.ts:569 defaultGitRunner(cwd, { timeoutMs: GIT_TIMEOUT_MS }); src/review/git-base.ts defaultGitRunner passes timeout + killSignal SIGKILL and maps a signal to exit 124. processCache (coverage.ts:497-513) bounds a pending entry to GIT_CACHE_TTL_MS (:502)."},
+    {"id": "r2-review-highload-w5:HL-001", "disposition": "closed", "evidence": "src/review/round-split.ts:128-149 labelLines: two linear passes (before[]/after[]) replace the per-line filter over changedAt. The remaining hunks.some per changed line (:188, :225) is O(changed x hunks), hunks being the round's fix/second-look hunks, not the changes."},
+    {"id": "review-clean-code-w3:CC-10", "disposition": "closed", "evidence": "src/review/ledger.ts:29-32 unreadableInputClaim reads the structured inputs_unreadable list; the UNREADABLE_INPUT regexes, the {0,80} windows and slice(0,120) magic are gone (CLAIM_QUOTE_CHARS named at :21)."},
+    {"id": "review-clean-code-w3:CC-13", "disposition": "closed", "evidence": "src/review/managed.ts:1222-1237 coverageFromResearch reads through dispatchRuns/asRecord (src/review/research.ts:60-76, one lenient reader) and an unrecognised status is reported as 'unrecognised status' (:1234), not 'not run'. normalizeCoverage still takes research: unknown (:1246), info only."},
+    {"id": "review-clean-code-w3:CC-2", "disposition": "closed", "evidence": "src/review/locate.ts:68 the sentence is above LocatorRecord; UnlocatableKind keeps its own block (:55-59). Same fix as w1:HL-004."},
+    {"id": "review-highload-w1:F-003", "disposition": "partial", "evidence": "src/review/dispatch-usage.ts:53 and :101-126: only the trailing block of usage lines states usage, so a quoted mid-reply line no longer counts, and spawn_subagent strips usage lines from child text (spawn-subagent-tool.ts:360). On Claude Code/Codex, where the reviewer writes raw/<reviewer>.txt itself and the host appends none, a reviewer's own trailing line is still read as measured (header comment states this; no gate reads usage)."},
+    {"id": "review-highload-w2:F-005", "disposition": "closed", "evidence": "spawn-subagent-tool.ts:360 `splitUsage(record.text).body.trim()` drops any KERYX_USAGE line a child wrote before the host line is appended (:361); a child's own line can no longer be read as host-measured."},
+    {"id": "review-logic-w3:F-002", "disposition": "closed", "evidence": "completion-gate.test.ts:448-480 drives the pointer branch with a pointer-named package that is not the newest-mtime one; see w1:HL-005."},
+    {"id": "review-performance-w3:PERF-006", "disposition": "closed", "evidence": "ledger.ts:29-32: no regex over summary exists; inputs_unreadable is joined and sliced."},
+    {"id": "review-performance-w3:PERF-007", "disposition": "partial", "evidence": "completion-gate.ts:432 scans roots with Promise.all. Candidates of every root are still collected before pickPackage (:433-434) even when a session-named package decides; roots capped at 8 (:52). Info only."},
+    {"id": "review-security-code-w2:SEC-W2-001", "disposition": "closed", "evidence": "spawn-subagent-tool.ts:360 strips usage lines from the child's text before the save, in the no-usage case too; with childUsage unknown no host line is written and the dispatch reads as unknown (dispatch-usage.ts counts it unknown, never 0)."},
+    {"id": "review-security-code-w3:SEC-003", "disposition": "partial", "evidence": "dispatch-usage.ts:101-126 narrows the forgery window to the trailing block and gives the host line (last) priority; a Claude Code/Codex reviewer that writes its own raw file with a trailing line and no host line appended is still read as measured. Documented as acceptable (file header: no gate decision reads usage)."},
+    {"id": "review-security-code-w3:SEC-005", "disposition": "closed", "evidence": "src/review/research.ts:54-65 REVIEWER_NAME = /^[A-Za-z0-9][\\w.:/@-]{0,127}$/ drops any run whose reviewer holds a newline or fence; status, notRunReason and executionReason pass through oneLine (:57, :68-73), so coverage.md cannot receive a forged `reviewer:/status:` pair."},
+    {"id": "review-testing-practices-w2:T-001", "disposition": "closed", "evidence": "Same as review-logic-w3:F-002: completion-gate.test.ts:448-480."}
+  ],
+  "findings": [
+    {
+      "id": "HL-R3-001",
+      "severity": "minor",
+      "file": "src/review/dispatch-usage.ts",
+      "line": 53,
+      "quote": "const USAGE_LINE = /^[ \\t]*KERYX_USAGE(_OTHER)?[ \\t]+(.*)$/;",
+      "problem": "splitUsage splits on \"\\n\" only (:103) and matches each line against USAGE_LINE, whose `.` does not match a trailing \"\\r\". The regex it replaced used `[^\\n]*`, which took the \\r. A raw result with CRLF line endings (a reviewer or host that writes raw/<reviewer>.txt on Windows) ends in `KERYX_USAGE {...}\\r`: the line does not match, it stays in the body, and it counts as reply text, so `trailing` turns false for every usage line above it.",
+      "impact": "Every dispatch whose raw file is CRLF reads as `unknown` usage and leaves its usage line in the body (a KERYX_USAGE line makes an empty reply non-empty, so isEmptyRecord is false for a CRLF placeholder + usage file). The round's token total undercounts by the number of such dispatches. No gate reads usage, so the cost is a wrong spend line in report.md, plus a CRLF placeholder file escaping the empty-reply handling in the ledger.",
+      "suggested_fix": "Strip a trailing \\r from each line before matching (`line.replace(/\\r$/, \"\")`), or make the pattern `(.*?)\\r?$`; add a CRLF case to the dispatch-usage tests.",
+      "confidence": "medium",
+      "evidence": "dispatch-usage.ts:53 `(.*)$` without the s flag; :103 `raw.split(\"\\n\")`; :109-112 non-matching lines set trailing=false. Prior pattern in the r2 diff: `[ \\t]+([^\\n]*)$` with the m flag."
+    },
+    {
+      "id": "HL-R3-002",
+      "severity": "minor",
+      "file": "src/review/package-location.ts",
+      "line": 71,
+      "quote": "for (const dir of await dirsUnder(reviewsRoot(cwd))) {",
+      "problem": "flowPackageDirs reads and JSON-parses the manifest of every standalone package under .metaproject/reviews for each flow asked about. collectFlowGovernance (src/governance/aggregate.ts:44-49) calls readFlowReviewManifests once per flow dir, serially, so `keryx governance report` does flows x packages manifest reads; loop.ts:488 and flow/review-gate.ts:462 do the same per flow they inspect.",
+      "impact": "At this repository's size (434 flows, 31 standalone packages) that is about 13,500 small sequential reads per governance report; it grows with both counts (1,000 flows x 300 committed packages is 300,000 reads, tens of seconds on a single-threaded CLI). Correct, only slow.",
+      "suggested_fix": "Read the standalone packages' manifest heads once per call chain and group by bound flow (a Map flowDir -> package dirs), or pass a pre-read head list into readFlowReviewManifests; read the heads with a bounded Promise.all.",
+      "confidence": "medium",
+      "evidence": "package-location.ts:61-76 (loop over reviewsRoot with readManifestHead per entry, per flow); governance/aggregate.ts:44-49 (per-flow call); governance/spend.ts:23."
+    },
+    {
+      "id": "HL-R3-003",
+      "severity": "minor",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": 345,
+      "quote": "const existing = await readFile(abs, \"utf8\").catch(() => undefined);",
+      "problem": "saveDispatchRecord is a read-modify-write on save_result_to (readFile at :345, writeFile at :315) with no serialisation. Two spawn_subagent calls in one turn that name the same save_result_to (the parallel dispatch of a slice and its retry, or the timed-out child's save running while the parent re-dispatches the same slice) both read the same prior state and the last write wins.",
+      "impact": "One dispatch's KERYX_USAGE / KERYX_USAGE_OTHER line (or its result) is overwritten, so the round's spend undercounts by that dispatch; with a complete result in the file, a later non-final record can rewrite the file from a stale read and drop the other's `kept` usage. Needs two children writing the same path in one turn; the review driver gives each (reviewer, wave) its own path, so only a hand dispatch reaches it.",
+      "suggested_fix": "Serialise saves per absolute path with a small in-process promise chain keyed by abs (Map<string, Promise>), or write via a temp file and rename after re-reading under that chain.",
+      "confidence": "low",
+      "evidence": "spawn-subagent-tool.ts:344-363 (read at :345, write via writeRecordFile :311-320); callers :1948-1949, :2303, :2343, :2368, :2407."
+    },
+    {
+      "id": "HL-R3-004",
+      "severity": "info",
+      "file": "src/review/completion-gate.ts",
+      "line": 24,
+      "quote": "async function dirSignature(dir: string): Promise<string> {",
+      "problem": "dirSignature reads and sha256-hashes every file under the package dir and the working data dir (raw outputs, diffs, slices) on every gate evaluation; scanRoot reads and parses each package manifest in the root, serially (:363-378). Neither is cached across stops. Not touched by the delta (the prior performance record PERF-002 is the same observation).",
+      "impact": "A package with several MB of raw reviewer output costs a full read and hash per stop of the shell turn; the delta did not make it worse. Would settle as minor only with a measured stall; none was.",
+      "suggested_fix": "Key the signature on (path, size, mtimeMs) of each entry instead of content hashes, and cache the manifest heads per root for a short TTL.",
+      "confidence": "low",
+      "evidence": "completion-gate.ts:24-40, :441, :455; scanRoot :354-380."
+    }
+  ]
+}
+```
+
+Summary: at HEAD every r2 highload minor is closed (the tracker keeps ids not command text and survives compaction, the git recheck has a timeout, labelLines is linear, saveDispatchRecord no longer lets a placeholder block a retry, the docs and the pointer test are fixed). Of the twelve earlier not-closed highload records, nine are closed and three are partial (usage self-report on hosts that append no host line, F-003 and SEC-003; candidates collected for every root, PERF-007). New in the delta: a CRLF regression in the usage-line matcher (minor), flowPackageDirs doing flows x packages manifest reads for the governance report (minor), an unserialised read-modify-write on save_result_to (minor, hand dispatch only), and the unchanged per-stop hashing in the gate (info).

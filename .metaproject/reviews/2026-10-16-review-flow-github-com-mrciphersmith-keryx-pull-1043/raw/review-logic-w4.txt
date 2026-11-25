@@ -1,0 +1,76 @@
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Slice 04 (CLI/card/gate wiring for decide-premise, --premises, tier --premise, gate hold) is logically sound on the main paths; three minors and two infos found, no blocker or major.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "src/review/premise-question.ts",
+      "line": 42,
+      "problem": "findHeldFinding falls back to the raw claim in research-evidence/premises.json when the finding record has no premise, without running mergePremises validation. managed.ts writes premises.json with the claims AS RECEIVED, rejected ones included, and a rejected claim is exactly why findings.json would carry no premise. So the fallback is effectively the rejected-claim path.",
+      "impact": "A claim rejected by the merge (e.g. challenged-without-evidence) is offered to the operator as a held finding by both `decide-premise` and the review_decide_premise card, and the answer is recorded. Gate withPremiseAnswers skips findings without premise, and verdict re-applies via mergePremises, so the recorded decision does nothing while the operator was told it was answered.",
+      "suggested_fix": "Resolve the fallback claim through mergePremises/parsePremiseClaims (as verdict.ts applyPremiseClaims does) and accept it only when applied and held; otherwise refuse as not held.",
+      "evidence": "managed.ts:499-503 writes input.premises raw; premise.ts:319-327 rejects held claims lacking evidence/question; review-gate.ts withPremiseAnswers requires finding.premise !== undefined.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "src/commands/review-operator.ts",
+      "line": 150,
+      "problem": "The terminal path asks the operator to 'Type your own words to confirm' and the card path receives confirmation.quote, but neither passes it to recordPremiseDecision; PremiseQuestionDecision has no quote field. Sibling decisions (mutation-waiver, reviewer-override) persist quote.",
+      "impact": "The record of an operator answer that dismisses a finding (and lets the gate pass over it) keeps only the agent-supplied --reason, not the operator's own words; the audit trail that the other two kinds keep is lost.",
+      "suggested_fix": "Add an optional quote to PremiseQuestionDecision and record answer / confirmation.quote at both call sites (review-operator.ts, operator-confirm-review.ts apply).",
+      "evidence": "review-operator.ts decide-premise branch: `answer` used only for the decline test; operator-confirm-review.ts apply ignores confirmation.quote.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/flow/review-gate.ts",
+      "line": 1440,
+      "problem": "The terminal-dispositions pass detail still reads '<blocking.length> finding(s) at or above the floor ... (<states.length - blocking.length> below the floor, not blocking)', but `blocking` now also contains held findings below the floor.",
+      "impact": "The pass message over-counts findings 'at or above the floor' and under-counts the below-floor ones when an answered held minor/info exists; a misleading but non-blocking report line.",
+      "suggested_fix": "Count floor-blocking and premise-held separately in the detail, or reword to 'blocking'.",
+      "evidence": "review-gate.ts hunk @@1418,1460: blocking filter gained `|| premiseGateState(finding) === \"awaiting\"`; detail template unchanged.",
+      "confidence": "medium",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/commands/review-operator.ts",
+      "line": 160,
+      "problem": "Help text and the card line say dismiss 'records it dismissed-incorrect with your reason as the evidence', but the only write is an entry in operator-decisions.json; no disposition is written to findings.json (the gate and verdict derive 'dismissed' at read time).",
+      "impact": "A reader of findings.json alone sees no disposition for a finding the operator dismissed. Settled by checking whether another path (complete --disposition) is expected to write it.",
+      "suggested_fix": "Reword to 'recorded as dismissed in operator-decisions.json' or write the disposition.",
+      "evidence": "recordPremiseDecision writes only operator-decisions.json.",
+      "confidence": "low",
+      "reviewer": "review-logic"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": "src/commands/routing-corpus.ts",
+      "line": 232,
+      "problem": "RANK1_FIRST/TOTAL were raised to 338/341 for the four review-premise positives, but the ratchet comment above them (which narrates each flow's additions, e.g. 328/330 + 4 = 332/334) was not extended for flow 459.",
+      "impact": "None functionally; the next editor loses the derivation of 338/341.",
+      "suggested_fix": "Add a 'Flow 459 added review-premise with four positives, all ranking first: 334/337 + 4 = 338/341' line.",
+      "evidence": "routing-corpus.ts hunk @@204,245.",
+      "confidence": "high",
+      "reviewer": "review-logic"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 2 }
+}
+```
+
+## Logic Review (slice-04)
+
+Spec gate: ran against flow 459 description. The decide-premise terminal command, card, `--premises` ingest flag, `tier --premise` deep floor and gate hold at any severity are wired and consistent with each other and their tests. Verified: card apply re-checks severity and verdict before writing; terminal path refuses without a TTY; gate treats awaiting as non-terminal and dismiss as terminal, uphold falls through to ordinary disposition rules; premise stats keys match renderPremiseMarkdown.
+
+Stats: blocker 0 | major 0 | minor 3 | info 2.

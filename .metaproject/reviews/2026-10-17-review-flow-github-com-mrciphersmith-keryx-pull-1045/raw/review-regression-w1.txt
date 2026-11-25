@@ -1,0 +1,99 @@
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-regression",
+  "summary": "Scope B regression check of slice-01 (schema core copy, flow data 458/459/460, review-orchestrator skill text, CHANGELOG, cli-reference, review-with-a-record guide, src/commands/agent.ts, src/commands/review-ledger.ts). No break of existing behaviour found in the dependents: findReviewGateState gained an optional third parameter (only caller agent.ts passes it; tests keep the 2-arg form); renderLedgerReport gained an optional trailing parameter (single caller); loadRaws strips KERYX_USAGE through splitUsage, and every other raw reader (parseReviewResult, isEmptyOutput, verdict.ts, retry-eval.ts via parseReviewResult fallback) strips it too, so a usage line cannot turn an empty reply non-empty or add an object to the result scan; packageHasMutationRecord excludes baseline-failed records (written as mutation-baseline-<n>). Two minor doc contradictions left behind by the change and two info observations are reported; under scope B's screen they are below the major floor.",
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "line": null,
+      "quote": "`review ingest` reads each internal finding's `quote` at its `path` at the reviewed SHA and refuses one that does not resolve there",
+      "problem": "The `review complete` paragraph of cli-reference.md still says `review ingest` refuses a finding whose quote does not resolve at the reviewed SHA. This PR changed ingest to keep such a finding flagged `quote_unlocated` (CHANGELOG, SKILL.md, the locator section of the same file and the review-with-a-record guide were all updated), so the same document now states both behaviours.",
+      "impact": "An orchestrator or operator reading this paragraph believes an unplaceable quote still refuses the round and re-quotes/re-dispatches instead of recording the round and answering readiness item `quotes-located` — the exact loop flow 460 G removes.",
+      "suggested_fix": "Reword to match the guide: ingest keeps a finding whose quote is absent or ambiguous at the reviewed SHA (flagged `quote_unlocated`, no line) and refuses only a quote it could not check at all (commit not in checkout, no file named, size bound).",
+      "evidence": "git show dff7a38a1:docs/docs/cli-reference.md line 4849 vs the changed hunk at ~6713 ('A quote that does not appear, or appears more than once, does not refuse the round') and docs/docs/guides/review-with-a-record.md 'Locators at the SHA'.",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": ["docs/docs/cli-reference.md:4849"],
+        "enumeration_method": "keryx ctx rg for 'refuses one that does not resolve there' / 'refuses an internal finding whose' over docs, src and .metaproject/skills: one remaining site (SKILL.md's sentence was updated in this PR)"
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "reads the package and prints eleven items, READY or NOT READY",
+      "problem": "The readiness section's lead sentence still says readiness prints eleven items, while this PR appended item 12 `quotes-located` to the list directly below it (and READINESS_ITEMS in src/review/readiness.ts now has 12 entries; cli-reference.md was updated to 'twelve-item').",
+      "impact": "The orchestrator skill text contradicts itself and the CLI; an orchestrator counting items can treat item 12 as stray. Low impact, documentation only.",
+      "suggested_fix": "Change 'eleven items' to 'twelve items' in both the project copy and the bundled copy src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md.",
+      "evidence": "git show dff7a38a1:.metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md line 654; src/review/readiness.ts:39 `{ number: 12, id: \"quotes-located\", ... }`; the bundled copy is byte-identical (diff exit 0).",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "location_class": "in-diff",
+      "class_scope": {
+        "sites": [".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md:654", "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md:654"],
+        "enumeration_method": "grep 'eleven' over the orchestrator SKILL.md/SKILL.detail.md (both copies), docs/docs and src/review/readiness.ts; only the readiness lead sentence (two mirrored copies) refers to the item count"
+      }
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/review/completion-gate.ts",
+      "line": null,
+      "quote": "if (typeof message.content === \"string\") scan(message.content);",
+      "problem": "sessionReviewRoots, now passed by src/commands/agent.ts holdReviewGate into findReviewGateState, collects a project root from ANY `.metaproject/reviews/<x>` path in any message content (user prompts and tool results included), not only from this session's review commands. findReviewGateState then honours the first active-review pointer over [cwd, ...those roots] and otherwise the newest open package across them. When cwd has no pointer (the subdirectory case this change targets) and the session merely mentioned another project's review path whose pointer/package was opened by a concurrent session after this one started, the nudge names that review.",
+      "impact": "Observation, not a demonstrated regression: it needs a mention of a foreign review path plus a concurrent review started after this session. Before the change only cwd was scanned, so this shape could not arise; it is a narrower version of problem C.",
+      "suggested_fix": "Restrict the scan to tool-call arguments and the output of `keryx review start|attach|plan` (the path keryx printed), or require the root's pointer callerToken to match this session's token.",
+      "evidence": "src/review/completion-gate.ts:61-66 scans message.content and call.arguments; :124-132 pointer-first over roots; src/commands/agent.ts:3487 passes sessionReviewRoots(history, process.cwd()). Settle with a test: history containing an unrelated '/other/.metaproject/reviews/p' mention plus an open package there opened after sessionStartedAt.",
+      "confidence": "medium",
+      "reviewer": "review-regression",
+      "location_class": "in-diff"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": ".metaproject/data/gdgraph/.provenance.json",
+      "line": null,
+      "quote": "\"branch\": \"feat/flow-364-governance-flow-actions\",",
+      "problem": "slice-01 carries hunks for .metaproject/data/gdgraph/.provenance.json and .metaproject/data/gdgraph/artifacts/summary.md that are not in the PR: `git diff 8483816bb..dff7a38a1 -- .metaproject/data/gdgraph` is empty and the head still holds the old provenance. They come from uncommitted working-tree modifications, so the slice was cut from the working tree rather than the reviewed head.",
+      "impact": "Review-process only: reviewers spend budget on content that will not merge, and a finding on those hunks would cite text absent at the head (and now be flagged quote_unlocated). No code behaviour affected.",
+      "suggested_fix": "Have `review slice` / scope diff the reviewed head commit (target.head) against the base rather than the working tree, or refuse slicing with a dirty tree under a PR target.",
+      "evidence": "git status at session start: ' M .metaproject/data/gdgraph/.provenance.json', ' M .../artifacts/summary.md'; git show dff7a38a1:.metaproject/data/gdgraph/.provenance.json shows commit 8eaec2ee…, while the slice shows it being replaced by 2a9c62e0….",
+      "confidence": "high",
+      "reviewer": "review-regression",
+      "location_class": "pr-process"
+    }
+  ],
+  "needs_context": [],
+  "follow_ups": [],
+  "slices": ["slice-01"],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 2 }
+}
+```
+
+## review-regression — slice-01 (wave 1)
+
+**Result:** no blocker or major regression in the blast radius reachable from this slice. 0 blocker, 0 major, 2 minor, 2 info.
+
+What I checked:
+
+- **Callers of the changed `src/commands/agent.ts` → `findReviewGateState` / `sessionReviewRoots`**: the new third parameter is optional and defaults to `[]`, so the 15 two-argument test callers keep their behaviour. The pointer-first choice ignores closed packages (`resolveActiveReview`), so a just-closed package can't stop the gate from accepting. F-003 (info) is the one new shape: the root scan reads all message content.
+- **Callers of `src/commands/review-ledger.ts`** (`renderLedgerReport`, `loadRaws`, `runLedger`; dependents `src/commands/review.ts`, `review-slice.ts`, `verdict.ts`, `retry-eval.ts`, `replay.ts`, `compare-reference.ts`): every parser of a raw reply strips the `KERYX_USAGE` line through `splitUsage`, both in `parseReviewResult` and in `isEmptyOutput`. So a usage line can't make an empty child reply look non-empty, and it can't add an object to the result scan. `retry-eval`'s `wholeFileResult` falls back to `parseReviewResult` when a usage line follows a bare JSON reply. The `rawEvidence` hash now covers the usage line, but no reader checks that hash.
+- **`mutationRecorded` / `packageHasMutationRecord`**: a baseline-failed pass is written as `mutation-baseline-<n>.json` and the `^mutation-\d+\.json$` test excludes it, so "Not run: mutation (light round)" still appears when only a red baseline exists.
+- **Schema `quote_unlocated`**: the core and bundled copies are byte-identical.
+- **Docs and skill text**: two stale statements contradict the new behaviour (F-001, F-002).
+
+Limits on what the blast radius could answer:
+
+- The computed set kept 40 files. 14 were dropped by the cap, and 441 were omitted in total (unrelated-symbol, text-hub and test-consumer filters).
+- 20 of the 50 changed files did not resolve in the graph. These are the non-code files: schema, flow data, skill text, CHANGELOG, docs. The radius has no answer for them, which does not mean they are clean. The skill and doc changes reach behaviour only through hosts reading the text, which no code graph shows.
+- The `KERYX_USAGE` handoff from spawn_subagent to the raw file is a file handoff, so the graph doesn't show it either. I checked it by reading the readers listed above.
+- Under the scope B screen, every finding here is below `major`, so it will be refused as `non-regression-severity`. They are reported because the dispatch asked for every severity. F-001 and F-002 belong under scope A on the changed docs.
+- F-004 shows that slice-01 contains working-tree hunks that are not at the reviewed head (`.metaproject/data/gdgraph/*`).
+
+Routing audit: graph_used: yes (the package's blast-radius.json, a graph-derived set); wiki_used: no (not relevant, since the contracts were read directly in code); ctx_used: yes (keryx ctx rg/read); raw_rg_used: no. Raw `cat`/`grep`/`sed` were used only on the package's own diff and JSON, with `keryx:raw` markers.

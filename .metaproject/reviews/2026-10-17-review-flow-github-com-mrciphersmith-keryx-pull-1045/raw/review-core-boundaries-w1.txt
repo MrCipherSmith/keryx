@@ -1,0 +1,99 @@
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-core-boundaries",
+  "summary": "slice-01 is mostly flow bookkeeping, docs and skill text, plus the quote_unlocated contract field, the ledger usage plumbing and the nudge roots call. No core-to-feature import, no inverted dependency, no named consumer broken. Two stale-doc minors and four infos.",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "line": null,
+      "quote": "reads the package and prints eleven items, READY or NOT READY",
+      "problem": "The diff adds readiness item 12 `quotes-located` to the list directly below, but the sentence introducing the list still says eleven items. The docs cli-reference row was updated to twelve; this one and its bundled copy src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md (line 654) were not.",
+      "impact": "An operator or agent following the skill counts eleven checks and the list has twelve; the two docs for the same command disagree.",
+      "suggested_fix": "Change `eleven items` to `twelve items` here and in the bundled copy, and keep the count derived from one place if the repo has a guard for it.",
+      "evidence": "Introducing sentence says eleven; the list below it ends with `12. quotes-located`.",
+      "confidence": "high",
+      "reviewer": "review-core-boundaries"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "line": null,
+      "quote": "and refuses one that does not resolve there",
+      "problem": "The paragraph on `review complete` / `review ingest` (near line 4849) still says ingest refuses a finding whose quote does not resolve. The same diff changes ingest to keep such a finding as `quote_unlocated` instead of refusing, in SKILL.md, review-with-a-record.md and the locator section of this file.",
+      "impact": "The CLI reference contradicts itself and the new behaviour; a reader of this paragraph expects a refused round.",
+      "suggested_fix": "Reword to: keeps a finding whose quote is absent or ambiguous, flagged `quote_unlocated`, and still refuses a quote it could not check at all (commit missing, no file named, size bound).",
+      "evidence": "Context line in the hunk at diff line 1806; new text at diff lines 1914-1918 and 1963.",
+      "confidence": "high",
+      "reviewer": "review-core-boundaries"
+    },
+    {
+      "id": "F-003",
+      "severity": "info",
+      "file": "src/review/retry-eval.ts",
+      "line": null,
+      "quote": "const result = wholeFileResult(raw) ?? parseReviewResult(raw);",
+      "problem": "parseReviewResult and isEmptyOutput were taught to strip the appended KERYX_USAGE line, but wholeFileResult (retry-eval.ts, and its caller in review-slice.ts) runs JSON.parse on the unstripped file. A plain-JSON result file with a usage line appended fails JSON.parse and falls back to parseReviewResult, which for a result that omits `reviewer` (the case wholeFileResult exists to allow) may not accept it.",
+      "impact": "Not shown to break: I did not find a path where a spawn_subagent save_result_to file is plain JSON without `reviewer`. Would settle it: a test saving a bare `{status, slices}` object plus a usage line and running retry-plan / collectLateResults on it.",
+      "suggested_fix": "Have wholeFileResult parse `splitUsage(raw).body`.",
+      "evidence": "retry-eval.ts wholeFileResult does JSON.parse(raw) with no splitUsage; ledger.ts parseReviewResult does splitUsage first.",
+      "confidence": "low",
+      "reviewer": "review-core-boundaries"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": "src/review/dispatch-usage.ts",
+      "line": null,
+      "quote": "const USAGE_LINE = /^[ \\t]*KERYX_USAGE[ \\t]+(\\{[^\\n]*\\})[ \\t]*\\r?$/gm;",
+      "problem": "The header comment says the host's line wins because the host measured it and the reviewer cannot, but the matcher takes the last KERYX_USAGE line anywhere in the file, so a reviewer-authored line (or one quoted at line start in its prose) is read as host-measured spend. The docs and SKILL.md present the figure as the review's spend.",
+      "impact": "Only the reported cost figure is affected, never a verdict or gate. No reviewer is shown writing such a line. Would settle it: a test where the reply body contains its own usage line before the host-appended one, and a decision on whether it must be the final line of the file.",
+      "suggested_fix": "Accept only a usage line that is the last non-empty line of the file, or soften the comment and docs to say the figure is as reported by the file.",
+      "evidence": "splitUsage loops over every match and keeps the last well-formed one.",
+      "confidence": "low",
+      "reviewer": "review-core-boundaries"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "line": null,
+      "quote": "\"candidate_lines\": { \"type\": \"array\", \"items\": { \"type\": \"integer\", \"minimum\": 1 } }",
+      "problem": "The new `quote_unlocated` object restates what the existing `locator` (state `unlocatable`, reason absent or ambiguous) already records, so one fact lives in two records on the finding. The description says the candidate list is bounded by the scan but the schema sets no maxItems.",
+      "impact": "Two fields can drift apart; a reader of findings.json must know which one readiness uses. No consumer is shown to break.",
+      "suggested_fix": "Add maxItems matching the scan bound, and state in the description which record is authoritative.",
+      "evidence": "The locator schema block just above in the same hunk has state `unlocatable` with a reason.",
+      "confidence": "medium",
+      "reviewer": "review-core-boundaries"
+    },
+    {
+      "id": "F-006",
+      "severity": "info",
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json",
+      "line": null,
+      "quote": "\"note\": \"invariant bun test src/gdskills/: 8000 pass, 1 fail (install.test.ts read-only rules/core EACCES test, environmental, install.ts untouched by this flow)\"",
+      "problem": "Invariant acceptance criteria AC9 here, and AC4-AC6 in flow 459, were signed with a failing test in the checked command, justified in the note as environmental. Both flows also record `implemented` with the warning `PR is not a draft`.",
+      "impact": "Process record only. The signature says the invariant holds while its own command exits non-zero. Would settle it: a green run of the command in a clean environment, or a recorded waiver for that one test.",
+      "suggested_fix": "Record the EACCES test as a named waiver or fix its environment dependence, so the invariant command can pass.",
+      "evidence": "The same note text appears in 459 AC4-AC6 with `1 unrelated environmental fail`.",
+      "confidence": "medium",
+      "reviewer": "review-core-boundaries"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 2, "info": 4 }
+}
+```
+
+# review-core-boundaries, slice-01
+
+STATUS: DONE. Reviewed slice-01 (flow 458/459/460 bookkeeping, docs, skill text, contract schema, `src/commands/agent.ts`, `src/commands/review-ledger.ts`).
+
+- No core importing feature code: `review-ledger.ts` imports the new `../review/dispatch-usage`, and the harness spawn tool already imported from `../review/` before this diff. Direction is unchanged.
+- No blocker or major. The new `quote_unlocated` field is additive and no consumer is shown to break.
+- Minor: stale "eleven items" (F-001) and stale "refuses" wording (F-002).
+- Info: wholeFileResult not stripping the usage line (F-003), usage line trust (F-004), duplicate record in schema (F-005), invariant signed over a failing test (F-006).
+- Not reviewed here: the implementation behind `sessionReviewRoots`, `packageHasMutationRecord`, `ledger.usage` (not in this slice's diff).

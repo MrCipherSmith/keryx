@@ -1,0 +1,137 @@
+STATUS: DONE_WITH_CONCERNS
+
+```json keryx:findings
+{
+  "REVIEW_RESULT": {
+    "reviewer": "review-testing-practices",
+    "status": "DONE_WITH_CONCERNS",
+    "summary": "Slices 04, 05 and 09 (PR #1043 at c144874f, flow 459). The new suites are well tiered, deterministic and mostly behaviour-level: tmpdir fixtures with cleanup, injected clocks, in-process seams for the operator command, no sleeps, no network. Every rejection reason of mergePremises has its own test, and the gate, verdict and readiness readers are each driven end to end. The mutation pass was NOT run: this dispatch is read-only and forbids running tests, so no mutation result below is observed; the mutants are proposed in mutant_candidates for the main session. Findings are coverage gaps (the latest-answer rule, the held-finding lookup branches, the --premises CLI path, severity-rule precedence) and one fixture class (held findings whose premise carries no evidence, a shape the producer rejects).",
+    "findings": [
+      {
+        "id": "F-001",
+        "severity": "minor",
+        "file": "src/review/operator-decisions.ts",
+        "line": 109,
+        "problem": "The 'a later answer replaces an earlier one' rule is pinned only on the pure applyPremiseDecisions. Every reader that decides gate, readiness or verdict state through premiseDecisionFor (operator-decisions.ts:109, used by review-gate.ts withPremiseAnswers and premise-question.ts) or premiseHoldState (premise.ts:434, `.at(-1)`) is only ever tested with ONE decision per finding. premise-decision.test.ts 'records an answer, reads it back' records one answer; the 'hold state' tests pass one or zero decisions; review-gate.test.ts and readiness.test.ts record one decision. The card advertises the rule ('already answered: X; this answer replaces it', operator-confirm-review.ts:603).",
+        "impact": "A gate or readiness that took the FIRST answer would treat a stale `dismiss` as terminal after the operator changed their mind to `uphold` (or keep a finding open after a later dismiss), and every suite stays green. This is unpinned, not a demonstrated defect: the code takes the last entry today.",
+        "suggested_fix": "Record [dismiss, uphold] for one finding and assert the later one wins in premiseDecisionFor, premiseHoldState (with decisions), the gate (service.complete fails with 'no disposition recorded' after dismiss then uphold) and computeReadiness. Mutants: `.at(-1)` -> `.at(0)` at operator-decisions.ts:109 and premise.ts:434.",
+        "evidence": "Mutation not run (read-only dispatch). Test search: keryx ctx rg 'recordPremiseDecision' over src/**/*.test.ts shows one call per finding in premise-decision.test.ts, review-gate.test.ts, readiness.test.ts, verdict.test.ts and the card/CLI suites; the only two-decision input is applyPremiseDecisions at premise-decision.test.ts 'takes the LATEST decision per finding'.",
+        "confidence": "medium",
+        "reviewer": "review-testing-practices",
+        "category": "unpinned-gate",
+        "evidence_class": "read"
+      },
+      {
+        "id": "F-002",
+        "severity": "minor",
+        "file": "src/review/premise-question.ts",
+        "line": 30,
+        "problem": "findHeldFinding, shared by the card and the terminal command, has no direct suite and four of its branches are never driven: (a) the ambiguous-id refusal (`keys.size > 1`, line 38); (b) the premises.json fallback (lines 42-46: a finding whose record carries no premise but whose judge claim in research-evidence/premises.json holds it); (c) the `answered` state (line 50-61) that feeds the card line 'already answered ... this answer replaces it' (operator-confirm-review.ts:603); (d) apply-time staleness is pinned only for a severity change (operator-confirm-review-tools.test.ts 'the answer is refused when the finding changed'): the `again.finding.verdict !== prepared.verdict` and `!again.ok` halves at operator-confirm-review.ts:619 are not. The CLI decline path is tested only for an empty answer; the `/^n(o)?$/i` half of review-operator.ts:146 is not.",
+        "impact": "Each branch is correct as read, but the next edit to any of them is unprotected; (b) in particular is the only path that lets an operator answer a hold before the claim is ingested, and (c) is user-visible text.",
+        "suggested_fix": "Add premise-question.test.ts: two findings sharing an id (refusal names the global_ids); a package with a premises.json claim and a bare finding (ok, verdict from the claim); an already-answered package (answered set, for decision and for premise.operator); a card test that asks, then rewrites findings.json with a different premise verdict, then invokes (refused); and a CLI case answering 'no'.",
+        "evidence": "Mutation not run. keryx ctx rg 'findHeldFinding' over src --glob '*.test.ts' returns no file; the branches are reached only through operator-confirm-review-tools.test.ts and review-operator-cli.test.ts, whose cases cover unknown, not-held, missing reason and bad answer only.",
+        "confidence": "medium",
+        "reviewer": "review-testing-practices",
+        "category": "unpinned-gate",
+        "evidence_class": "read"
+      },
+      {
+        "id": "F-003",
+        "severity": "minor",
+        "file": "src/review/premise-decision.test.ts",
+        "line": 33,
+        "problem": "Held-finding fixtures carry a premise the producer cannot emit. mergePremises (src/review/premise.ts:320-323) rejects `challenged` without at least one intent signal or practice source (`challenged-without-evidence`), and `downgraded` likewise (premise.ts:312, `downgrade-without-evidence`). The fixtures that stand in for a judge's output set `premise: { verdict: \"challenged\", judge, question }` with neither: premise-decision.test.ts:33 (heldFinding), readiness.test.ts:333 (held, and the `downgraded` fixture at :360), verdict.test.ts:419 (held), review-operator-cli.test.ts:305 and operator-confirm-review-tools.test.ts:107 (held). Only review-gate.test.ts HELD_PREMISE (line 78) and premise.test.ts carry the evidence.",
+        "impact": "These suites pin the reader side against a record that ingest would have refused, so a future reader tightening (for example requiring the cited sources to render the card or the verdict line) would break production records while these fixtures stay green, and the next author reads them as the shape a real record has.",
+        "suggested_fix": "Build the held records from one shared helper that runs a claim through mergePremises (or copies HELD_PREMISE from review-gate.test.ts with practice_sources), so every fixture is a state the producer can emit. For the `downgraded` fixtures add `practice_sources`.",
+        "evidence": "Producer: src/review/premise.ts:312-315 and :320-323 (rejections for the missing evidence). Consumers' fixtures: the five sites listed; every one lacks intent_signals and practice_sources. Class sites: src/review/premise-decision.test.ts:33, src/review/readiness.test.ts:333 and :360, src/review/verdict.test.ts:419 and :464, src/commands/review-operator-cli.test.ts:305, src/commands/operator-confirm-review-tools.test.ts:107. Enumerated with keryx ctx rg 'verdict: \"challenged\"|verdict: \"downgraded\"' over the six test files.",
+        "confidence": "medium",
+        "reviewer": "review-testing-practices",
+        "category": "fixture-shape",
+        "evidence_class": "read"
+      },
+      {
+        "id": "F-004",
+        "severity": "minor",
+        "file": "src/commands/review.ts",
+        "line": 3616,
+        "problem": "`keryx review ingest --premises <file|->` is tested only below the command: parseEmbeddedPremises (premise-embedded.test.ts) and createManagedReviewPackage with a `premises` object (premise.test.ts). The command layer that connects them is not run by any test: the `--premises` allowlist entry (review.ts:334), readPremises (review.ts:3616: file read, `-` for stdin, the unreadable-file error) and the thread into ManagedReviewInput (review.ts:1054). `keryx ctx rg -- '--premises'` over src --glob '*.test.ts' finds the string only inside premise-embedded.test.ts, as a label argument.",
+        "impact": "Flow 457 review B1 (review-operator-cli.test.ts header) was exactly this class: a command that every unit test could reach but the real CLI refused as 'Unknown command'. A dropped allowlist entry or an ingest path that stops forwarding `premises` would leave all 18 test files green while the feature is dead from the shell.",
+        "suggested_fix": "Add one in-process case to review.test.ts (or the CLI subprocess suite) that runs `review ingest --report r.md --premises premises.json` over a package with one finding and asserts findings.json carries the premise and research-evidence/premises.json exists; plus one for `--premises` naming a missing file.",
+        "evidence": "Mutation not run. Search: keryx ctx rg -- '--premises' over src --glob '*.test.ts' returns only src/review/premise-embedded.test.ts. Candidate mutant M-04: drop `\"--premises\"` from the allowlist at review.ts:334.",
+        "confidence": "medium",
+        "reviewer": "review-testing-practices",
+        "category": "unpinned-gate",
+        "evidence_class": "read"
+      },
+      {
+        "id": "F-005",
+        "severity": "minor",
+        "file": "src/review/dedupe.ts",
+        "line": 286,
+        "problem": "The new severity-rule precedence is only exercised with one downgraded plus one plain member. mergeCluster now ranks `downgraded` above `confirmed` above `max` (dedupe.ts:286-288) and has a third `higher` branch (dedupe.ts:346-350). dedupe.test.ts covers premise-vs-max ('a premise judge's downgraded severity is canonical over a higher re-statement') and, as before, verified-vs-max, but no cluster where a verifier-confirmed member and a downgraded member meet, which is the precedence the code comment names ('A premise judge's downgrade outranks both'). The never-merge guard (dedupe.ts:159) is tested for `challenged` in both orders but not for `owner-decision`, nor for two held findings that would otherwise merge with each other.",
+        "impact": "Swapping the precedence (verified over premise) or narrowing the guard to `challenged` leaves dedupe.test.ts green; the first would raise a downgraded finding back to its confirmed original severity during the merge, the second would fold an owner-decision hold into a non-held duplicate.",
+        "suggested_fix": "Add a case with members [confirmed major, downgraded minor] expecting severityRule 'premise' and severity minor, and a `it.each(['challenged','owner-decision'])` over the never-merge test including a held-with-held pair.",
+        "evidence": "Mutation not run. Candidate mutants M-05 (reorder the ternary at dedupe.ts:287 so `confirmed` wins) and M-06 (use `member.premise?.verdict === \"challenged\"` in mergeable at dedupe.ts:159): neither is reached by a fixture in dedupe.test.ts.",
+        "confidence": "medium",
+        "reviewer": "review-testing-practices",
+        "category": "unpinned-gate",
+        "evidence_class": "read"
+      },
+      {
+        "id": "F-006",
+        "severity": "info",
+        "file": "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+        "line": 129,
+        "problem": "The skill's output contract shows one ```json keryx:premises``` example (SKILL.md:129-153) and tells the orchestrator to save it unchanged for `keryx review ingest --premises`. No test feeds that example, or the block extracted from the shipped SKILL.md, through parseEmbeddedPremises and parsePremiseClaims/mergePremises. premise-embedded.test.ts builds its own `claims` object, so the documented shape and the accepted shape can drift without a red test. The shipped-tree suites (bundled-eval, skills.bundled-verify, review-skills-*) only count the skill and exempt it from the class_scope and iron-law checks.",
+        "impact": "None today as read: the example appears to satisfy the rules by inspection (evidence on challenged, evidence on the downgrade). It is an observation about where a later edit to the skill's example would first be noticed.",
+        "suggested_fix": "One test: read the shipped review-premise SKILL.md, hand its text to parseEmbeddedPremises, run parsePremiseClaims, and merge against stub findings named LY-003, LG-002, LG-004; expect zero rejections.",
+        "evidence": "Search: keryx ctx rg -l 'review-premise' over src --glob '*.test.ts' lists 14 files; none reads review-premise/SKILL.md for its example block.",
+        "confidence": "low",
+        "reviewer": "review-testing-practices",
+        "category": "doc-example-unpinned",
+        "evidence_class": "read"
+      }
+    ],
+    "mutation_table": {
+      "pass_run": false,
+      "reason": "read-only dispatch: running tests is forbidden by this reviewer's payload, so no mutant was executed and no result is reported",
+      "gates_added_or_changed": 14,
+      "gates_mutated": 0,
+      "gates_not_reached": 14
+    },
+    "mutant_candidates": [
+      { "id": "M-01", "file": "src/review/operator-decisions.ts", "anchor": ".filter((decision) => keys.has(decision.finding)).at(-1)", "replacement": ".filter((decision) => keys.has(decision.finding)).at(0)", "kind": "behavior" },
+      { "id": "M-02", "file": "src/review/premise.ts", "anchor": "const decided = [...decisions].filter((decision) => keysOf(record).includes(decision.finding)).at(-1);", "replacement": "const decided = [...decisions].filter((decision) => keysOf(record).includes(decision.finding)).at(0);", "kind": "behavior" },
+      { "id": "M-03", "file": "src/commands/operator-confirm-review.ts", "anchor": "again.finding.verdict !== prepared.verdict", "replacement": "false", "kind": "behavior" },
+      { "id": "M-04", "file": "src/commands/review.ts", "anchor": "\"--premises\",", "replacement": "", "kind": "behavior" },
+      { "id": "M-05", "file": "src/review/dedupe.ts", "anchor": "downgraded.length > 0 ? \"premise\" : confirmed.length > 0 ? \"verified\" : \"max\"", "replacement": "confirmed.length > 0 ? \"verified\" : downgraded.length > 0 ? \"premise\" : \"max\"", "kind": "behavior" },
+      { "id": "M-06", "file": "src/review/dedupe.ts", "anchor": "!isHeldVerdict(finding.premise?.verdict) &&", "replacement": "finding.premise?.verdict !== \"challenged\" &&", "kind": "behavior" },
+      { "id": "M-07", "file": "src/review/premise-question.ts", "anchor": "if (keys.size > 1) return", "replacement": "if (false) return", "kind": "behavior" },
+      { "id": "M-08", "file": "src/review/premise-question.ts", "anchor": "const premise = obj(record[\"premise\"]) ?? (claim !== undefined && isHeldVerdict(claim[\"verdict\"]) ? claim : undefined);", "replacement": "const premise = obj(record[\"premise\"]);", "kind": "behavior" },
+      { "id": "M-09", "file": "src/commands/operator-confirm-review.ts", "anchor": "...(found.answered === undefined ? [] : [`already answered: ${found.answered}; this answer replaces it`]),", "replacement": "", "kind": "presentation" },
+      { "id": "M-10", "file": "src/flow/review-gate.ts", "anchor": "|| premiseGateState(finding) === \"awaiting\"", "replacement": "", "kind": "behavior" },
+      { "id": "M-11", "file": "src/flow/review-gate.ts", "anchor": "answer === \"dismiss\" ? \"dismissed\" : answer === \"uphold\" ? \"none\" : \"awaiting\"", "replacement": "answer === \"dismiss\" ? \"dismissed\" : \"awaiting\"", "kind": "behavior" },
+      { "id": "M-12", "file": "src/review/verdict.ts", "anchor": "if (premiseHoldState(record) === \"awaiting\") return { finding, state: \"held\" };", "replacement": "", "kind": "behavior" },
+      { "id": "M-13", "file": "src/review/readiness.ts", "anchor": "if (awaiting.length === 0) return ok(", "replacement": "if (false) return ok(", "kind": "behavior" },
+      { "id": "M-14", "file": "src/gdskills/model-tier.ts", "anchor": "premiseJudge", "replacement": "false", "kind": "behavior" }
+    ],
+    "stats": { "blocker": 0, "major": 0, "minor": 5, "info": 1 }
+  }
+}
+```
+
+## Summary
+
+Scope: slices 04 (commands, gate, docs), 05 (gate and skill suites, schema, tier) and 09 (review suites, unattended roster). Reviewed at PR head c144874f; the intent was read from flow 459 description.md.
+
+Mutation pass: not run. This dispatch is read-only and forbids running tests, so no mutation was executed and none is reported as a result. Cap: 0 of 14 changed gates mutated, 14 not reached; the 14 proposed mutants are in `mutant_candidates` for the main session (M-10, M-11, M-12 and M-13 are the ones I expect to be red, from reading: the gate tests 'held finding with no operator decision fails the gate at any severity', 'uphold ... still needs a terminal disposition', the verdict 'held' tests and the readiness 'fails while a held finding has no decision' case drive them; this is a prediction, not a result).
+
+What is solid: every `PremiseRejectionReason` has a named test with the finding left as it was; the vocabulary-in-schema-equals-vocabulary-in-code test and the schema-validation test of every producible premise; the never-merge guard has a control (an upheld pair does merge); the gate suites use one condition per test with the other conditions satisfied; unattended roster, card roster count (18) and shell roster are pinned by name; temp dirs are created per test and removed; no fixed waits or network use.
+
+Findings (all minor or info; no blocker or major):
+- F-001 the latest-answer rule is pinned only on the pure function, not on the readers the gate, readiness and verdict use.
+- F-002 findHeldFinding has no suite; ambiguity, the premises.json fallback, the already-answered state and verdict-change staleness are unpinned.
+- F-003 held and downgraded fixtures in five suites carry a premise (no evidence) that mergePremises would reject.
+- F-004 `review ingest --premises` is never run through the command; the B1 class from flow 457.
+- F-005 severity-rule precedence (verified vs premise) and the guard for `owner-decision` are unpinned in dedupe.
+- F-006 (info) the skill's documented keryx:premises example is not parsed by any test.

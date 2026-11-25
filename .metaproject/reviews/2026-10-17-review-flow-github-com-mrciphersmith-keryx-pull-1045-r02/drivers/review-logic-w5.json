@@ -1,0 +1,17 @@
+{
+  "reviewer": "review-logic",
+  "wave": 5,
+  "waves": 11,
+  "slices": [
+    "slice-10"
+  ],
+  "slicePaths": [
+    {
+      "id": "slice-10",
+      "path": "/Users/Goodea/goodea/keryx/.claude/worktrees/blissful-poitras-27beb5/.metaproject/reviews/2026-10-17-review-flow-github-com-mrciphersmith-keryx-pull-1045-r02/slices/slice-10.diff",
+      "bytes": 139980
+    }
+  ],
+  "result": "raw/review-logic-w5.txt",
+  "definition": ".metaproject/skills/gdskills/review/review-logic/SKILL.md"
+}

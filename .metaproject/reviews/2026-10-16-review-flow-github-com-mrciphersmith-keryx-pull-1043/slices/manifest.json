@@ -1,0 +1,443 @@
+{
+  "schemaVersion": 1,
+  "maxBytes": 150000,
+  "waveBytes": 150000,
+  "source": "diff",
+  "slices": [
+    {
+      "id": "slice-01",
+      "path": "slice-01.diff",
+      "bytes": 49029,
+      "contentHash": "7a2356dbe52ea09d8e81fb9ff52f4c5f60004b8b80f873ff19638b351d6ea7f4",
+      "files": [
+        ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+        ".metaproject/core/gdskills/contracts/task-implementer-input-contract.schema.json",
+        ".metaproject/data/gdgraph/.provenance.json",
+        ".metaproject/flows/459-2026-10-16-review-premise/eval/inputs/fixture-findings.json",
+        ".metaproject/flows/459-2026-10-16-review-premise/eval/inputs/pr1005-findings.json",
+        ".metaproject/flows/459-2026-10-16-review-premise/eval/inputs/pr992-findings.json",
+        ".metaproject/flows/459-2026-10-16-review-premise/eval/inputs/validate.ts",
+        ".metaproject/flows/459-2026-10-16-review-premise/eval/premise-eval.json",
+        ".metaproject/flows/459-2026-10-16-review-premise/eval/validate-fixture.json",
+        ".metaproject/flows/459-2026-10-16-review-premise/eval/validate-pr1005.json",
+        ".metaproject/flows/459-2026-10-16-review-premise/eval/validate-pr992.json",
+        ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+        ".metaproject/skills/gdskills/orchestration/task-implementer/input-contract.schema.json"
+      ],
+      "domain": ".metaproject",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-core-boundaries",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class schema: .metaproject/core/gdskills/contracts/review-finding.schema.json",
+          "risk class schema: .metaproject/core/gdskills/contracts/task-implementer-input-contract.schema.json",
+          "risk class schema: .metaproject/skills/gdskills/orchestration/task-implementer/input-contract.schema.json",
+          "schema: .metaproject/core/gdskills/contracts/review-finding.schema.json, .metaproject/core/gdskills/contracts/task-implementer-input-contract.schema.json, .metaproject/skills/gdskills/orchestration/task-implementer/input-contract.schema.json",
+          "source code: .metaproject/flows/459-2026-10-16-review-premise/eval/inputs/validate.ts"
+        ]
+      }
+    },
+    {
+      "id": "slice-02",
+      "path": "slice-02.diff",
+      "bytes": 148430,
+      "contentHash": "7367104990c8bda95e663ad3b72887a884a852dc47dc8157dc299daa3b4c049c",
+      "files": [
+        ".metaproject/data/gdgraph/artifacts/summary.md",
+        ".metaproject/flows/459-2026-10-16-review-premise/acceptance-criteria.md",
+        ".metaproject/flows/459-2026-10-16-review-premise/context.md",
+        ".metaproject/flows/459-2026-10-16-review-premise/description.md",
+        ".metaproject/flows/459-2026-10-16-review-premise/eval/README.md",
+        ".metaproject/flows/459-2026-10-16-review-premise/eval/judge-fixture.raw.md",
+        ".metaproject/flows/459-2026-10-16-review-premise/eval/judge-pr1005.raw.md",
+        ".metaproject/flows/459-2026-10-16-review-premise/eval/judge-pr992-rerun.raw.md",
+        ".metaproject/flows/459-2026-10-16-review-premise/eval/judge-pr992.raw.md",
+        ".metaproject/flows/459-2026-10-16-review-premise/journal.md",
+        ".metaproject/flows/459-2026-10-16-review-premise/plan.md",
+        ".metaproject/flows/459-2026-10-16-review-premise/tasks.md",
+        ".metaproject/modules/gdskills.md",
+        ".metaproject/skills/catalog.md",
+        ".metaproject/skills/gdskills/orchestration/feature-dev/SKILL.md",
+        ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/orchestration/task-implementer/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-architecture/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-backend/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-clean-code/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-core-boundaries/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-flow-graph/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-frontend-conventions/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-frontend/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-highload/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-jev-comments/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-jev-contract/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-jev-docs/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-jev-risk/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-jev-rules/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-jev-scenarios/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-layout/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-logic/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md"
+      ],
+      "domain": ".metaproject [docs]",
+      "split": "file",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "agent instructions: .metaproject/skills/gdskills/orchestration/feature-dev/SKILL.md, .metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md, .metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.md (+18)"
+        ]
+      }
+    },
+    {
+      "id": "slice-03",
+      "path": "slice-03.diff",
+      "bytes": 121809,
+      "contentHash": "36c6e7f5e7b931ccac98e4f3cbe18c46a988a843dd745b64fa52ca02423e4470",
+      "files": [
+        ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-performance/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-pr-contract/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-pr-feedback/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-premise/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-regression/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-security-code/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-style/SKILL.md",
+        ".metaproject/skills/gdskills/review/review-testing-practices/SKILL.md",
+        "CHANGELOG.md"
+      ],
+      "domain": ".metaproject [docs], . [docs]",
+      "split": "file",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "agent instructions: .metaproject/skills/gdskills/review/review-orchestrator/SKILL.md, .metaproject/skills/gdskills/review/review-performance/SKILL.md, .metaproject/skills/gdskills/review/review-pr-contract/SKILL.md (+6)"
+        ]
+      }
+    },
+    {
+      "id": "slice-04",
+      "path": "slice-04.diff",
+      "bytes": 147813,
+      "contentHash": "099015a80c02852899cab6536bcadb07479a59472e035b699ca3a09015485f06",
+      "files": [
+        "docs/docs/cli-reference.md",
+        "docs/docs/guides/review-with-a-record.md",
+        "src/commands/automatic-review.ts",
+        "src/commands/operator-confirm-review.ts",
+        "src/commands/review-operator.ts",
+        "src/commands/review.ts",
+        "src/commands/routing-corpus.ts",
+        "src/commands/operator-confirm-review-tools.test.ts",
+        "src/commands/operator-confirm-rosters.test.ts",
+        "src/commands/review-operator-cli.test.ts",
+        "src/commands/review.test.ts",
+        "src/commands/shell.test.ts",
+        "src/commands/skills.bundled-verify.test.ts",
+        "src/flow/review-fixtures.ts",
+        "src/flow/review-gate.ts"
+      ],
+      "domain": "docs [docs], src/commands, src/commands [test] +1 more",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/commands/automatic-review.ts, src/commands/operator-confirm-review.ts, src/commands/review-operator.ts (+4)"
+        ]
+      }
+    },
+    {
+      "id": "slice-05",
+      "path": "slice-05.diff",
+      "bytes": 57867,
+      "contentHash": "637bc65f76445acec3ababa96658eec87f67b8d8a656383529491c984be64442",
+      "files": [
+        "src/flow/review-gate.test.ts",
+        "src/gdskills/bundled-eval.test.ts",
+        "src/gdskills/model-tier.test.ts",
+        "src/gdskills/review-skills-class-scope.test.ts",
+        "src/gdskills/review-skills-iron-laws.test.ts",
+        "src/gdskills/bundled/install-manifest.json",
+        "src/gdskills/bundled/skills/orchestration/task-implementer/input-contract.schema.json",
+        "src/gdskills/catalog.ts",
+        "src/gdskills/contracts/review-finding.schema.json",
+        "src/gdskills/model-tier.ts",
+        "src/gdskills/skill-length-ceilings.ts"
+      ],
+      "domain": "src/flow [test], src/gdskills [test], src/gdskills",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.9,
+        "why": [
+          "risk class schema: src/gdskills/bundled/skills/orchestration/task-implementer/input-contract.schema.json",
+          "risk class schema: src/gdskills/contracts/review-finding.schema.json",
+          "schema: src/gdskills/bundled/skills/orchestration/task-implementer/input-contract.schema.json, src/gdskills/contracts/review-finding.schema.json",
+          "source code: src/gdskills/catalog.ts, src/gdskills/model-tier.ts, src/gdskills/skill-length-ceilings.ts"
+        ]
+      }
+    },
+    {
+      "id": "slice-06",
+      "path": "slice-06.diff",
+      "bytes": 95204,
+      "contentHash": "b45d82303fc0c067dea488215ccbb3372fc52986f689516f463a40f028399c2a",
+      "files": [
+        "src/gdskills/bundled/skills/orchestration/feature-dev/SKILL.md",
+        "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-architecture/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-backend/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-clean-code/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-core-boundaries/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-flow-graph/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-frontend-conventions/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-frontend/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-highload/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-jev-comments/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-jev-contract/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-jev-docs/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-jev-risk/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-jev-rules/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-jev-scenarios/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-layout/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-logic/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md"
+      ],
+      "domain": "src/gdskills [docs]",
+      "split": "file",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "agent instructions: src/gdskills/bundled/skills/orchestration/feature-dev/SKILL.md, src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md, src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md (+18)"
+        ]
+      }
+    },
+    {
+      "id": "slice-07",
+      "path": "slice-07.diff",
+      "bytes": 117703,
+      "contentHash": "ce69ff68280cd69917c616f9fbeed87fb1aa809a826992e6ffe24e8fa13a9171",
+      "files": [
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-performance/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-pr-contract/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-regression/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-security-code/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-style/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-testing-practices/SKILL.md",
+        "src/lib/group-subcommands.ts"
+      ],
+      "domain": "src/gdskills [docs], src/lib",
+      "split": "file",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "agent instructions: src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md, src/gdskills/bundled/skills/review/review-performance/SKILL.md, src/gdskills/bundled/skills/review/review-pr-contract/SKILL.md (+6)",
+          "source code: src/lib/group-subcommands.ts"
+        ]
+      }
+    },
+    {
+      "id": "slice-08",
+      "path": "slice-08.diff",
+      "bytes": 127458,
+      "contentHash": "791d11290222167ba4ac88db56111a9c8b069702ab034b3725e4791b9fee05a6",
+      "files": [
+        "src/review/coverage.ts",
+        "src/review/dedupe.ts",
+        "src/review/managed.ts",
+        "src/review/operator-decisions.ts",
+        "src/review/premise-question.ts",
+        "src/review/premise.ts",
+        "src/review/readiness.ts",
+        "src/review/types.ts",
+        "src/review/verdict.ts",
+        "src/review/verification.ts"
+      ],
+      "domain": "src/review",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/review/coverage.ts, src/review/dedupe.ts, src/review/managed.ts (+6)",
+          "schema: src/review/types.ts"
+        ]
+      }
+    },
+    {
+      "id": "slice-09",
+      "path": "slice-09.diff",
+      "bytes": 61084,
+      "contentHash": "f789fa8adfff11ea3a5c3e9cec9a6f4576379113ef0891aad8f900258c8cbb28",
+      "files": [
+        "src/review/dedupe.test.ts",
+        "src/review/premise-decision.test.ts",
+        "src/review/premise-embedded.test.ts",
+        "src/review/premise.test.ts",
+        "src/review/readiness.test.ts",
+        "src/review/verdict.test.ts",
+        "src/trigger/unattended.ts"
+      ],
+      "domain": "src/review [test], src/trigger",
+      "split": "domain",
+      "roles": [
+        "review-architecture",
+        "review-backend",
+        "review-clean-code",
+        "review-frontend",
+        "review-highload",
+        "review-logic",
+        "review-performance",
+        "review-regression",
+        "review-security-code",
+        "review-style",
+        "review-testing-practices"
+      ],
+      "depth": "deep",
+      "risk": {
+        "score": 0.5,
+        "why": [
+          "source code: src/trigger/unattended.ts"
+        ]
+      }
+    }
+  ],
+  "omissions": [
+    {
+      "path": ".metaproject/flows/459-2026-10-16-review-premise/eval/inputs/fixture.bundle",
+      "reason": "binary",
+      "detail": "binary: the diff carries no reviewable text for this file",
+      "bytes": 0
+    },
+    {
+      "path": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "reason": "large-json",
+      "detail": "large json document (104184 bytes of diff)",
+      "bytes": 104184
+    },
+    {
+      "path": ".metaproject/data/wiki/freshness-queue.jsonl",
+      "reason": "data-ledger",
+      "detail": "data ledger: tabular or line-delimited data, not code",
+      "bytes": 15801
+    }
+  ],
+  "totals": {
+    "slices": 9,
+    "bytes": 926397,
+    "files": 132,
+    "omittedFiles": 3,
+    "omittedBytes": 119985,
+    "droppedBlocks": 0
+  },
+  "host": "claude-code"
+}

@@ -1,0 +1,129 @@
+[
+ {
+  "id": "r4-review-architecture-code#R4-ARCH-001",
+  "severity": "minor",
+  "file": "src/review/package-location.ts",
+  "line": 1,
+  "problem": "The module header says every reader of the package layout takes it from here so a change is made once, but at least eight production sites still build the same paths by hand: review/loop.ts:485, flow/review-gate.ts:460, governance/spend.ts:21, tui/jev-triage-command.ts:42, tui/conform-source.ts:87, review/arbiter-log.ts:89, review/autonomous-run.ts:179, commands/review.ts:3615 (and the bot/pr-comments dirs at bot/run.ts:118, pr-comments.ts:1607).",
+  "impact": "The single-source claim is false. A move of the reviews root still needs ~10 edits, and the sites that lag diverge from isReviewPackageDir silently (a package accepted by one path, ignored by another).",
+  "suggested_fix": "Either route the flow-scoped sites through flowReviewsRoot and the standalone ones through reviewsRoot in a follow-up, or soften the header to say it covers allocation, prior-round globs and the package check only.",
+  "evidence": "keryx ctx rg '\"reviews\"' src (non-test) lists the sites above; each does path.join(flowsRoot(cwd), flowDir, \"reviews\") or path.join(cwd, \".metaproject\", \"reviews\").",
+  "confidence": "high"
+ },
+ {
+  "id": "r4-review-clean-code-code#CC4-001",
+  "severity": "minor",
+  "file": "src/review/premise.ts",
+  "line": 241,
+  "problem": "severityAgrees is one flag with two opposite meanings: for a downgraded verdict it means 'the carried severity still matches the finding', for any other verdict it means 'no severity fields are present'. The name states only the first, and the early return folds both rules into one ternary, partly re-tangling what CC3-3 split.",
+  "impact": "A reader of the `if (severityAgrees) return {...finding, premise: judgement}` branch must re-derive that it is only reached for downgraded; adding a verdict means editing a compound ternary.",
+  "suggested_fix": "Name the two rules: two predicates (carriesStraySeverity, severityIsStale) used in the early return.",
+  "confidence": "medium"
+ },
+ {
+  "id": "r4-review-clean-code-code#CC4-002",
+  "severity": "minor",
+  "file": "src/review/premise.ts",
+  "line": 730,
+  "problem": "inheritedPremiseClaims is a ~35-line function doing four things: collect previously held records, parse the stored claims tolerating failure, find claims the merge now rejects, find previously held findings whose subject changed. The refuse closure and the `unreadable` side variable thread state between steps, and a generic T is cast to Loose for keysOf.",
+  "impact": "The two 'lost' rules are only separable by reading the loop bodies; a third rule has no obvious home.",
+  "suggested_fix": "Extract claimsNoLongerHeld(trial, heldClaims) and heldFindingsChanged(trial, previousHeld), each returning names; the main body then reads parse, trial merge, union, refuse or ok.",
+  "confidence": "medium"
+ },
+ {
+  "id": "r4-review-clean-code-skills#CC4-001",
+  "severity": "minor",
+  "file": "src/gdskills/bundled/skills/review/review-premise/SKILL.md",
+  "line": 66,
+  "quote": "any claim on a finding below `minor` (`below-minor`)",
+  "problem": "The delta adds a general refusal 'any claim on a finding below minor' to the source row, but the same row still lists 'a downgrade of an external or review-security-code finding, of a minor, or below minor' further on. The tail 'or below minor' is now subsumed by the new first clause, so the list states one refusal twice under different reasons.",
+  "impact": "A caller applying the refusals by hand cannot tell which reason code to record for a downgrade of a sub-minor finding (below-minor vs the downgrade clause).",
+  "suggested_fix": "Drop 'or below `minor`' from the downgrade clause, leaving 'of a `minor`'.",
+  "confidence": "medium"
+ },
+ {
+  "id": "r4-review-clean-code-skills#CC4-002",
+  "severity": "minor",
+  "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+  "line": 813,
+  "quote": "premise: upheld N, held N (per held comment its C-NNN, the judge's question and the operator's answer, in their words)",
+  "problem": "The Stats line is a counts line; the delta puts a per-comment narrative into it, and rule 7 (:366) now also stores the same answer on the Step 7 entry (**Premise**, :390). The operator's answer is recorded in two places in one report.",
+  "impact": "Two copies of one fact drift: a later edit to a held comment's answer on one site leaves the other stale, and a resumed --fix run has two places to read.",
+  "suggested_fix": "Keep counts only in Stats ('premise: upheld N, held N') and have rule 7 point resumed runs at the Step 7 **Premise** entries.",
+  "confidence": "medium"
+ },
+ {
+  "id": "r4-review-clean-code-skills#CC4-003",
+  "severity": "minor",
+  "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+  "line": 1165,
+  "quote": "Without `--premises` a first ingest holds nothing: a finding the judge challenged goes to the fixer.",
+  "problem": "'a first ingest' implies a later ingest differs, but this section states no contrast, so the qualifier is unexplained. The line is also 105 columns in a block wrapped near 88, and the delta rewraps the unrelated arXiv/repetition paragraph (:1273-1285) with no content change, leaving a 120-column first line followed by short ones.",
+  "impact": "Reader cannot tell what a non-first ingest does; the whitespace-only rewrap adds noise to blame and to the next diff.",
+  "suggested_fix": "Say what a later ingest does (or drop 'first'), rewrap the line, and revert the whitespace-only rewrap of :1273-1285.",
+  "confidence": "medium"
+ },
+ {
+  "id": "r4-review-clean-code-skills#CC4-004",
+  "severity": "minor",
+  "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+  "line": 1127,
+  "quote": "renumber a collision, a new finding whose display id a carried one already has included, in the saved reviewer results",
+  "problem": "The dispatch bullet grows to one sentence with nested parentheticals and an interjected 'included' clause that reads as a stray word; it mixes three rules (ingest refusal, ambiguous-finding rejection, renumber-before-dispatch) in one bullet.",
+  "impact": "The renumber instruction, the one action the dispatcher must take, is the hardest part to find and parse.",
+  "suggested_fix": "Split: one bullet for the dispatch inputs, a second 'Before dispatch, renumber any display id a carried finding already has, in the saved reviewer results' with the two rejection reasons as its rationale.",
+  "confidence": "medium"
+ },
+ {
+  "id": "r4-review-logic-code#LG4-001",
+  "severity": "minor",
+  "file": "src/review/premise.ts",
+  "line": 739,
+  "quote": "const heldClaims = (parsed?.claims ?? []).filter((claim) => !isMalformed(claim) && isHeldVerdict(claim.verdict));",
+  "problem": "inheritedPremiseClaims counts a stored claim as a hold by its verdict word alone, not by whether it ever held a finding, and it runs on a first ingest as well as a re-ingest. review-orchestrator/SKILL.md:1128 has the orchestrator save the judge's claims to research-evidence/premises.json in the package before ingest. So two things now happen that the delta's own text rules out. (a) A first ingest without --premises over that file applies the claims: previousFindings is undefined, heldClaims merge cleanly, `ok: true`. The challenged finding is held, and the CLI prints 'carried forward ... the held findings still match them' (review.ts:1082). job-orchestrator/SKILL.md:1165, changed in this round, says 'Without `--premises` a first ingest holds nothing: a finding the judge challenged goes to the fixer', and review.ts:5306 describes the carry as a re-ingest feature only. (b) A held-verdict claim that the merge rejected (for example `challenged` with no practice_sources, which gives challenged-without-evidence, or held-without-question, self-judgement or unknown-finding) never held anything. The trial merge rejects it again, it lands in `lost`, and the ingest is refused with 'This package holds findings the premise judge held'. That is false: no finding was held, and the earlier ingest's findings.json has no held record.",
+  "impact": "Trigger for (b): ingest 1 with --premises whose only `challenged` claim cites no source, so it is rejected and nothing is held. After that, any ingest of the package without --premises is refused, with a reason that names a hold that does not exist, until the operator passes --premises. Trigger for (a): following review-orchestrator:1128 and then running ingest without --premises holds findings the job-orchestrator text says go to the fixer. Neither case loses data, and (a) fails safe. But the docstring's 'Undefined when nothing was held' (premise.ts:727-728) is not what the code does.",
+  "suggested_fix": "Key the carry on what the previous ingest recorded, not on the claim's verdict word. Return undefined unless previousFindings is an array (an ingest happened). Take the claims that must still land from previousHeld (the records whose hold actually applied), and drop the heldClaims-only branch. Or, if a first ingest is meant to pick up a saved premises.json, say so in job-orchestrator/SKILL.md:1165 and in review.ts:5306, and filter heldClaims to claims the trial merge applies.",
+  "evidence": "src/review/premise.ts:730-758 (previousHeld from findings.json, heldClaims from the verdict only, the early return needs both empty, lost from trial.rejections); src/review/managed.ts:369-374 (runs whenever premiseClaims is undefined, first ingest included); src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:1128; src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:1165; src/commands/review.ts:1082, :5306.",
+  "confidence": "high"
+ },
+ {
+  "id": "r4-review-logic-code#LG4-002",
+  "severity": "minor",
+  "file": "src/review/operator-decisions.ts",
+  "line": 161,
+  "quote": "throw new Error(`${path.basename(packageDir)} holds ${lookalikes.map(...)}, which a case-insensitive filesystem may read as ${OPERATOR_DECISIONS_FILE}. ... remove the look-alike and check the decisions again.`);",
+  "problem": "The new look-alike refusal is thrown from readEntries, so it also escapes readPremiseDecisions inside readReviewRounds (review-gate.ts:514 to :531). That module's documented contract is that a per-package read failure becomes a blocking, named outcome, never an escaping exception (review-gate.ts:550-571). Its two callers swallow what escapes. flow complete's reviewGate turns it into the constant 'review gate could not be evaluated; treated as failed, not skipped' (service.ts:653, :2055), so the file name and the instruction to remove the look-alike never reach the operator. prior-round.ts:890 turns it into `[]`, so one look-alike in any package of a flow silently removes every round of that flow from prior-round source 5 ('no reviewed round in flow ...').",
+  "impact": "Trigger: an entry folding to operator-decisions.json (for example `operator-deci\u017fions.json`) in any package under .metaproject/flows/<flow>/reviews/. flow complete fails with an unexplained constant message, and the next `review start` for that flow does not see its flow rounds. Both fail closed, but the remedy text this fix wrote is lost on both paths. `keryx review verdict`/readiness do show it.",
+  "suggested_fix": "In readReviewRounds, catch the readPremiseDecisions failure for that package and push its message onto `problems` (ingested=false), so the gate names the package and the look-alike. Or have withPremiseHolds return an awaiting hold plus a problem instead of throwing.",
+  "evidence": "src/review/operator-decisions.ts:152-173; src/flow/review-gate.ts:514, :527-535, :550-571; src/flow/service.ts:653, :2040-2056; src/review/prior-round.ts:890.",
+  "confidence": "high"
+ },
+ {
+  "id": "r4-review-regression-code#RG4-001",
+  "severity": "minor",
+  "file": "src/review/premise.ts",
+  "line": 750,
+  "quote": "if (trial.rejections.some((rejection) => rejection.finding === name && rejection.reason !== \"already-judged\")) lost.add(name);",
+  "problem": "inheritedPremiseClaims (new in this delta) counts every held claim in the stored premises.json that the trial merge rejects as a hold 'lost', whatever the reason. But the stored file is the claims as received, rejected ones included (managed.ts:512-514), so a held claim the ORIGINAL `ingest --premises` already rejected (unknown-finding, ambiguous-finding, duplicate-claim, self-judgement, below-minor, no-judge, unknown-property, missing question, ...) is rejected again on re-ingest and the re-ingest is refused, even though the findings and the claims are byte-identical and nothing was ever held under that claim.",
+  "impact": "Trigger: `keryx review ingest --premises premises.json` where one `challenged` claim names a typo id (rejected unknown-finding, recorded in scope.md, ingest succeeds); later `keryx review ingest` on the same package with the same report and no --premises. Outcome: the ingest is refused with 'the stored claims no longer hold <id> as they did (the finding is gone, or its severity, verdict or problem changed)', which is false: it never held it. The same claim file passed with --premises is accepted, so the no-flag path is stricter than the flag path and its message misdirects the operator. Workaround exists (pass --premises), hence minor.",
+  "suggested_fix": "Decide 'lost' from what was actually held, not from the raw claims: drop the first loop, or restrict it to held claims that previously applied (a claim whose name matches a key of a record in previousHeld). The previousHeld loop already covers 'a hold that existed is gone or changed'. Add a test: a stored file with one applied challenged claim and one rejected (unknown-finding) challenged claim re-ingests without --premises and is carried forward.",
+  "evidence": "premise.ts:739 (heldClaims = every non-malformed held-verdict claim, rejected or not), :748-751 (rejection => lost), :759 (refusal); managed.ts:512-514 writes input.premises unchanged ('rejected ones included'); premise.ts:64-80 PREMISE_REJECTION_REASONS; premise.ts:465 duplicate-claim rejects both claims of a pair.",
+  "confidence": "high",
+  "class_scope": {
+   "sites": [
+    "src/review/premise.ts:748-751"
+   ],
+   "enumeration_method": "every place inheritedPremiseClaims adds to `lost`: two loops (premise.ts:748-751 claims, :752-758 previous records); only the claims loop reads trial rejections, so it is the single site."
+  },
+  "reviewer": "review-regression"
+ },
+ {
+  "id": "r4-review-style-skills#R4-001",
+  "severity": "minor",
+  "file": "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+  "line": 454,
+  "problem": "The delta joined list item 3 of the --fix preconditions into one 190-char line, while items 4 and 5 (:455-456) and the origin/main original (:456-457) hard-wrap. The item now differs from its neighbours.",
+  "suggested_fix": "Re-wrap item 3 at the file's ~85-col width with a 3-space continuation indent, as items 4 and 5 do.",
+  "source": "reviewer"
+ }
+]

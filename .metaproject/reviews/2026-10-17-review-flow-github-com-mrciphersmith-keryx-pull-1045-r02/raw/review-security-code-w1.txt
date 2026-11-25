@@ -1,0 +1,363 @@
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-security-code",
+  "slices": [
+    "slice-01"
+  ],
+  "summary": "Fix slice slice-01 was reviewed for code-level security: gate root harvesting, ReDoS, usage-line parsing, git argument handling, save_result_to writes and coverage.md rendering. Completion-gate root harvesting is now linear, confined to cwd and limited to the session's own keryx review commands. The KERYX_USAGE parser is linear and bounded, and git diff runs with assertGitRevision and --end-of-options. Two minor residuals remain in the gate: token matching of attacker-controlled review ids, and gate release on any closed manifest under cwd. Prior findings: 45 closed, 6 partial, 7 open, 0 regressed.",
+  "findings": [
+    {
+      "id": "SEC-R2-001",
+      "severity": "minor",
+      "reviewer": "review-security-code",
+      "file": "src/review/completion-gate.ts",
+      "line": null,
+      "quote": "if ((named.commands ?? []).some((command) => namesToken(command, id))) return true;",
+      "title": "An older open package counts as named by this session when attacker-controlled text matches a token of any keryx review command",
+      "problem": "namedBySession treats a package as continued by this session when its manifest.reviewId or directory name appears as a token anywhere in the arguments of any `keryx review` tool call (completion-gate.ts:217). scanRoot passes the manifest's own reviewId at :252, and that value is attacker-controlled when the package is committed in the checked-out PR. A package whose reviewId is `keryx` or `review` is therefore named by every `keryx review` command. Separately, the tracker trusts `# managed review:` and `path:` lines in the result of any tool call whose arguments merely contain `keryx review` (:160, :165-172). With a compound command such as `keryx review status x; cat notes.md`, file content can name review ids and package dirs inside cwd.",
+      "attack_vector": "The author of the PR under review commits `.metaproject/reviews/anything/manifest.json` with mode review-flow, status draft and reviewId \"keryx\". Take a session that resumes an earlier review without an active pointer, or one that has not opened its own package yet. Every `keryx review ...` call names that package, and it passes the stale-manifest filter at :252. pickPackage picks it as the newest candidate when its checkout mtime is later than the real package's manifest. The harness nudge then names the attacker's package and repeats its completion blockers to the model as harness-provenance text.",
+      "impact": "The completion gate nudges the model about the wrong package, the misdirection flow 460 C set out to remove. The damage is bounded: the nudge flattens and caps blocker text (nudgeLine, 300 chars x 20), displayId sanitises the id, and `review complete` is unaffected.",
+      "suggested_fix": "Match a review id only against reviewIds keryx printed and against an explicit argument position (`review status|readiness|complete <id>`, `--review-id <id>`), not against any token of the command line; or ignore ids that equal a word of the command itself. Trust `path:`/`# managed review:` lines only when the tool call is a single `keryx review start|attach|ingest` command, not a compound shell line.",
+      "evidence": "src/review/completion-gate.ts:202-208 namesToken matches any boundary-delimited token; :217 applies it to every recorded command; :252 passes manifest.reviewId from the package on disk; :160 accepts any call whose arguments contain `keryx review`. Test completion-gate.test.ts:245-246 covers only a call that is not a keryx review command.",
+      "confidence": "medium",
+      "related_skill": null
+    },
+    {
+      "id": "SEC-R2-002",
+      "severity": "minor",
+      "reviewer": "review-security-code",
+      "file": "src/review/completion-gate.ts",
+      "line": null,
+      "quote": "const closedAt = best === null ? Math.max(0, ...closedAtByRoot.values()) : (closedAtByRoot.get(best.root) ?? 0);",
+      "title": "A closed review-flow manifest committed by the reviewed PR under cwd still releases the completion gate",
+      "problem": "This is the remaining part of round-1 SEC-002. scanRoot (:245-246) counts any review-flow package with status closed whose manifest mtime is at or after the session start. findReviewGateState (:324-325) returns null, which releases the gate, when no package is chosen yet or when the chosen package's manifest is older. cwd is always a scanned root, and nothing ties the closed package to the review this session is running (no id, pointer or own command output).",
+      "attack_vector": "The PR under review adds `.metaproject/reviews/x/manifest.json` with mode review-flow and status closed. The reviewing agent checks the PR out during the session, so the mtime is >= since. If the agent has not opened its own package yet (best === null), or resumes an older package whose manifest predates the checkout, the next stop attempt finds closedAt > 0 and the gate accepts the stop.",
+      "impact": "The model may end the run before any package is opened or completed. `review complete` is not run, so nothing is falsely recorded complete, but PR content defeats the gate's guarantee that the run keeps going until `review complete` accepts.",
+      "suggested_fix": "Release the gate only for a package this session opened or named (reviewIds/packageDirs from SessionReviewNames, or the active pointer), not for any closed manifest under the root. With best === null, do not release on closedAt at all.",
+      "evidence": "src/review/completion-gate.ts:245-246 take closedAt from any closed review-flow manifest newer than since; :324 takes the max over all roots when best === null; :325 returns null. Test completion-gate.test.ts:335 covers only a closed package under a different root.",
+      "confidence": "medium",
+      "related_skill": null
+    }
+  ],
+  "needs_context": [],
+  "follow_ups": [],
+  "prior_dispositions": [
+    {
+      "id": "review-architecture-w3:F-004",
+      "disposition": "closed",
+      "evidence": "src/review/coverage.ts:557 now states why the import is lazy (prior-round -> publish -> readiness -> coverage load cycle); the import moved into resolveDiffBase at :558."
+    },
+    {
+      "id": "review-architecture-w3:F-005",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:158-183: names come only from `keryx review` tool-call arguments and the `path:`/`# managed review:` lines of that same call's result, and only for roots inside cwd (:179). The narrower remaining variant is SEC-R2-001."
+    },
+    {
+      "id": "review-clean-code-w1:F-004",
+      "disposition": "closed",
+      "evidence": "src/commands/review-ledger.ts:192-201: trailing optionals moved into LedgerReportExtras; renderLedgerReport takes `extras: LedgerReportExtras = {}`."
+    },
+    {
+      "id": "review-clean-code-w1:F-005",
+      "disposition": "closed",
+      "evidence": "src/commands/review-ledger.ts:61 the scopeReviewed sentence now precedes the Token spend paragraph at :63."
+    },
+    {
+      "id": "review-clean-code-w2:F-003",
+      "disposition": "closed",
+      "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:2190-2194 failChild helper; used at :2248, :2304, :2325."
+    },
+    {
+      "id": "review-clean-code-w2:F-006",
+      "disposition": "open",
+      "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts onUsage still sums every usage_update (childUsage.tokens_in += tokensIn ?? 0); adapters not changed in this slice. Info only."
+    },
+    {
+      "id": "review-clean-code-w3:CC-10",
+      "disposition": "closed",
+      "evidence": "src/review/ledger.ts:20-39: the {0,80} gaps are gone, patterns are anchored and documented, the quote bound is named CLAIM_QUOTE_CHARS (:39); the helper no longer uses `text`."
+    },
+    {
+      "id": "review-clean-code-w3:CC-11",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:266-287 pickPackage extracted; roots deduplicated once with a Set at :313."
+    },
+    {
+      "id": "review-clean-code-w3:CC-13",
+      "disposition": "partial",
+      "evidence": "src/review/managed.ts:1227 now reads typed dispatchRuns (src/review/research.ts:46); an unrecognised status still falls through to `failed: not run` at managed.ts:1234."
+    },
+    {
+      "id": "review-clean-code-w3:CC-2",
+      "disposition": "partial",
+      "evidence": "src/review/locate.ts:62 `/** How a finding's `line` was arrived at. */` is still an orphan doc comment, now stacked over LocateMethod's doc at :63-66 instead of over UnlocatableKind."
+    },
+    {
+      "id": "review-clean-code-w3:CC-3",
+      "disposition": "closed",
+      "evidence": "src/review/coverage.ts:526-573 split into readPackageTarget, resolveDiffBase, diffOfTarget; lazy import commented at :557."
+    },
+    {
+      "id": "review-clean-code-w3:CC-4",
+      "disposition": "closed",
+      "evidence": "src/review/coverage.ts:544 nominalBase computed once; reused at :530, :568, :570."
+    },
+    {
+      "id": "review-clean-code-w3:CC-7",
+      "disposition": "closed",
+      "evidence": "src/review/mutate.ts:359-368 MUTATION_RECORD_FILE and mutationRecordNames used by writeMutationEvidence (:347), packageHasMutationRecord (:372), doneMutantIds (:379)."
+    },
+    {
+      "id": "review-clean-code-w3:CC-9",
+      "disposition": "closed",
+      "evidence": "src/review/ledger.ts:681 runUsage returns `RunUsage | \"unknown\"`; RunUsage exported at src/review/dispatch-usage.ts:30."
+    },
+    {
+      "id": "review-core-boundaries-w1:F-004",
+      "disposition": "closed",
+      "evidence": "src/review/dispatch-usage.ts:12-14 now says the figure is reported, not proven, that a reviewer can write the line on hosts where it writes its own raw file, and that no gate decision reads usage (the fix's 'soften the comment' option)."
+    },
+    {
+      "id": "review-highload-w1:F-001",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:65-85 reviewPackagePaths finds `.metaproject` with indexOf and walks back at most MAX_PREFIX_CHARS (:48), never past the previous match; linearity test src/review/completion-gate.test.ts:287."
+    },
+    {
+      "id": "review-highload-w1:F-002",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:51 MAX_SESSION_REVIEW_ROOTS = 8 enforced via remember() at :181; test completion-gate.test.ts:269."
+    },
+    {
+      "id": "review-highload-w1:F-003",
+      "disposition": "partial",
+      "evidence": "src/review/dispatch-usage.ts:9-14 comment corrected (last line wins, a reviewer can write one); the parser still accepts a KERYX_USAGE line anywhere at a line start (:36, :79-83), not only the last non-empty line."
+    },
+    {
+      "id": "review-highload-w2:F-001",
+      "disposition": "closed",
+      "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:2332-2335 advice caps re-dispatch at once; :2328 records the placeholder plus the usage line in save_result_to."
+    },
+    {
+      "id": "review-highload-w2:F-003",
+      "disposition": "open",
+      "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts onUsage sums every usage_update, unchanged; info, no reproducible path."
+    },
+    {
+      "id": "review-highload-w3:F-001",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:43-85 the lazy-prefix regex is gone; literal-first scan with bounded walk-back."
+    },
+    {
+      "id": "review-highload-w3:F-002",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:51 cap of 8 roots, :179 only roots inside cwd, :186-200 tracker cached per history array so each stop scans only new messages."
+    },
+    {
+      "id": "review-highload-w3:F-004",
+      "disposition": "closed",
+      "evidence": "src/review/dispatch-usage.ts:36 `([^\\n]*)$` has no backtracking brace group; :38/:46 a line over 4096 chars states nothing."
+    },
+    {
+      "id": "review-highload-w3:F-005",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:279 `const fresh = Date.parse(pointer.startedAt) >= since;` so NaN is not fresh and the pointer is skipped unless the session named it (:280)."
+    },
+    {
+      "id": "review-logic-w1:LG-002",
+      "disposition": "closed",
+      "evidence": "docs/docs/cli-reference.md:4849 now says an absent/ambiguous quote is kept and flagged quote_unlocated and only an uncheckable quote refuses."
+    },
+    {
+      "id": "review-logic-w1:LG-005",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:46 `=` is a prefix delimiter; test completion-gate.test.ts:257 asserts `--package=in/...` yields root `in`."
+    },
+    {
+      "id": "review-logic-w2:F-002",
+      "disposition": "closed",
+      "evidence": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md:294 adds 'it still refuses, naming the finding, a quote it could not check at all'."
+    },
+    {
+      "id": "review-logic-w2:F-005",
+      "disposition": "partial",
+      "evidence": "src/harness/tool/builtin/spawn-subagent-tool.ts:2328 the empty reply is now recorded, but saveTimedOutPartial (:329-334) writes it to `<target>.partial` when a non-empty file is already there, so an earlier dispatch's result at the same path still reads as current."
+    },
+    {
+      "id": "review-logic-w3:F-002",
+      "disposition": "open",
+      "evidence": "src/review/completion-gate.test.ts:207-216 unchanged: pr-7975 is the only in-session open package, so the test passes with the pointer branch removed; the new tests at :301 and :335 are also decided by the candidate scan (named by id / newest mtime) rather than by the pointer."
+    },
+    {
+      "id": "review-logic-w3:F-004",
+      "disposition": "closed",
+      "evidence": "src/review/ingest-locator-sha.test.ts:89-91 comment reworded to 'Only a quote that could not be checked at all ... refuses'."
+    },
+    {
+      "id": "review-logic-w4:F-001",
+      "disposition": "closed",
+      "evidence": "src/review/ledger.ts:32-37 both patterns now require OWN_STATEMENT plus an explicit inability phrase next to a read verb; the bare `is not`/`missing` alternatives are removed."
+    },
+    {
+      "id": "review-logic-w4:F-002",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:252 and :280 an older package or pointer is kept when this session's commands name its path or id; test completion-gate.test.ts:301."
+    },
+    {
+      "id": "review-logic-w4:F-003",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:158-183 roots only from `keryx review` call arguments and their own output lines, inside cwd; tests completion-gate.test.ts:239, :257. The residual compound-command variant is reported as SEC-R2-001."
+    },
+    {
+      "id": "review-logic-w4:F-004",
+      "disposition": "closed",
+      "evidence": "src/commands/review.ts:1048 runCreate now writes `base` into manifest.target."
+    },
+    {
+      "id": "review-logic-w4:F-005",
+      "disposition": "closed",
+      "evidence": "src/review/coverage.ts:561-562 an empty range from resolveBase returns { error: emptyRangeWarning(...) }."
+    },
+    {
+      "id": "review-logic-w4:F-006",
+      "disposition": "closed",
+      "evidence": "src/review/managed.ts:1231 routedOut complete runs are recorded 'routed out: ... not dispatched'."
+    },
+    {
+      "id": "review-performance-w3:PERF-001",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:65-85 linear literal-first scan; test completion-gate.test.ts:287 (1 MB token)."
+    },
+    {
+      "id": "review-performance-w3:PERF-002",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:125-200 SessionReviewTracker with a cursor, cached per history array in a WeakMap."
+    },
+    {
+      "id": "review-performance-w3:PERF-004",
+      "disposition": "closed",
+      "evidence": "src/review/coverage.ts:500 gitTopLevel cached per directory; :547-550 the whole diff result cached per package/target/head for the process."
+    },
+    {
+      "id": "review-performance-w3:PERF-006",
+      "disposition": "open",
+      "evidence": "src/review/ledger.ts:45 still `UNREADABLE_INPUT.map((re) => re.exec(summary)).find(...)` with no summary length cap; info."
+    },
+    {
+      "id": "review-performance-w3:PERF-007",
+      "disposition": "open",
+      "evidence": "src/review/completion-gate.ts:316-320 roots are still scanned sequentially and every root's candidates are collected before pickPackage; info."
+    },
+    {
+      "id": "review-regression-w3:REG-W3-001",
+      "disposition": "closed",
+      "evidence": "src/review/retry-eval.ts:82 `readSliceIds(result.slices).ids.filter(...)` (no list claims none) and :74 skips a reply with unreadableInputClaim."
+    },
+    {
+      "id": "review-regression-w3:REG-W3-002",
+      "disposition": "closed",
+      "evidence": "src/commands/agent.ts:3487 passes sessionReviewNames; src/review/completion-gate.ts:252/:280 keep an older package/pointer the session names; nextStep at :369 tells the model how to name an earlier session's package."
+    },
+    {
+      "id": "review-security-code-w1:SEC-001",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:158-183 roots no longer come from arbitrary tool output or user content, are confined inside cwd (:179), and an older pointer wins only when named (:279-280). The narrower residual (compound `keryx review` command output, token match on manifest reviewId) is SEC-R2-001, minor."
+    },
+    {
+      "id": "review-security-code-w1:SEC-004",
+      "disposition": "closed",
+      "evidence": "No action was required; quote_unlocated findings are still gated by readiness item quotes-located (docs/docs/cli-reference.md:4849)."
+    },
+    {
+      "id": "review-security-code-w2:SEC-W2-001",
+      "disposition": "partial",
+      "evidence": "src/review/dispatch-usage.ts:12-14 comment corrected; but src/harness/tool/builtin/spawn-subagent-tool.ts:2369 still saves `${raw}${usageSuffix()}` with child-authored KERYX_USAGE lines intact, so with childUsage.known false the child's own line is read as the dispatch's usage. Kept at info because no gate reads usage."
+    },
+    {
+      "id": "review-security-code-w3:SEC-001",
+      "disposition": "closed",
+      "evidence": "src/review/completion-gate.ts:65-85 the unbounded lazy-prefix regex is replaced by an indexOf scan with bounded walk-back (MAX_PREFIX_CHARS 1024, MAX_NAME_CHARS 255); test completion-gate.test.ts:287."
+    },
+    {
+      "id": "review-security-code-w3:SEC-002",
+      "disposition": "partial",
+      "evidence": "src/review/completion-gate.ts:324 closedAt now comes only from the chosen package's root, and roots are harvested only from the session's own commands inside cwd; but a closed review-flow manifest committed by the PR under cwd itself (always a scanned root) still releases the gate when no package is chosen or the chosen one is older. The remaining part is reported as SEC-R2-002."
+    },
+    {
+      "id": "review-security-code-w3:SEC-003",
+      "disposition": "closed",
+      "evidence": "src/review/dispatch-usage.ts:9-14 the 'host measured it and the reviewer cannot' claim is gone; it now says the figure is reported and that no gate decision reads it."
+    },
+    {
+      "id": "review-security-code-w3:SEC-005",
+      "disposition": "open",
+      "evidence": "src/review/managed.ts:1227-1234 reviewer names (and now notRunReason/executionReason) from research.json are still copied into coverage.md (renderCoverage at :2738) without rejecting newlines; there is still no attacker path (names come from the CLI's selected set), info."
+    },
+    {
+      "id": "review-style-w1:F-003",
+      "disposition": "closed",
+      "evidence": "src/commands/review-ledger.ts:61-63 the sentence was moved before the Token spend paragraph."
+    },
+    {
+      "id": "review-style-w3:F-003",
+      "disposition": "closed",
+      "evidence": "src/review/mutate.ts:359 one MUTATION_RECORD_FILE constant used by both readers."
+    },
+    {
+      "id": "review-style-w3:F-004",
+      "disposition": "closed",
+      "evidence": "src/review/coverage.ts:544 nominalBase named once."
+    },
+    {
+      "id": "review-style-w3:F-005",
+      "disposition": "closed",
+      "evidence": "src/review/dispatch-usage.ts:41 renamed toTokenCount."
+    },
+    {
+      "id": "review-style-w3:F-006",
+      "disposition": "closed",
+      "evidence": "src/review/managed.ts:1250 `const named = reviewers !== undefined && reviewers.length > 0;` reused at :1251 and :1255."
+    },
+    {
+      "id": "review-testing-practices-w1:F-003",
+      "disposition": "closed",
+      "evidence": "src/harness/tool/builtin/spawn-subagent-tool.test.ts:1385-1437 multi-update sum, one-sided count, timeout partial and empty-reply usage cases."
+    },
+    {
+      "id": "review-testing-practices-w2:T-001",
+      "disposition": "open",
+      "evidence": "src/review/completion-gate.test.ts:207-216 unchanged; no test makes the pointer decide against the candidate scan."
+    },
+    {
+      "id": "review-testing-practices-w2:T-002",
+      "disposition": "closed",
+      "evidence": "src/review/locate.test.ts:83 adds kind ambiguous candidates [1, 3]; :90 and :97 add kind bound."
+    }
+  ],
+  "stats": {
+    "blocker": 0,
+    "major": 0,
+    "minor": 2,
+    "info": 0
+  }
+}
+```
+
+## Security Review (round 2, fix slice slice-01)
+
+- Head: 375279e781f043c42373b29e06092a2c4177a82a. Scope: slice-01.diff (17 files), fix slice.
+- Blockers: 0, Major: 0, Minor: 2, Info: 0.
+- Prior dispositions (58): closed 45, partial 6, open 7, regressed 0.
+
+### Findings
+- SEC-R2-001 (minor), src/review/completion-gate.ts namedBySession: a package whose manifest reviewId is a command word (`keryx`, `review`) counts as named by every keryx review command. Output of a compound command that mentions `keryx review` is also trusted for `path:` and `# managed review:` lines. A package committed in the reviewed PR can redirect the nudge when no fresh pointer exists.
+- SEC-R2-002 (minor), src/review/completion-gate.ts:324: the PR can commit a closed review-flow manifest under cwd. If it is checked out mid-session, it releases the gate before a package is opened, or when the chosen package is older. This is what remains of round-1 SEC-002.
+
+### Clean areas
+- ReDoS: reviewPackagePaths is a literal-first linear scan with bounded walk-back. USAGE_LINE has no backtracking group and caps the line at 4096 characters. The UNREADABLE_INPUT patterns have no nested quantifiers.
+- Command/argument injection: gitDiffAt uses assertGitRevision and --end-of-options, and Bun.spawn is called with argv.
+- Path traversal: session roots must be inside cwd (`inside`). save_result_to goes through resolveSaveResultPath, and an empty or partial result never overwrites a non-empty file.
+- Prompt injection into nudges: displayId sanitises ids, and nudgeLine flattens and bounds blockers.
+- Secrets/crypto: none in the slice.
+
+Not run: tests (read-only reviewer). Graph and wiki layers were not used; this was a static read of the slice and the files at head.

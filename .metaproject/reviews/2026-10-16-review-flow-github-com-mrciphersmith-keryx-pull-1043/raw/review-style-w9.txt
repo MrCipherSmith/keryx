@@ -1,0 +1,70 @@
+```json keryx:findings
+{
+  "status": "DONE",
+  "reviewer": "review-style",
+  "summary": "Slice 09 is tests plus one roster line; naming and structure are consistent. Four minor/info style observations, no major.",
+  "findings": [
+    {
+      "id": "ST-001",
+      "severity": "minor",
+      "reviewer": "review-style",
+      "file": "src/review/verdict.test.ts",
+      "line": 919,
+      "quote": "const decision = (finding: string, answer: \"uphold\" | \"dismiss\") =>",
+      "problem": "The helper parameter `finding` shadows the module-level `finding` factory declared at the top of the same file, inside a describe that also calls that factory.",
+      "impact": "A reader (or a later edit that calls finding(...) inside the helper) gets the string, not the factory.",
+      "suggested_fix": "Rename the parameter to `findingId`.",
+      "evidence": "verdict.test.ts declares `const finding = (id, severity, problem, extra) => ...` and the new `decision` helper takes `finding: string`.",
+      "confidence": "high"
+    },
+    {
+      "id": "ST-002",
+      "severity": "minor",
+      "reviewer": "review-style",
+      "file": "src/review/premise-decision.test.ts",
+      "line": 147,
+      "quote": "(after as { disposition?: unknown }).disposition",
+      "problem": "The same inline cast to read `disposition` off the apply result is repeated (lines 148, 155, 165, 184 with different shapes, plus `after as Record<string, unknown>`). One shape, several spellings.",
+      "impact": "Repeated, inconsistent casts add noise and hide that the apply function's return type lacks `disposition`.",
+      "suggested_fix": "Add one local helper, e.g. `const disposition = (f: unknown) => (f as { disposition?: { state: string; evidence: string } }).disposition;`, and use it at every site, or type applyPremiseDecision's result so no cast is needed.",
+      "evidence": "`as { disposition` appears at 4 sites with 3 distinct inline types in the file.",
+      "confidence": "high"
+    },
+    {
+      "id": "ST-003",
+      "severity": "minor",
+      "reviewer": "review-style",
+      "file": "src/review/premise.test.ts",
+      "line": 363,
+      "quote": "global_id: \"2026-10-16-round#LY-003\",",
+      "problem": "The literal \"2026-10-16-round#LY-003\" is repeated (finding() default, claim() default, several tests) while a later `ID` const in the ingest describe names a different review id; the \"...round#LY-004\" variant is also hand-spelled twice.",
+      "impact": "Changing the fixture id means editing many literals; two near-identical id constants in one file invite mixing them up.",
+      "suggested_fix": "Hoist one module-level `const GID = \"2026-10-16-round#LY-003\"` next to finding()/claim() and use it at all sites.",
+      "evidence": "Sites: premise.test.ts lines 360, 378, 429, 465, 635-638 (the \"2026-10-16-round#\" literal).",
+      "confidence": "medium"
+    },
+    {
+      "id": "ST-004",
+      "severity": "info",
+      "reviewer": "review-style",
+      "file": "src/review/verdict.test.ts",
+      "line": 893,
+      "quote": "import { VERDICT_FILE, computeVerdict, renderVerdict, writeVerdict } from \"./verdict\";",
+      "problem": "The two new imports (./operator-decisions, ./premise) are placed after ./verdict, whereas the sibling new test files order relative imports alphabetically.",
+      "impact": "Minor import-ordering inconsistency within the same PR.",
+      "suggested_fix": "Order as ./operator-decisions, ./premise, ./verdict.",
+      "evidence": "premise-decision.test.ts lines 91-105 sort relative imports alphabetically.",
+      "confidence": "medium"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 3, "info": 1 }
+}
+```
+
+# Style Review Report
+
+## Verdict: APPROVE_WITH_SUGGESTIONS
+
+Slice 09 (dedupe/premise/premise-decision/premise-embedded/readiness/verdict tests and the unattended roster line) is consistent in naming and layout. Observations: a shadowed `finding` parameter in verdict.test.ts (ST-001), repeated ad hoc casts in premise-decision.test.ts (ST-002), a repeated fixture id literal in premise.test.ts (ST-003), and import order (ST-004). The `review_decide_premise` roster entry in unattended.ts is placed consistently with the other review gates.
+
+Stats: major 0, minor 3, info 1.

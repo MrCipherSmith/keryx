@@ -1,0 +1,53 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "reviewer": "review-clean-code",
+  "status": "DONE",
+  "prior_dispositions": [
+    {"id": "review-clean-code-skills#CC-001", "disposition": "closed", "evidence": "review-orchestrator/SKILL.md:1129 Wave D 'Asking about a held finding': card in keryx shell, elsewhere question tool then the exact decide-premise command for the operator's own terminal, 'Never run it yourself'; feature-dev:116, flow-orchestrator step 6, job-orchestrator:1174 and pr-feedback:366 now point at it."},
+    {"id": "review-clean-code-skills#CC-002", "disposition": "closed", "evidence": "job-orchestrator/SKILL.md:1000 gate-table row, :1137-1139 Step 7 names Wave D, :1149 Step 8 ingest carries --premises."},
+    {"id": "review-clean-code-skills#CC-003", "disposition": "closed", "evidence": "law 4 reconciled: review-clean-code/SKILL.md:30 and :74 allow git log/blame/show, review-orchestrator/SKILL.md:110 and reviewer-input.schema.json:188 allow them as read-only history commands for every reviewer; residual (keryx-shell child may have no shell) is a host-capability question, not a text contradiction now."},
+    {"id": "review-clean-code-skills#CC-004", "disposition": "closed", "evidence": "review-orchestrator/SKILL.md:132 Waves A/B/C/D, :134 Early verdict provisional before Wave D, :91 Step 13 counts premise verdicts, :105 and :120 step-10b id, :58 'no verifier ran: after the last reviewer'. Residual: session-plan-bridge.mdc:39 (see CC2-002)."},
+    {"id": "review-clean-code-skills#CC-005", "disposition": "partial", "evidence": "External never downgraded now stated (review-premise/SKILL.md:93,113; pr-feedback:355,366) and a dismissal maps to verdict `disagree` (pr-feedback:366). Left: review-premise/SKILL.md:48 Step 1 and review-orchestrator/SKILL.md:1127 still 'Never with findings it raised', a case the judge cannot create (it never adds findings); only the self-judgement merge rule (:108) is real."},
+    {"id": "review-clean-code-skills#CC-006", "disposition": "closed", "evidence": "flow-orchestrator/SKILL.md:277 own heading, :279 names source, finding shape, claims file path and journalling instead of decide-premise; feature-dev:42 now points at it instead of repeating it. See CC2-003 for a side effect."},
+    {"id": "review-clean-code-skills#CC-007", "disposition": "closed", "evidence": "full statement kept once at review-orchestrator/SKILL.md:1129; feature-dev:116, flow-orchestrator step 6, job-orchestrator:1174, pr-feedback:366 point at 'Wave D'; job-orchestrator pseudo-code now `UNRESOLVED_FINDINGS = OPEN from step 2.6` with prose moved below (:1169-1174)."}
+  ],
+  "findings": [
+    {
+      "id": "CC2-001", "severity": "minor",
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md", "line": 470,
+      "quote": "`premise-decisions` — every finding `review-premise` held (`challenged` or `owner-decision`) has an operator decision",
+      "problem": "Item 11 is added as an ordinary readiness item, but code makes it the one item that cannot be waived (src/review/readiness.ts:444, :458: 'premise-decisions cannot be waived in the operator's own words'). The same page's next paragraph, SKILL.md 'Done when' (each failing item is waived by the operator), and the cli-reference.md readiness row ('only the operator waives one') still say any failing item can be waived, so a reader will offer review_waive_readiness for it and be refused. The cli-reference row also lists premise-decisions before memory-outside-stage while the code numbers it 11 after it.",
+      "impact": "An agent facing a failing premise-decisions follows the generic waiver path and hits a refusal; the repair (decide-premise per finding) is named only in item 11's own line.",
+      "suggested_fix": "In item 11 and in the cli-reference readiness row add 'not waivable: each held finding needs its own decide-premise answer'; word the general waiver sentences as 'any item but premise-decisions'; list it last in the cli-reference prose."
+    },
+    {
+      "id": "CC2-002", "severity": "minor",
+      "file": "src/gdskills/bundled/rules/core/session-plan-bridge.mdc", "line": 39,
+      "quote": "| `review-orchestrator` | `step-0` … `step-14`, from its own numbered checklist | its Workflow section |",
+      "problem": "review-orchestrator now publishes `step-0`…`step-14` and `step-10b` (SKILL.md:105, :120) but the rule that owns the plan-id contract still lists only step-0..step-14, so the id `step-10b` is defined in one skill and unknown to its governing rule. The contract test (session-plan-bridge-contract.test.ts:106) only checks the `step-0`…`step-14` substring, so it cannot catch the drift.",
+      "impact": "Maintenance drift: a host or reviewer validating plan ids against the rule sees an unlisted id; a lettered step id is a one-off in the scheme.",
+      "suggested_fix": "Add step-10b to the rule row (and to the test expectation), or renumber so Wave D is a plain numbered step."
+    },
+    {
+      "id": "CC2-003", "severity": "minor",
+      "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md", "line": 277,
+      "quote": "### A flow sourced from a finding: check its premise before freeze",
+      "problem": "The new heading has no closing: 'Then freeze and start' with the `flow freeze`/`flow start` block (:281-286) now sits under it, so for every flow, finding-sourced or not, the mandatory freeze step reads as a sub-step of a finding-specific section (the CC-006 fix moved the paragraph out of the verification section but left the freeze text as its tail).",
+      "impact": "A skimming agent on an ordinary flow may skip the section, and the freeze with it.",
+      "suggested_fix": "Give the freeze block its own heading ('### Freeze and start') after the finding-sourced paragraph."
+    },
+    {
+      "id": "CC2-004", "severity": "info",
+      "file": "src/gdskills/bundled/skills/review/review-premise/SKILL.md", "line": 111,
+      "quote": "a minor is upheld or challenged, never downgraded",
+      "problem": "The verdict table (:93) tells the judge to hold a minor with `challenged` or `owner-decision`; this law lists only upheld or challenged.",
+      "impact": "Negligible: a judge may avoid owner-decision for a minor.",
+      "suggested_fix": "Write 'upheld or held (`challenged` / `owner-decision`)'."
+    }
+  ]
+}
+```
+
+Summary: prior clean-code findings: 6 closed, 1 partial (CC-005 residual 'findings it raised' clause), 0 open, 0 regressed. New: 0 blocker, 0 major, 3 minor, 1 info. The delta's central fix (one Wave D statement, pointers elsewhere, round-1 premises wiring, law 4 reconciliation) is coherent; the new defects are doc drift around it (unwaivable readiness item described as waivable, plan id step-10b missing from the plan-bridge rule, freeze block orphaned under the new flow heading).

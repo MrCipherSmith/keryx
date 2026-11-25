@@ -1,0 +1,968 @@
+{
+  "v": 1,
+  "round": 1,
+  "source": "none",
+  "sourcesTried": [
+    {
+      "source": "local-package",
+      "result": "none",
+      "detail": "no package for this target in this checkout"
+    },
+    {
+      "source": "git-history",
+      "result": "none",
+      "detail": "no committed package for this target in the last 200 package commits of the local branches and origin/main (180 days)"
+    },
+    {
+      "source": "github-block",
+      "result": "none",
+      "detail": "no keryx round block in our own comments"
+    },
+    {
+      "source": "github-comments",
+      "result": "none",
+      "detail": "no comments from others"
+    },
+    {
+      "source": "flow",
+      "result": "not-consulted",
+      "detail": "the package is not bound to a flow"
+    }
+  ],
+  "previous": null,
+  "mode": "first",
+  "range": {
+    "base": "8483816bb48e1a99b3ec09e19ad0e83e814356ac",
+    "head": "dff7a38a1c1cd7fb3a3c71db16841c9ccd64e7e9"
+  },
+  "fixHunks": [],
+  "newHunks": [
+    {
+      "file": ".metaproject/core/gdskills/contracts/review-finding.schema.json",
+      "startLine": 225,
+      "endLine": 234
+    },
+    {
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json",
+      "startLine": 12,
+      "endLine": 12
+    },
+    {
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json",
+      "startLine": 14,
+      "endLine": 14
+    },
+    {
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json",
+      "startLine": 20,
+      "endLine": 69
+    },
+    {
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json",
+      "startLine": 71,
+      "endLine": 71
+    },
+    {
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json",
+      "startLine": 246,
+      "endLine": 246
+    },
+    {
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json",
+      "startLine": 254,
+      "endLine": 256
+    },
+    {
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json",
+      "startLine": 262,
+      "endLine": 262
+    },
+    {
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json",
+      "startLine": 270,
+      "endLine": 272
+    },
+    {
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json",
+      "startLine": 408,
+      "endLine": 482
+    },
+    {
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/flow.json",
+      "startLine": 533,
+      "endLine": 667
+    },
+    {
+      "file": ".metaproject/flows/458-2026-10-16-review-delta-rounds/journal.md",
+      "startLine": 27,
+      "endLine": 41
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+      "startLine": 12,
+      "endLine": 12
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+      "startLine": 14,
+      "endLine": 14
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+      "startLine": 20,
+      "endLine": 53
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+      "startLine": 55,
+      "endLine": 55
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+      "startLine": 220,
+      "endLine": 220
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+      "startLine": 230,
+      "endLine": 232
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+      "startLine": 238,
+      "endLine": 238
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+      "startLine": 248,
+      "endLine": 250
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+      "startLine": 351,
+      "endLine": 405
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/flow.json",
+      "startLine": 440,
+      "endLine": 530
+    },
+    {
+      "file": ".metaproject/flows/459-2026-10-16-review-premise/journal.md",
+      "startLine": 45,
+      "endLine": 55
+    },
+    {
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/acceptance-criteria.md",
+      "startLine": 1,
+      "endLine": 24
+    },
+    {
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/context.md",
+      "startLine": 1,
+      "endLine": 82
+    },
+    {
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/description.md",
+      "startLine": 1,
+      "endLine": 34
+    },
+    {
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/flow.json",
+      "startLine": 1,
+      "endLine": 337
+    },
+    {
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/journal.md",
+      "startLine": 1,
+      "endLine": 20
+    },
+    {
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/plan.md",
+      "startLine": 1,
+      "endLine": 23
+    },
+    {
+      "file": ".metaproject/flows/460-2026-10-17-review-gate-consistency/tasks.md",
+      "startLine": 1,
+      "endLine": 15
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 667,
+      "endLine": 667
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 45,
+      "endLine": 45
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "startLine": 294,
+      "endLine": 294
+    },
+    {
+      "file": "CHANGELOG.md",
+      "startLine": 5,
+      "endLine": 16
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 4857,
+      "endLine": 4857
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 5547,
+      "endLine": 5557
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "startLine": 6684,
+      "endLine": 6688
+    },
+    {
+      "file": "docs/docs/guides/review-with-a-record.md",
+      "startLine": 825,
+      "endLine": 825
+    },
+    {
+      "file": "src/commands/agent.ts",
+      "startLine": 3,
+      "endLine": 3
+    },
+    {
+      "file": "src/commands/agent.ts",
+      "startLine": 3487,
+      "endLine": 3487
+    },
+    {
+      "file": "src/commands/review-ledger.test.ts",
+      "startLine": 397,
+      "endLine": 398
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 10,
+      "endLine": 10
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 17,
+      "endLine": 17
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 49,
+      "endLine": 52
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 112,
+      "endLine": 114
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 179,
+      "endLine": 179
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 184,
+      "endLine": 184
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 312,
+      "endLine": 312
+    },
+    {
+      "file": "src/commands/review-ledger.ts",
+      "startLine": 327,
+      "endLine": 327
+    },
+    {
+      "file": "src/commands/review-plan.test.ts",
+      "startLine": 4,
+      "endLine": 4
+    },
+    {
+      "file": "src/commands/review-plan.test.ts",
+      "startLine": 6,
+      "endLine": 6
+    },
+    {
+      "file": "src/commands/review-plan.test.ts",
+      "startLine": 11,
+      "endLine": 12
+    },
+    {
+      "file": "src/commands/review-plan.test.ts",
+      "startLine": 183,
+      "endLine": 274
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "startLine": 667,
+      "endLine": 667
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 45,
+      "endLine": 45
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "startLine": 294,
+      "endLine": 294
+    },
+    {
+      "file": "src/gdskills/contracts/review-finding.schema.json",
+      "startLine": 225,
+      "endLine": 234
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "startLine": 24,
+      "endLine": 25
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "startLine": 574,
+      "endLine": 595
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "startLine": 1347,
+      "endLine": 1383
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 26,
+      "endLine": 26
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 1899,
+      "endLine": 1903
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 1917,
+      "endLine": 1924
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 2244,
+      "endLine": 2244
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 2314,
+      "endLine": 2335
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "startLine": 2363,
+      "endLine": 2363
+    },
+    {
+      "file": "src/review/active-review.test.ts",
+      "startLine": 11,
+      "endLine": 11
+    },
+    {
+      "file": "src/review/active-review.test.ts",
+      "startLine": 101,
+      "endLine": 101
+    },
+    {
+      "file": "src/review/complete-coverage-gate.test.ts",
+      "startLine": 4,
+      "endLine": 5
+    },
+    {
+      "file": "src/review/complete-coverage-gate.test.ts",
+      "startLine": 8,
+      "endLine": 8
+    },
+    {
+      "file": "src/review/complete-coverage-gate.test.ts",
+      "startLine": 10,
+      "endLine": 12
+    },
+    {
+      "file": "src/review/complete-coverage-gate.test.ts",
+      "startLine": 114,
+      "endLine": 221
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 22,
+      "endLine": 22
+    },
+    {
+      "file": "src/review/complete-head-gate.test.ts",
+      "startLine": 171,
+      "endLine": 171
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "startLine": 15,
+      "endLine": 15
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "startLine": 18,
+      "endLine": 18
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "startLine": 112,
+      "endLine": 112
+    },
+    {
+      "file": "src/review/completion-gate.test.ts",
+      "startLine": 189,
+      "endLine": 239
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 9,
+      "endLine": 9
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 41,
+      "endLine": 44
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 46,
+      "endLine": 48
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 50,
+      "endLine": 69
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 72,
+      "endLine": 72
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 76,
+      "endLine": 76
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 79,
+      "endLine": 79
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 87,
+      "endLine": 87
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 92,
+      "endLine": 94
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 99,
+      "endLine": 135
+    },
+    {
+      "file": "src/review/completion-gate.ts",
+      "startLine": 137,
+      "endLine": 138
+    },
+    {
+      "file": "src/review/coverage.test.ts",
+      "startLine": 2,
+      "endLine": 3
+    },
+    {
+      "file": "src/review/coverage.test.ts",
+      "startLine": 7,
+      "endLine": 7
+    },
+    {
+      "file": "src/review/coverage.test.ts",
+      "startLine": 535,
+      "endLine": 603
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 462,
+      "endLine": 471
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 473,
+      "endLine": 478
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 481,
+      "endLine": 498
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 504,
+      "endLine": 516
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 518,
+      "endLine": 538
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 560,
+      "endLine": 560
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 698,
+      "endLine": 698
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 701,
+      "endLine": 704
+    },
+    {
+      "file": "src/review/coverage.ts",
+      "startLine": 709,
+      "endLine": 721
+    },
+    {
+      "file": "src/review/dispatch-usage.ts",
+      "startLine": 1,
+      "endLine": 100
+    },
+    {
+      "file": "src/review/dispatch.test-helpers.ts",
+      "startLine": 8,
+      "endLine": 10
+    },
+    {
+      "file": "src/review/evidence-level.test.ts",
+      "startLine": 5,
+      "endLine": 5
+    },
+    {
+      "file": "src/review/evidence-level.test.ts",
+      "startLine": 21,
+      "endLine": 21
+    },
+    {
+      "file": "src/review/git-fixture.test-helpers.ts",
+      "startLine": 1,
+      "endLine": 33
+    },
+    {
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "startLine": 46,
+      "endLine": 49
+    },
+    {
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "startLine": 51,
+      "endLine": 79
+    },
+    {
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "startLine": 82,
+      "endLine": 82
+    },
+    {
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "startLine": 118,
+      "endLine": 119
+    },
+    {
+      "file": "src/review/ingest-locator-sha.test.ts",
+      "startLine": 121,
+      "endLine": 123
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "startLine": 6,
+      "endLine": 8
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "startLine": 51,
+      "endLine": 51
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "startLine": 611,
+      "endLine": 612
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "startLine": 692,
+      "endLine": 693
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "startLine": 695,
+      "endLine": 695
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "startLine": 784,
+      "endLine": 785
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "startLine": 789,
+      "endLine": 789
+    },
+    {
+      "file": "src/review/ledger.test.ts",
+      "startLine": 980,
+      "endLine": 1076
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 12,
+      "endLine": 12
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 18,
+      "endLine": 32
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 46,
+      "endLine": 47
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 62,
+      "endLine": 63
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 103,
+      "endLine": 104
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 133,
+      "endLine": 134
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 352,
+      "endLine": 354
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 402,
+      "endLine": 404
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 408,
+      "endLine": 412
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 505,
+      "endLine": 506
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 510,
+      "endLine": 510
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 518,
+      "endLine": 518
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 521,
+      "endLine": 522
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 536,
+      "endLine": 536
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 567,
+      "endLine": 567
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 630,
+      "endLine": 644
+    },
+    {
+      "file": "src/review/ledger.ts",
+      "startLine": 743,
+      "endLine": 748
+    },
+    {
+      "file": "src/review/locate.test.ts",
+      "startLine": 69,
+      "endLine": 70
+    },
+    {
+      "file": "src/review/locate.test.ts",
+      "startLine": 99,
+      "endLine": 99
+    },
+    {
+      "file": "src/review/locate.test.ts",
+      "startLine": 103,
+      "endLine": 103
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 53,
+      "endLine": 60
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 63,
+      "endLine": 63
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 67,
+      "endLine": 67
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 153,
+      "endLine": 154
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 167,
+      "endLine": 167
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 173,
+      "endLine": 173
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 181,
+      "endLine": 181
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 207,
+      "endLine": 207
+    },
+    {
+      "file": "src/review/locate.ts",
+      "startLine": 237,
+      "endLine": 243
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "startLine": 1898,
+      "endLine": 1928
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 10,
+      "endLine": 10
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 274,
+      "endLine": 274
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 540,
+      "endLine": 541
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1197,
+      "endLine": 1218
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1222,
+      "endLine": 1222
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1227,
+      "endLine": 1230
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1370,
+      "endLine": 1371
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1399,
+      "endLine": 1406
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1451,
+      "endLine": 1466
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1469,
+      "endLine": 1476
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1488,
+      "endLine": 1492
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1503,
+      "endLine": 1503
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 1619,
+      "endLine": 1621
+    },
+    {
+      "file": "src/review/managed.ts",
+      "startLine": 2616,
+      "endLine": 2616
+    },
+    {
+      "file": "src/review/mutate.ts",
+      "startLine": 357,
+      "endLine": 363
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 14,
+      "endLine": 15
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 108,
+      "endLine": 108
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 218,
+      "endLine": 244
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 356,
+      "endLine": 357
+    },
+    {
+      "file": "src/review/readiness.test.ts",
+      "startLine": 571,
+      "endLine": 639
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 24,
+      "endLine": 24
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 39,
+      "endLine": 39
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 167,
+      "endLine": 170
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 176,
+      "endLine": 176
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 178,
+      "endLine": 181
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 227,
+      "endLine": 253
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 269,
+      "endLine": 272
+    },
+    {
+      "file": "src/review/readiness.ts",
+      "startLine": 402,
+      "endLine": 402
+    },
+    {
+      "file": "src/review/research.test.ts",
+      "startLine": 2,
+      "endLine": 2
+    },
+    {
+      "file": "src/review/research.test.ts",
+      "startLine": 53,
+      "endLine": 53
+    },
+    {
+      "file": "src/review/research.test.ts",
+      "startLine": 65,
+      "endLine": 65
+    },
+    {
+      "file": "src/review/research.ts",
+      "startLine": 36,
+      "endLine": 52
+    },
+    {
+      "file": "src/review/research.ts",
+      "startLine": 73,
+      "endLine": 73
+    },
+    {
+      "file": "src/review/types.ts",
+      "startLine": 532,
+      "endLine": 537
+    }
+  ],
+  "carried": [],
+  "mergeBase": "8483816bb48e1a99b3ec09e19ad0e83e814356ac"
+}

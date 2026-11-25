@@ -1,0 +1,250 @@
+```json keryx:findings
+{
+  "reviewer": "review-clean-code",
+  "status": "DONE",
+  "summary": "Round-3 delta check. 33 prior records (4 not-closed from earlier rounds plus 29 r2 minors) checked at HEAD: 31 closed, 2 partial, 0 open, 0 regressed. New: 0 blocker, 0 major, 2 minor, 4 info.",
+  "findings": [
+    {
+      "id": "CC-R3-001",
+      "severity": "minor",
+      "file": "src/review/managed.ts",
+      "line": 1335,
+      "quote": "Flow 460: `review ingest` of a stub",
+      "problem": "Two doc comments are stacked at 1335-1346: the stub-refusal doc (1335-1341) sits directly above the attributionReviewers doc (1342-1346), so attributionReviewers carries two docs and refuseStubReport (1370) has none. This is the defect class of the closed locate.ts CC-2, reintroduced when attributionReviewers was extracted between a doc and its function.",
+      "impact": "Readability only: a reader of attributionReviewers is told about stub refusal, and refuseStubReport looks undocumented.",
+      "suggested_fix": "Move the 1335-1341 block down onto refuseStubReport (1370).",
+      "evidence": "managed.ts:1335-1341 stub doc, :1342-1346 attributionReviewers doc, :1347 function, :1370 refuseStubReport without a doc",
+      "confidence": "high"
+    },
+    {
+      "id": "CC-R3-002",
+      "severity": "minor",
+      "file": "src/commands/review-slice.ts",
+      "line": 319,
+      "quote": "export function deltaRoundCut(input:",
+      "problem": "deltaRoundCut is one ~35-line body that partitions, judges ledgers twice, runs five buildSlices calls (other, fix, second-look, outside) and four routeSlices/classify/tag passes, then merges and de-duplicates omissions. Each side repeats the same build, route, classify shape. Line 333 also reaches `look!` after only checking `outside.length`, which is non-empty only because `look` exists; the compiler cannot see that.",
+      "impact": "The function is hard to extend (a fifth region kind means another copy of the pattern) and the non-null assertion silently depends on how `outside` is built.",
+      "suggested_fix": "Extract `cutSide(regions, source, sizes)` returning built slices, and give the second-look/outside pair one helper that takes `look` as a defined value, so no `!` is needed.",
+      "evidence": "review-slice.ts:319-345 (build calls at 327, 330, 332, 333; `look!` at 333)",
+      "confidence": "medium"
+    },
+    {
+      "id": "CC-R3-003",
+      "severity": "info",
+      "file": "src/review/ledger.ts",
+      "line": 29,
+      "quote": "export function unreadableInputClaim(result: Pick<ParsedResult, \"inputs_unreadable\" | \"status\" | \"summary\">)",
+      "problem": "The Pick lists status and summary, but the body reads only inputs_unreadable.",
+      "impact": "The signature claims more inputs than the function uses.",
+      "suggested_fix": "Pick<ParsedResult, \"inputs_unreadable\">.",
+      "evidence": "ledger.ts:29-31 reads only result.inputs_unreadable",
+      "confidence": "high"
+    },
+    {
+      "id": "CC-R3-004",
+      "severity": "info",
+      "file": "src/review/readiness.ts",
+      "line": 28,
+      "quote": "export { COVERAGE_MD_MARK };",
+      "problem": "COVERAGE_MD_MARK moved to coverage-md.ts so the writer does not import the checklist, but readiness.ts still re-exports it and managed.test.ts:2 and readiness.test.ts:16 import it through readiness.",
+      "impact": "Leaves the indirection the move was meant to remove.",
+      "suggested_fix": "Import from ./coverage-md in the tests and drop the re-export.",
+      "evidence": "readiness.ts:25,28; managed.test.ts:2; readiness.test.ts:16",
+      "confidence": "high"
+    },
+    {
+      "id": "CC-R3-005",
+      "severity": "info",
+      "file": "src/review/slice.ts",
+      "line": 418,
+      "quote": "for (const region of regions) byFile.set(region.path, [...(byFile.get(region.path) ?? []), region]);",
+      "problem": "Each region copies the file's whole array so far, which is quadratic in a file's regions; the same module groups with push at line 448.",
+      "impact": "Negligible at current sizes; inconsistent with the nearby grouping.",
+      "suggested_fix": "Get or create the array once and push.",
+      "evidence": "slice.ts:418 versus :448",
+      "confidence": "high"
+    },
+    {
+      "id": "CC-R3-006",
+      "severity": "info",
+      "file": "src/review/git-base.ts",
+      "line": 53,
+      "quote": "target: { kind?: string; ref?: string; base?: string | undefined }",
+      "problem": "resolveBase takes a target with kind and ref but reads only base. coverage.ts:548 also spreads `{ ...target, head: target.head }`, a no-op.",
+      "impact": "Signature and call site suggest fields that do nothing.",
+      "suggested_fix": "Type the parameter as { base?: string | undefined }; drop the spread.",
+      "evidence": "git-base.ts:53-54 reads target.base only; coverage.ts:548",
+      "confidence": "medium"
+    }
+  ],
+  "prior_dispositions": [
+    {
+      "id": "review-clean-code-w2:F-006",
+      "disposition": "closed",
+      "evidence": "spawn-subagent-tool.ts:1963-1965 now documents that every adapter emits one usage_update per provider request, so the per-update sum is the child's total; the sum at :1970-1971 is correct by that contract"
+    },
+    {
+      "id": "review-clean-code-w3:CC-13",
+      "disposition": "closed",
+      "evidence": "managed.ts:1246 normalizeCoverage takes research as a required parameter and reads dispatchRuns via coverageFromResearch; :1234 an unrecognised status now reports 'unrecognised status ... in the research ledger', no longer 'not run'"
+    },
+    {
+      "id": "review-clean-code-w3:CC-2",
+      "disposition": "closed",
+      "evidence": "locate.ts:62-66 LocateMethod has its own doc; :68 the 'How a finding's line was arrived at' block now sits directly on LocatorRecord (:69)"
+    },
+    {
+      "id": "review-clean-code-w3:CC-10",
+      "disposition": "closed",
+      "evidence": "ledger.ts:20-32 the regexes and the {0,80} bound are gone: unreadableInputClaim reads only the structured inputs_unreadable list, CLAIM_QUOTE_CHARS names the 120 cut (:21), and the helper sits after its constants"
+    },
+    {
+      "id": "r2-review-clean-code-w1:CC-001",
+      "disposition": "closed",
+      "evidence": "spawn-subagent-tool.ts:344 saveDispatchRecord, documented at :333-343 for completed, partial and no-text exits"
+    },
+    {
+      "id": "r2-review-clean-code-w1:CC-002",
+      "disposition": "closed",
+      "evidence": "locate.ts:68 doc is on LocatorRecord"
+    },
+    {
+      "id": "r2-review-clean-code-w1:CC-003",
+      "disposition": "closed",
+      "evidence": "coverage.ts:497 processCache<A,T> takes a keyOf function; :562 packageDiffStatsCached(diffOfTarget, ..., request => JSON.stringify(...)) passes the typed DiffRequest, no parse-back cast"
+    },
+    {
+      "id": "r2-review-clean-code-w1:CC-004",
+      "disposition": "closed",
+      "evidence": "completion-gate.ts:52-58 separate caps MAX_SESSION_REVIEW_DIRS / _IDS and MAX_PENDING_CALLS; :298 drops the oldest pending call past the cap"
+    },
+    {
+      "id": "r2-review-clean-code-w2:CC-001",
+      "disposition": "closed",
+      "evidence": "docs/docs/cli-reference.md:6679-6685 now names the one-line substring step and lists substring as a locator.method"
+    },
+    {
+      "id": "r2-review-clean-code-w2:CC-002",
+      "disposition": "closed",
+      "evidence": "reviewer-finding.schema.json (.metaproject/skills/.../review-orchestrator and src/gdskills/bundled/.../review-orchestrator, :85) both changed in the delta and now name the substring step"
+    },
+    {
+      "id": "r2-review-clean-code-w2:CC-003",
+      "disposition": "closed",
+      "evidence": "review-ledger.test.ts:208 the refusal is captured once and asserted on"
+    },
+    {
+      "id": "r2-review-clean-code-w2:CC-004",
+      "disposition": "closed",
+      "evidence": "review-plan.e2e.test.ts no longer holds the bare toBeLessThanOrEqual(40) literal; the timeout is a named E2E_TIMEOUT_MS (:18)"
+    },
+    {
+      "id": "r2-review-clean-code-w3:CC-001",
+      "disposition": "closed",
+      "evidence": "dispatch-usage.ts:35 is the one exported NO_TEXT_PLACEHOLDER; spawn-subagent-tool.ts:26 imports it and dispatch-usage.ts:131 (isEmptyRecord) reads it"
+    },
+    {
+      "id": "r2-review-clean-code-w3:CC-002",
+      "disposition": "partial",
+      "evidence": "review.ts:3645-3657 readPremiseFile now returns PremiseSource[] and validates via parsePremiseClaimSets, but still ends in `[parsed as PremiseSource]` (:3657)"
+    },
+    {
+      "id": "r2-review-clean-code-w3:CC-003",
+      "disposition": "closed",
+      "evidence": "operator-confirm-review.ts:306 derives the item number from READINESS_ITEMS by id"
+    },
+    {
+      "id": "r2-review-clean-code-w3:CC-004",
+      "disposition": "closed",
+      "evidence": "saveDispatchRecord (spawn-subagent-tool.ts:344) is the neutral name and its doc covers all exits"
+    },
+    {
+      "id": "r2-review-clean-code-w3:CC-005",
+      "disposition": "closed",
+      "evidence": "spawn-subagent-tool.ts:366 recordSaveNote helper replaces the ternary chain; :2304 is one call"
+    },
+    {
+      "id": "r2-review-clean-code-w4:CC-001",
+      "disposition": "closed",
+      "evidence": "managed.ts:1239-1243 doc now says the fallback becomes coverage's one entry only when nothing better exists"
+    },
+    {
+      "id": "r2-review-clean-code-w4:CC-002",
+      "disposition": "closed",
+      "evidence": "coverage.ts:497/562 typed processCache and DiffRequest; one arg object to diffOfTarget (:579)"
+    },
+    {
+      "id": "r2-review-clean-code-w4:CC-003",
+      "disposition": "closed",
+      "evidence": "ledger.ts:156-160 namesObligation, holdsKey, mergedFromHas are used at :598, :607-608, :616, :790"
+    },
+    {
+      "id": "r2-review-clean-code-w4:CC-004",
+      "disposition": "closed",
+      "evidence": "ledger.ts:612-613 single `byReviewer.length === 1 ? ... : canonicalByObligation`; closeWith's third parameter is optional (:788) and not passed a literal undefined"
+    },
+    {
+      "id": "r2-review-clean-code-w4:CC-005",
+      "disposition": "closed",
+      "evidence": "premise.ts:381 uses displayIdHasHash; :202-203 builds the detail from DISPLAY_ID_FORM"
+    },
+    {
+      "id": "r2-review-clean-code-w4:CC-006",
+      "disposition": "closed",
+      "evidence": "premise.ts:148-190 parsePremiseClaims / parsePremiseClaimSets call parseOnePremiseResult, which returns the defined type; no cast"
+    },
+    {
+      "id": "r2-review-clean-code-w4:CC-007",
+      "disposition": "closed",
+      "evidence": "managed.ts:278 attributionReviewers (:1347) and :287 refuseUnacceptableRound (:1356) extracted"
+    },
+    {
+      "id": "r2-review-clean-code-w4:CC-008",
+      "disposition": "closed",
+      "evidence": "ledger.ts:29 unreadableInputClaim takes a Pick<ParsedResult, ...>, no object-plus-cast"
+    },
+    {
+      "id": "r2-review-clean-code-w5:CC-001",
+      "disposition": "closed",
+      "evidence": "round-split.ts:187-188 partitionRegionsByFix is a splitRegions call over walkRegion (:86); labelling split out"
+    },
+    {
+      "id": "r2-review-clean-code-w5:CC-002",
+      "disposition": "closed",
+      "evidence": "round-split.ts:77 lineInHunk(hunk: RoundHunk ...) is used at :118, :188, :274; secondLookClaimBacked (:339) shares the walk"
+    },
+    {
+      "id": "r2-review-clean-code-w5:CC-003",
+      "disposition": "partial",
+      "evidence": "research.ts:10 exports asRecord, used by research.ts and readiness.ts:93, but round-record.ts:88 and coverage-complete.ts:49 still declare their own `record`, and coverage.ts:265/713/721/806 inline the same cast"
+    },
+    {
+      "id": "r2-review-clean-code-w5:CC-004",
+      "disposition": "closed",
+      "evidence": "round-split.ts:316 fixClaimBacked and :330 expectedFixRoles both take text as a required parameter"
+    },
+    {
+      "id": "r2-review-clean-code-w5:CC-005",
+      "disposition": "closed",
+      "evidence": "coverage-md.ts:11 defines COVERAGE_MD_MARK beside the writer renderCoverageMd (:21); readiness.ts:25 imports it"
+    },
+    {
+      "id": "r2-review-clean-code-w5:CC-006",
+      "disposition": "closed",
+      "evidence": "readiness.ts:170 runsMissingResultFile, :182 coverageGateOf, :192 reviewersFailure extracted; reviewersCheck (:207) gathers and decides"
+    },
+    {
+      "id": "r2-review-clean-code-w5:CC-007",
+      "disposition": "closed",
+      "evidence": "round-split.ts:26-32 SECURITY_PROBLEM lists secur\\w* and inject\\w* once, with a comment that each entry matters"
+    },
+    {
+      "id": "r2-review-clean-code-w5:CC-008",
+      "disposition": "closed",
+      "evidence": "verdict.ts:214 readPremiseClaimSets with a doc describing one result per judge file"
+    }
+  ]
+}
+```
+
+Summary: nearly every clean-code finding was fixed in the delta (renamed saveDispatchRecord, single NO_TEXT_PLACEHOLDER, typed processCache, ledger predicate helpers, extracted readiness and managed helpers, coverage-md.ts, docs and both schema copies updated). Partial: review.ts still ends readPremiseFile in one cast; asRecord is shared in research.ts and readiness.ts but round-record.ts and coverage-complete.ts keep their own copies. New: a stacked doc block in managed.ts (1335-1346) and a long, repetitive deltaRoundCut with a `look!` assertion (review-slice.ts:319); four info items.

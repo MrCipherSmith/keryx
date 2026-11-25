@@ -1,0 +1,90 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "reviewer": "review-architecture",
+  "status": "DONE",
+  "slices": ["slice-01"],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "minor",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "quote": "`keryx review readiness <review-id-or-path> [--json]` reads the package and prints eleven items, READY or NOT READY",
+      "title": "Readiness item count left at eleven after item 12 was added",
+      "problem": "The same section now lists twelve items (item 12 quotes-located is added in this slice) but its lead-in sentence still says it prints eleven. The contract the orchestrator host executes disagrees with itself; the bundled mirror under src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md carries the same line at 654.",
+      "impact": "An orchestrator following the text may stop at 11 items or treat item 12 as optional.",
+      "suggested_fix": "Say twelve in SKILL.detail.md (and the bundled mirror) so it matches the list and the cli-reference twelve-item wording.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "file": "docs/docs/cli-reference.md",
+      "quote": "`review ingest` reads each internal finding's `quote` at its `path` at the reviewed SHA and refuses one that does not resolve there",
+      "title": "cli-reference still documents the removed ingest refusal",
+      "problem": "This slice changes ingest so an unplaceable quote is kept as quote_unlocated and no longer refuses the round, and updates the locator section of the same file (around line 6687) and the guide. The earlier paragraph in the review complete section was not updated and now states the opposite.",
+      "impact": "Two sections of one reference page give contradictory ingest behaviour; the stale one is the first a reader meets.",
+      "suggested_fix": "Reword to: keeps a finding whose quote is absent or ambiguous with no line, flagged quote_unlocated, and refuses only a quote it could not check at all.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "file": "src/commands/review-ledger.ts",
+      "quote": "...(merged === undefined ? { diagnosis: explainUnparsedResult(splitUsage(body).body) } : { result: merged })",
+      "title": "splitUsage parsed twice per raw file in the loader",
+      "problem": "The loader destructures usage from splitUsage(body) one line above, then calls splitUsage(body) again inside the diagnosis branch to get body. One usage-stripping rule is applied through two call sites in the command layer, while ledger.ts already strips it in parseReviewResult and isEmptyOutput, so the stripping knowledge is spread over three places.",
+      "impact": "Cost is to whoever changes the usage-line format next: more places to keep in step. Behaviour is correct today.",
+      "suggested_fix": "Destructure `{ body: reply, usage }` once and pass reply to explainUnparsedResult; ideally let the ledger loader own stripping so the command does not repeat it.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-004",
+      "severity": "info",
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "quote": "append that one line to the file yourself (a dispatch without it is counted unknown, never 0)",
+      "title": "Usage line travels in the reviewer-owned raw file",
+      "problem": "On non-shell hosts the orchestrator appends KERYX_USAGE to raw/<reviewer>.txt, a file the same document says the reviewer writes itself, and the ledger hashes the whole body, so the recorded hash covers the appended line. A reviewer result may also carry its own usage object. Spend figures are therefore host- or model-reported in the same channel as the verdict, with no separate record.",
+      "impact": "No failure path found: the report labels missing usage as unknown. It is a provenance observation about how trustworthy the spend total is.",
+      "suggested_fix": "Settled by deciding whether spend is advisory (then say so in the report text) or written to its own file (for example drivers/<reviewer>.json) that the orchestrator owns.",
+      "confidence": "low"
+    }
+  ]
+}
+```
+
+## Architecture Review
+
+### Review Scope
+- Slice: slice-01 (PR #1045, flow 460), diff of schema, flow bookkeeping, skills, docs, agent.ts, review-ledger.ts
+- Stack detected: generic-ts (CLI plus markdown contracts)
+
+### Summary
+The slice adds an optional quote_unlocated property to the finding contract, wires usage totals into the ledger report, and passes session review roots to the completion gate. Dependency direction is sound: the command layer imports review-layer helpers (dispatch-usage, mutate, completion-gate), not the reverse. No layer, boundary or DIP violation found. Remaining issues are documentation contradictions and a small duplication.
+
+### Stats
+- blocker: 0  |  major: 0  |  minor: 3  |  info: 1
+
+### Layer Violations
+None detected.
+
+### Dependency Direction
+None detected.
+
+### Module Boundary Violations
+None detected.
+
+### Design Pattern Misuse
+F-003 (minor, duplicated usage stripping).
+
+### SOLID Violations
+None detected.
+
+### Framework-Specific
+N/A.
+
+### Other
+F-001, F-002 (stale docs against the new contract), F-004 (info).
+
+Limits: only slice-01 was reviewed; src/review/* implementation files (ingest, readiness, completion-gate, dispatch-usage) are not in this slice and were not judged. Flow json/journal and gdgraph data files in the slice are bookkeeping and were not assessed.

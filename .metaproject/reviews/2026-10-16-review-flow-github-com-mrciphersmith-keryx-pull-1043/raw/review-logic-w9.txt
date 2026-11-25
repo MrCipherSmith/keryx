@@ -1,0 +1,128 @@
+```json keryx:findings
+{
+  "status": "DONE_WITH_CONCERNS",
+  "reviewer": "review-logic",
+  "summary": "Slice 09 is test-only plus one roster line (review_decide_premise excluded from unattended runs). The test assertions match the implementation in premise.ts, operator-decisions.ts, verdict.ts, readiness.ts and dedupe.ts. Reading those for context turned up one major: the decide-premise lookup treats an unvalidated claim from research-evidence/premises.json as a hold, so an operator can record an answer that no reader ever applies. Three minors and one info cover reader disagreement on where holds come from, a misleading verdict count, and a dropped upheld premise in dedupe.",
+  "slices": [{ "id": "slice-09", "status": "DONE" }],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "reviewer": "review-logic",
+      "file": "src/review/premise-question.ts",
+      "line": null,
+      "quote": "const premise = obj(record[\"premise\"]) ?? (claim !== undefined && isHeldVerdict(claim[\"verdict\"]) ? claim : undefined);",
+      "problem": "findHeldFinding, which both `keryx review decide-premise` and the review_decide_premise card use, falls back to the raw claim in research-evidence/premises.json when the finding record has no premise. It takes the first claim whose finding_id matches and uses it as the hold, without running mergePremises. managed.ts writes that file as received, rejected claims included. So a claim the merge rejected (self-judgement, challenged-without-evidence, held-without-question, duplicate-claim, no-judge, external, below-minor) is offered to the operator as a held finding.",
+      "impact": "Silent wrong result. Suppose the ingest ran with --premises from judge `review-layout` and the claim challenges review-layout's own LY-003. The merge rejects it as self-judgement, so findings.json has no premise on LY-003. The operator runs `keryx review decide-premise --finding <id> --answer dismiss`. findHeldFinding accepts the raw claim, the operator confirms, and the CLI logs `premise-question dismiss recorded`. computeVerdict then re-merges premises.json (verdict.ts:220), rejects the claim again and leaves the record without a premise. applyPremiseDecision returns non-held findings unchanged (premise.ts:457), so the dismissal is ignored and LY-003 stays an open major. The readiness item and review-gate also read only findings.json, so neither sees the decision. The operator was told the finding was dismissed and it was not. The reverse also breaks: an `uphold` is recorded for a finding that was never held.",
+      "suggested_fix": "In findHeldFinding, derive the hold the way the verdict does. Parse premises.json with parsePremiseClaims, run mergePremises over the findings.json records that carry no premise, and use the merged record's `premise`. A rejected claim then yields 'not held'. A simpler alternative is to honour only `record.premise` from findings.json, which ingest has already validated. Add a premise-decision test where a self-judged challenged claim is on file and decide-premise must refuse.",
+      "evidence": "premise-question.ts:42-46 picks the claim with `.find` and checks only isHeldVerdict(claim.verdict). managed.ts:499-503 writes `input.premises` verbatim ('rejected ones included'). verdict.ts:209-226 re-validates through mergePremises. premise.ts:454-458 is a no-op on non-held records. The slice's premise-decision.test.ts says it covers 'the decision store the CLI command and the shell card will write', but it never exercises findHeldFinding, so this path has no test.",
+      "confidence": "high",
+      "class_scope": {
+        "sites": ["src/review/premise-question.ts:42", "src/review/verdict.ts:210", "src/review/readiness.ts:332", "src/flow/review-gate.ts:502"],
+        "enumeration_method": "`keryx ctx rg -n \"PREMISES_FILE|findHeldFinding|readPremiseDecisions\" src` lists every reader of premises.json and of the decisions. premise-question.ts:42 is the only reader that uses a claim without mergePremises. verdict.ts:210 validates. readiness.ts and review-gate.ts read holds only from findings.json, so they agree with the validated set and disagree with premise-question.ts."
+      }
+    },
+    {
+      "id": "F-002",
+      "severity": "minor",
+      "reviewer": "review-logic",
+      "file": "src/review/readiness.ts",
+      "line": null,
+      "quote": "const held = ctx.findings.filter((finding) => premiseHoldState(finding, ctx.premiseDecisions) !== \"none\");",
+      "problem": "Readiness item 11 (premise-decisions) reads holds only from findings.json. computeVerdict also applies research-evidence/premises.json to records that have no premise. On a package whose holds exist only in premises.json, the two disagree. verdict.test.ts:971 builds exactly such a package: raw results plus a premises.json with a challenged LY-2. The verdict reports `awaiting operator: LY-2`, readiness passes with 'no finding is held by the premise judge', and decide-premise refuses because there is no findings.json.",
+      "impact": "Two readers give different answers for the same package. Normally an ingest writes findings.json with the premises applied, which limits the reach, so this is minor.",
+      "suggested_fix": "Choose one source of truth for holds. Either readiness applies premises.json the way computeVerdict does, or computeVerdict applies premises.json only when there is no ingested findings.json and says so. Then add a test where readiness and verdict see the same hold.",
+      "evidence": "readiness.ts:331-332 reads only findings.json and decisions. verdict.ts:245 runs applyPremiseClaims on both the raw and the ingested path.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-003",
+      "severity": "minor",
+      "reviewer": "review-logic",
+      "file": "src/review/verdict.ts",
+      "line": null,
+      "quote": "const pending = entries.filter((entry) => object(entry.record.premise) === undefined);",
+      "problem": "On an ingested round, ingest has already applied every accepted claim to findings.json. applyPremiseClaims excludes those records from `pending` and re-merges the same premises.json against the rest, so each previously applied claim now resolves as unknown-finding. `premiseClaims` is then 0, and renderVerdict prints `premise results applied: 0 claim(s) from research-evidence/premises.json` for a round where every claim was applied.",
+      "impact": "The interim verdict misstates the premise stage on the normal ingest path. A reader concludes the judge's claims were all discarded.",
+      "suggested_fix": "Count the records that carry a premise after the merge (merged.counts.upheld + downgraded + held), not the claims applied in this pass. Alternatively, skip the re-merge when every record already carries a premise. Add a verdict test on an ingested findings.json that already holds premises plus its premises.json.",
+      "evidence": "verdict.ts:218-225 and :331. premise.ts:234-237 rejects a claim with no match as unknown-finding, so it does not count as applied.",
+      "confidence": "high"
+    },
+    {
+      "id": "F-004",
+      "severity": "minor",
+      "reviewer": "review-logic",
+      "file": "src/review/dedupe.ts",
+      "line": null,
+      "quote": "const canonical = bestOf(downgraded.length > 0 ? downgraded : confirmed.length > 0 ? confirmed : members);",
+      "problem": "Only `downgraded` gets priority in the canonical pick. An `upheld` premise on a non-canonical member is lost when it merges with a higher-severity re-statement that has no premise: bestOf picks the higher severity and spreads only the canonical record. The new dedupe test at dedupe.test.ts:49 covers only equal severities with the premised finding first, so it passes either way.",
+      "impact": "A finding carried into a delta round with an upheld premise loses it. mergePremises then no longer rejects a new claim as already-judged, so this round's judge can challenge and hold a finding whose premise was already upheld. That contradicts the 'a carried finding keeps the premise it has' rule the premise tests assert.",
+      "suggested_fix": "When the canonical member has no premise and another member has one, carry that premise onto the merged record. Add a test with an upheld major merging with an unpremised blocker.",
+      "evidence": "dedupe.ts:271-278 (bestOf sorts by severity then confidence) and dedupe.ts:324-330 (the merged finding is `...canonical`). premise.ts:244-246 is the already-judged guard, which relies on the premise being present.",
+      "confidence": "medium"
+    },
+    {
+      "id": "F-005",
+      "severity": "info",
+      "reviewer": "review-logic",
+      "file": "src/review/premise.ts",
+      "line": null,
+      "quote": "export function applyPremiseDecisions<T extends object>(findings: readonly T[], decisions: readonly PremiseQuestionDecision[]): T[] {",
+      "problem": "Nothing persists the operator's answer onto a finding record. applyPremiseDecisions runs only at read time in computeVerdict, and the answer lives only in this package's operator-decisions.json. A held finding carried into the next round's package (premise.test.ts:729 shows carried findings arrive with their premise) arrives without `premise.operator` or a disposition. It reads as `awaiting` again, and readiness item 11 fails until the operator answers the same question a second time.",
+      "impact": "Unconfirmed. It depends on how the delta-round carry builds its input findings, which this slice does not show. Tracing the carry source for a held, answered finding would settle it.",
+      "suggested_fix": "Either write `premise.operator` (and the dismissal disposition) into findings.json when a decision is recorded, or have the carry step bring the earlier package's premise-question decisions along with the findings.",
+      "evidence": "The `rg applyPremiseDecision` results have one non-test caller, verdict.ts:250. recordPremiseDecision writes only operator-decisions.json.",
+      "confidence": "low"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 1, "minor": 3, "info": 1 }
+}
+```
+
+## Logic Review
+
+### Review Scope
+- Branch: `feat/review-premise` (PR #1043, head c144874f)
+- Slice: slice-09 (dedupe.test.ts, premise-decision.test.ts, premise-embedded.test.ts, premise.test.ts, readiness.test.ts, verdict.test.ts, trigger/unattended.ts)
+- Scope mode: supplied slice; implementation files read for context only
+- Spec compliance gate: ran against flow 459 description; the AC1/AC2 behaviours the slice tests claim are implemented as asserted
+
+### Summary
+The slice is almost entirely tests, and their assertions match the implementation. Each rejection reason, the duplicate-claim rule, the decision-store sharing, readiness item 11 and the verdict's held list behave as the tests say. The one major is in the decide-premise lookup that these tests never exercise. It accepts a raw, unvalidated premises.json claim as a hold, so an operator's answer can be recorded and then silently ignored.
+
+### Stats
+- blocker: 0  |  major: 1  |  minor: 3  |  info: 1
+
+### Spec Gaps (blocker)
+None found.
+
+### Logic Bugs
+- [F-001] major: findHeldFinding uses an unvalidated premises.json claim, including ones the merge rejected, so a recorded decide-premise answer has no effect on verdict, readiness or gate. (src/review/premise-question.ts:42-46)
+- [F-003] minor: on an ingested round the verdict reports `premise results applied: 0 claim(s)` even though every claim was applied. (src/review/verdict.ts:218)
+- [F-004] minor: dedupe drops an `upheld` premise when the canonical member is a higher-severity re-statement, which defeats the already-judged guard. (src/review/dedupe.ts:286)
+
+### Async & Concurrency
+None found.
+
+### Error Handling
+None found.
+
+### Null / Undefined Safety
+None found.
+
+### Type Contract Violations
+None found.
+
+### Edge Cases
+- [F-002] minor: readiness reads holds only from findings.json while the verdict also applies premises.json, so they disagree on raw-result packages. (src/review/readiness.ts:331)
+- [F-005] info: operator answers are never written onto finding records; a carried held finding may be asked again in the next round (unconfirmed).
+
+### Suggested Patches
+F-001, smallest fix: honour only the validated premise on the record.
+```diff
+-  const premise = obj(record["premise"]) ?? (claim !== undefined && isHeldVerdict(claim["verdict"]) ? claim : undefined);
++  // Only a merged (validated) premise holds a finding; re-run mergePremises over premises.json when the record has none.
++  const premise = obj(record["premise"]) ?? validatedClaimPremise(record, claims);
+```
+
+Routing audit: graph_used: no (not-relevant: bounded slice review), wiki_used: no (not-relevant), ctx_used: yes (keryx ctx rg/read), raw_rg_used: no.

@@ -1,0 +1,99 @@
+STATUS: DONE
+
+```json keryx:findings
+{
+  "reviewer": "review-clean-code",
+  "status": "DONE",
+  "slices": ["slice-03"],
+  "summary": "Slice 03 is mostly tidy: failChild, finiteNumber and the options-object renderLedgerReport remove real duplication. Five minor findings: a placeholder literal duplicated across modules with a comment that no longer matches, casts in readPremises, a hard-coded item number beside a dynamic count, a mis-named reused helper, and a dense nested ternary.",
+  "findings": [
+    {
+      "id": "CC-001",
+      "severity": "minor",
+      "reviewer": "review-clean-code",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": null,
+      "quote": "const NO_TEXT_PLACEHOLDER = \"(subagent produced no text)\";",
+      "problem": "The JSDoc says the placeholder is 'display text only, never compared to decide an outcome', but src/review/ledger.ts isEmptyOutput matches this exact literal with a regex (/^\\(subagent produced no text\\)$/) to decide a raw file is empty, and review-orchestrator/SKILL.md quotes it a third time. The literal is therefore a cross-module contract held in three places, and the comment contradicts it. Clean Code: DRY (E1/E2) and a stale comment (C1).",
+      "impact": "Changing the constant in one place silently breaks empty-reply detection in the ledger: the empty dispatch file would stop counting as empty. The comment tells the next editor it is safe to change.",
+      "suggested_fix": "Export the placeholder from one module (e.g. review/ledger.ts or dispatch-usage.ts), build the isEmptyOutput regex from it, import it in spawn-subagent-tool.ts, and reword the JSDoc to say that readers match it.",
+      "evidence": "spawn-subagent-tool.ts:308 defines it with the 'never compared' doc; ledger.ts:428 `raw.trim() === \"\" || /^\\(subagent produced no text\\)$/.test(raw.trim())`; review-orchestrator/SKILL.md:1226 repeats it.",
+      "confidence": "high"
+    },
+    {
+      "id": "CC-002",
+      "severity": "minor",
+      "reviewer": "review-clean-code",
+      "file": "src/commands/review.ts",
+      "line": null,
+      "quote": "files.push((await readPremiseFile(source)) as PremiseSource);",
+      "problem": "readPremises casts at three points (`sources[0] as string`, `readPremiseFile(source)) as PremiseSource`, and readPremiseFile's own `parsed as ManagedReviewInput[\"premises\"]`). readPremiseFile is typed to return the wide union ManagedReviewInput[\"premises\"] (single object | list | undefined), so the caller has to cast it back to the single-file type to build the list. Clean Code B3/D: the types do not carry what the function knows.",
+      "impact": "A future change to the premises union can make the casts lie without a compile error.",
+      "suggested_fix": "Type readPremiseFile as returning PremiseSource, and return `sources[0]`-based results without casts (a `for` over `sources` with noUncheckedIndexedAccess handled by destructuring).",
+      "evidence": "review.ts readPremises: `return readPremiseFile(sources[0] as string);` and the loop pushing the cast result.",
+      "confidence": "medium"
+    },
+    {
+      "id": "CC-003",
+      "severity": "minor",
+      "reviewer": "review-clean-code",
+      "file": "src/commands/operator-confirm-review.ts",
+      "line": null,
+      "quote": "Item 11 (premise-decisions) is never waived",
+      "problem": "The same description string was made dynamic for the range (`1-${READINESS_ITEMS.length}`) but still hard-codes 'Item 11 (premise-decisions)'. The two numbers come from the same list and will drift when an item is inserted before premise-decisions. Clean Code E2 (magic number).",
+      "impact": "Adding or reordering a readiness item makes the operator-facing tool description name the wrong item number.",
+      "suggested_fix": "Derive the number from the item id (look up premise-decisions in READINESS_ITEMS) or name the item by id only: 'premise-decisions is never waived'.",
+      "evidence": "The inputSchema description in waiveReadinessSpec mixes `${READINESS_ITEMS.length}` with the literal 11; the SKILL.detail text also hard-codes 'twelve' and item numbers in prose.",
+      "confidence": "high"
+    },
+    {
+      "id": "CC-004",
+      "severity": "minor",
+      "reviewer": "review-clean-code",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": null,
+      "quote": "await saveTimedOutPartial(saveTarget.abs, `${NO_TEXT_PLACEHOLDER}${usageSuffix()}`)",
+      "problem": "The empty-reply exit reuses saveTimedOutPartial, whose name, doc ('a timed-out child's partial text') and `.partial` fallback are about timeouts. This path is not a timeout and writes the placeholder, so the name misleads and the empty record can land in `<target>.partial` under a doc that never mentions it. Clean Code A1 (intention-revealing names).",
+      "impact": "A reader looking for where empty dispatches are recorded will not find it by name, and a change to the timeout semantics of the function will change the empty path too.",
+      "suggested_fix": "Rename to a neutral name such as saveWithoutOverwrite (keeping an alias or updating the exported test imports) and update its JSDoc to cover both callers.",
+      "evidence": "Called at the timeout exit and at the empty-reply exit in the same file; the second call is new in this diff.",
+      "confidence": "high"
+    },
+    {
+      "id": "CC-005",
+      "severity": "minor",
+      "reviewer": "review-clean-code",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": null,
+      "quote": "partialSaved === undefined || (partial.length === 0 && !(\"error\" in partialSaved))",
+      "problem": "The partialSaveNote chain was already a three-level nested ternary; the added disjunct makes its first condition encode two unrelated rules (nothing was saved, or an empty placeholder was saved successfully) and the result is hard to read. The same block also builds the Timeout output from several string pieces with another conditional. Clean Code B1/B3 (mixed abstraction, nested conditionals).",
+      "impact": "Readability only; the next change to the timeout note needs a careful read of four interacting conditions.",
+      "suggested_fix": "Extract a small `partialSaveNoteOf(partialSaved, partialIsEmpty, saveTarget, input)` helper with early returns.",
+      "evidence": "Diff lines in the timeout branch of invoke.",
+      "confidence": "medium"
+    },
+    {
+      "id": "CC-006",
+      "severity": "info",
+      "reviewer": "review-clean-code",
+      "file": "src/commands/review-slice.ts",
+      "line": null,
+      "quote": "const omissions = [...built.manifest.omissions, ...(fixBuilt?.manifest.omissions ?? []), ...(secondBuilt?.manifest.omissions ?? [])].filter((omission, index, all) => all.findIndex((known) => known.path === omission.path) === index);",
+      "problem": "The new one-line dedupe is O(n^2) via findIndex and now also collapses duplicate paths inside built.manifest.omissions itself, where the old code only filtered the second-look list against the first. Whether two omissions of one path (different reasons) were previously both kept is unverified here.",
+      "impact": "None shown: omissions are few. Would be settled by a test with two omissions on one path in the main source.",
+      "suggested_fix": "If the old behaviour must hold, filter fix/second omissions against a Set of already-seen paths; otherwise use a Map keyed by path.",
+      "evidence": "Old line filtered only `secondBuilt` omissions against `built`.",
+      "confidence": "low"
+    }
+  ],
+  "stats": { "blocker": 0, "major": 0, "minor": 5, "info": 1 }
+}
+```
+
+## Clean Code Review
+
+Summary: slice 03 improves structure (failChild removes four copies of the fail epilogue; renderLedgerReport takes an options object; finiteNumber narrows without a cast). Remaining issues are minor: the placeholder literal is a hidden cross-module contract with a contradicting comment (CC-001), casts in readPremises (CC-002), a hard-coded item number (CC-003), a mis-named reused helper (CC-004) and a dense ternary (CC-005). One info observation on the omissions dedupe (CC-006).
+
+Stats: blocker 0 | major 0 | minor 5 | info 1
+
+Clean areas: error handling (no swallowed catches; the remaining catch blocks carry reasons), function arguments, SOLID (no new class-level violations), naming outside CC-004.
