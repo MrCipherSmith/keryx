@@ -439,7 +439,8 @@ button { font: inherit; }
 .composer textarea:disabled { cursor: not-allowed; }
 .composer-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; min-width: 0; padding: 4px 6px 6px 8px; }
 .composer-bar > .grow { flex: 1 1 0; min-width: 0; }
-.icon-btn.composer-add { flex: none; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: var(--r-md); }
+/* Round and 30px, like the send/stop button at the other end of the bar. */
+.icon-btn.composer-add { flex: none; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 50%; }
 .composer-add[aria-expanded="true"] { background: var(--bg-selected); color: var(--accent-text); }
 .chip-btn {
   display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; max-width: 220px; min-width: 0; flex: 0 1 auto; overflow: hidden;
