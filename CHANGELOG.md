@@ -5,6 +5,14 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.58] - 2026-11-25
+
+**Keryx Desktop 0.2.21** bundles Keryx 0.4.58.
+
+### Changed
+
+- Review cards in a session no longer sit at the bottom of the conversation. Each review round has its own compact card with its status, round, verdict and finding counts; **Show details** opens the plan, reviewers, activity and **Continue review**. While a round runs or waits on your answer, its card is pinned above the message box; once it finishes, it stays in the conversation right after the message that started that round, and the conversation continues below it. A later round in the same session gets its own card. (#1321)
+
 ## [0.4.57] - 2026-11-25
 
 **Keryx Desktop 0.2.20** bundles Keryx 0.4.57. This release ships stage 1 of Desktop Review v3: a manual review is a live agent session. Use the bundled Keryx, or 0.4.57 or newer, so the session knows the `keryx review state` commands the review sends.
