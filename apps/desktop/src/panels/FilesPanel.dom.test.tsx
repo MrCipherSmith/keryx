@@ -200,3 +200,71 @@ test("a cwd change resets the panel; a response after unmount is ignored", async
   await tick();
   expect(host.textContent).toBe("");
 });
+
+const tabTitles = () => Array.from(host.querySelectorAll(".panel-tabs [role=tab]")).map((t) => t.textContent!.trim());
+const activeTab = () => host.querySelector(".panel-tabs [role=tab][aria-selected=true]")!.textContent!.trim();
+const tab = (name: string) => Array.from(host.querySelectorAll<HTMLElement>(".panel-tabs [role=tab]")).find((t) => t.textContent!.trim() === name)!;
+
+test("the tree is the first tab; each opened file gets its own tab and the tree gives way to it", async () => {
+  await mount(api({ list: async () => ({ files: ["a.txt", "src/b.ts"], truncated: false }) }));
+  await tick();
+  expect(tabTitles()).toEqual(["Files"]);
+  expect(host.querySelector<HTMLElement>(".files-tree")!.hidden).toBe(false);
+  await click(row("a.txt"));
+  await click(row("src"));
+  await click(row("b.ts"));
+  await tick();
+  expect(tabTitles()).toEqual(["Files", "a.txt", "b.ts"]);
+  expect(activeTab()).toBe("b.ts");
+  expect(host.querySelector<HTMLElement>(".files-tree")!.hidden).toBe(true);
+  expect(host.querySelector(".files-viewer-path")!.textContent).toBe("src/b.ts");
+  // Switching tabs shows the other file without opening a second tab for it.
+  await click(tab("a.txt"));
+  expect(host.querySelector(".files-viewer-path")!.textContent).toBe("a.txt");
+  await click(tab("Files"));
+  expect(host.querySelector(".files-viewer")).toBeNull();
+  expect(host.querySelector<HTMLElement>(".files-tree")!.hidden).toBe(false);
+  // The tree kept its open folder, and opening a file again reuses its tab.
+  await click(row("b.ts"));
+  await tick();
+  expect(tabTitles()).toEqual(["Files", "a.txt", "b.ts"]);
+});
+
+test("closing a file tab shows its neighbour, and the tree once no file is left", async () => {
+  await mount(api({ list: async () => ({ files: ["a.txt", "b.txt"], truncated: false }) }));
+  await tick();
+  await click(row("a.txt"));
+  await click(row("b.txt"));
+  await tick();
+  await click(host.querySelector('[aria-label="Close b.txt"]')!);
+  expect(tabTitles()).toEqual(["Files", "a.txt"]);
+  expect(activeTab()).toBe("a.txt");
+  await click(host.querySelector('[aria-label="Close a.txt"]')!);
+  expect(tabTitles()).toEqual(["Files"]);
+  expect(activeTab()).toBe("Files");
+  expect(host.querySelector<HTMLElement>(".files-tree")!.hidden).toBe(false);
+});
+
+test("code is syntax-highlighted beside a line-number gutter; the body still holds exactly the file's text", async () => {
+  const source = "const answer = 42;\nexport default answer;";
+  await mount(api({ list: async () => ({ files: ["a.ts"], truncated: false }), read: async (_c, path) => ({ path, text: source, binary: false, size: source.length }) }));
+  await tick();
+  await click(row("a.ts"));
+  await tick();
+  const body = host.querySelector(".files-viewer-body")!;
+  expect(body.textContent).toBe(source);
+  expect(body.querySelector(".hljs-keyword")!.textContent).toBe("const");
+  expect(host.querySelector(".files-code-gutter")!.textContent).toBe("1\n2");
+});
+
+test("a response for a closed tab does not reopen it", async () => {
+  const slow = deferred<{ path: string; text: string; binary: boolean; size: number }>();
+  await mount(api({ list: async () => ({ files: ["slow.txt"], truncated: false }), read: () => slow.promise }));
+  await tick();
+  await click(row("slow.txt"));
+  await click(host.querySelector('[aria-label="Close slow.txt"]')!);
+  await act(async () => slow.resolve({ path: "slow.txt", text: "late", binary: false, size: 4 }));
+  await tick();
+  expect(tabTitles()).toEqual(["Files"]);
+  expect(host.querySelector(".files-viewer")).toBeNull();
+});
