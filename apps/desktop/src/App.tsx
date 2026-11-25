@@ -705,12 +705,13 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   // A card that moves between the pinned slot and the timeline mounts anew; this keeps its dialog, expansion and draft.
   const reviewCardMemory = useRef<ReviewCardMemory>(new Map());
   const reviewSlots = useMemo(() => {
-    if (reviewDisconnected || !sessionReviews.length) return { pinned: undefined, cards: undefined };
+    if (reviewDisconnected || !sessionReviews.length) return { pinned: undefined, pinnedKeys: undefined, cards: undefined };
     const { pinned, timeline } = splitReviewCards(sessionReviews, activeReviews);
     const common = { cwd, allLinks: sessionReviews, visible: view === "session", onContinueTurn: continueSessionReview, onActiveChange: markReviewActive,
       memory: reviewCardMemory.current };
     return {
       pinned: pinned.length ? <SessionReviewActivity {...common} links={pinned} pinned /> : undefined,
+      pinnedKeys: pinned.map(link => `${link.sessionId}:${link.id}`),
       // Oldest round first: each round claims the first start message after the previous round's (see reviewCardPlacement).
       cards: [...timeline].reverse().map(link => ({ key: `${link.sessionId}:${link.id}`, group: reviewCardGroup(link), anchors: reviewCardAnchors(link),
         node: <SessionReviewActivity {...common} links={[link]} /> })),
@@ -780,7 +781,7 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       <div className="view" hidden={view !== "session"}>
         <SessionView ref={composer} s={s} cwd={cwd} projectName={basename(cwd)} visible={view === "session"} onGoFlows={() => go("flows")} onGoSettings={() => go("settings")} onTelegramSettings={() => openSettings("integrations")} narrow={narrow} onProviders={providers.openProviders} onRouting={() => setRoutingSession(state.sessionId)}
           reviewLinks={reviewLinks}
-          reviewCards={reviewSlots.cards} pinnedReviews={reviewSlots.pinned}
+          reviewCards={reviewSlots.cards} pinnedReviews={reviewSlots.pinned} pinnedReviewKeys={reviewSlots.pinnedKeys}
           githubAccount={githubAccount?.eligible ? githubAccount : undefined} onProjectSettings={openProjectSettings} />
       </div>
       {workView === "flows" ? (
