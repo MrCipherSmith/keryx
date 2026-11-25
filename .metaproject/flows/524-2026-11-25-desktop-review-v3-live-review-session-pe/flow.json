@@ -11,7 +11,7 @@
   "title": "Desktop Review v3: live review session per round and review.json state",
   "status": "in-progress",
   "createdAt": "2026-11-25T05:57:50.199Z",
-  "updatedAt": "2026-11-25T06:03:56.698Z",
+  "updatedAt": "2026-11-25T06:21:06.192Z",
   "source": {
     "type": "description",
     "ref": null
@@ -45,22 +45,29 @@
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-25T06:04:30.344Z",
+            "outcome": "started",
+            "detail": "524-T2 backend+desktop lanes"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -68,7 +75,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
@@ -89,7 +97,7 @@
       "id": "T5",
       "title": "Write docs/requirements/keryx-desktop-review-v3",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -97,7 +105,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
@@ -106,8 +115,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-25T06:21:06.192Z",
+            "outcome": "started",
+            "detail": "verify suites"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -142,6 +157,31 @@
       "at": "2026-11-25T06:03:56.698Z",
       "event": "task-done",
       "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-11-25T06:04:07.713Z",
+      "event": "task-done",
+      "detail": "T5: Write docs/requirements/keryx-desktop-review-v3"
+    },
+    {
+      "at": "2026-11-25T06:04:30.344Z",
+      "event": "task-attempt",
+      "detail": "T2: started (attempt 1) — 524-T2 backend+desktop lanes"
+    },
+    {
+      "at": "2026-11-25T06:21:05.630Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-11-25T06:21:05.911Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-11-25T06:21:06.192Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — verify suites"
     }
   ],
   "acKinds": {
