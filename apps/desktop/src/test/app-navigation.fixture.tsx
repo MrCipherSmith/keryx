@@ -388,6 +388,11 @@ try {
   assert.ok(!calls.includes("_keryx/session_review_request"), "No v2 launch receipt is written");
   // AC9: the attempt the skill registered for this session (v2 data) shows in the session review card.
   await waitFor("the session review card shows the registered attempt", () => /2 questions are waiting for a reply/.test(host.textContent ?? ""));
+  // The running round is pinned above the composer, not the last transcript item, and stays compact until expanded.
+  await waitFor("the running round's card is pinned above the composer", () => !!host.querySelector(".composer-dock .session-review-pinned .session-review-item"));
+  assert.equal(host.querySelector(".transcript .session-review-item"), null, "A running round is not in the transcript");
+  assert.equal([...host.querySelectorAll("summary")].find(summary => summary.textContent === "Review activity"), undefined, "Compact by default");
+  await React.act(() => namedButton("Show details").click());
   const activity = [...host.querySelectorAll("summary")].find(summary => summary.textContent === "Review activity");
   assert.ok(activity);
   await React.act(() => activity.click());
