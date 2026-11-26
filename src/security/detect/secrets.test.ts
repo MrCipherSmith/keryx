@@ -20,6 +20,8 @@ function timed(content: string): number {
 const BODY = "MIIEowIBAAKCAQEAu1SU1LfVLPHCozMxH2Mo4lgOEePzNm0tRgeLezV6ffAt0gun\nVTLw7onLRnrq0/IzW7yWR7QkrmBL7jTKEn5u+qKhbwKfBstIs+bMY2Zkp18gnTxK\n";
 /** BODY's two key lines. */
 const [L1 = "", L2 = ""] = BODY.split("\n");
+/** Two other key lines (BODY's, reversed): the old key a diff of a replaced key removes. */
+const [O1 = "", O2 = ""] = [L2, L1].map((line) => [...line].reverse().join(""));
 
 // Linear work scales 4x from the small input to the large one and quadratic work 16x. The best of five runs
 // is gated at a ratio of 8, the midpoint, with a floor so that millisecond-scale runs do not turn timer noise
@@ -150,6 +152,20 @@ describe("secrets.private-key-block", () => {
       expect(JSON.parse(redactSensitiveText(json))).toEqual({ b: "[REDACTED:secret]" });
     });
 
+    test("R4-TP-006: a key in JSON encoded twice (`+` written `\\u002B`, then escaped again) is masked from its body: never between two backslashes, never over the inner string's quote", () => {
+      // An encoder that writes `+` as `+` (System.Text.Json's default), its output encoded again: `\\u002B`
+      // is an escaped backslash and the letters `u002B`, and the inner string opens with `\"`.
+      const inner = JSON.stringify({ k: `${L1}\n${L2}\n-----END PRIVATE KEY-----` }).replace(/\+/g, "\\u002B");
+      const outer = JSON.stringify({ payload: inner });
+      expect(outer).toContain(String.raw`\\u002B`);
+      const opener = String.raw`\"k\":\"`;
+      const open = outer.indexOf(opener) + opener.length;
+      const close = outer.indexOf("-----END PRIVATE KEY-----") + "-----END PRIVATE KEY-----".length;
+      expect(spans(outer, "secrets.private-key-block")).toEqual([outer.slice(open, close)]);
+      const redacted = JSON.parse(redactSensitiveText(outer)) as { payload: string };
+      expect(JSON.parse(redacted.payload)).toEqual({ k: "[REDACTED:secret]" });
+    });
+
     test("the text before an END line inside a line of code is not masked (the secrets.test.ts lines ctx rg lost)", () => {
       const source = [
         "  test(\"an orphan END\", () => {",
@@ -200,8 +216,17 @@ describe("secrets.private-key-block", () => {
       ["grep -r -B2 / rg -B2 in a pipe, a path and no line numbers", "$ rg -B2 END . | cat", [`./a.pem-${L1}`, `./a.pem-${L2}`, `./a.pem:${END}`]],
       ["rg --column with a path (keryx ctx rg's raw output)", "$ rg --column -B2 END a.pem", [`a.pem-25-${L1}`, `a.pem-26-${L2}`, `a.pem:27:1:${END}`]],
       ["cat -n across a digit of width", "$ cat -n key.pem | tail -3", [`     9\t${L1}`, `    10\t${L2}`, `    11\t${END}`]],
+      // Review R4-PC-005: `cat -n` and `nl` right-align the number in six columns, so the padding ends at line 100000.
+      ["cat -n across line 100000, where the padding ends", "$ cat -n big.log | tail -3", [` 99999\t${L1}`, `100000\t${L2}`, `100001\t${END}`]],
+      ["nl -s ' ' across line 100000, where the padding ends", "$ nl -ba -s ' ' big.log | tail -3", [` 99999 ${L1}`, `100000 ${L2}`, `100001 ${END}`]],
       ["git show of a removed key", "[… 1200 characters omitted …]", [`-${L1}`, `-${L2}`, `-${END}`]],
       ["git show of an added key", "@@ -0,0 +1,27 @@", [`+${L1}`, `+${L2}`, `+${END}`]],
+      // Review R4-RR-002 (+R4-DG-004, R4-LG-004): a unified diff's first column is one marker, ` `, `+` or `-`,
+      // whichever it is; `+` is a base64 character, so it is read as the column, not as body.
+      ["git show of a replaced key, its BEGIN cut off (a context END under the old key's - lines and the new key's + lines)", "[… 1200 characters omitted …]", [`-${O1}`, `-${O2}`, `+${L1}`, `+${L2}`, ` ${END}`]],
+      ["git diff of a key whose last lines changed, under its hunk header", "@@ -24,5 +24,5 @@", [` ${O1}`, ` ${O2}`, `-${L1}`, `+${L2}`, ` ${END}`]],
+      ["git show of an added PGP key, its checksum line under git's +", "@@ -0,0 +1,12 @@", [`+${L1}`, `+${L2}`, "+=AbCd", "+-----END PGP PRIVATE KEY BLOCK-----"]],
+      ["git show of an added PGP key with an armor header and its blank line", "@@ -0,0 +1,14 @@", ["+Comment: a test key", "+", `+${L1}`, `+${L2}`, "+=AbCd", "+-----END PGP PRIVATE KEY BLOCK-----"]],
       ["diff", "1,27d0", [`< ${L1}`, `< ${L2}`, `< ${END}`]],
       ["docker compose logs", "app-1  | loading the TLS key", [`app-1  | ${L1}`, `app-1  | ${L2}`, `app-1  | ${END}`]],
       ["timestamped log lines", "2026-11-25T10:00:00.997Z loading the key", [`2026-11-25T10:00:00.998Z ${L1}`, `2026-11-25T10:00:00.999Z ${L2}`, `2026-11-25T10:00:01.000Z ${END}`]],
@@ -212,6 +237,12 @@ describe("secrets.private-key-block", () => {
         "a.pem-21-Zm9vYmFy",
         ["a.pem-22-Proc-Type: 4,ENCRYPTED", "a.pem-23-DEK-Info: AES-128-CBC,0123456789ABCDEF", "a.pem-24-", `a.pem-25-${L1}`, `a.pem-26-${L2}`, `a.pem:27:${END}`],
       ],
+      // Review R4-TP-007: cat -n numbers a blank line too; its prefix alone, trailing tab cut, is a blank line.
+      [
+        "cat -n of an encrypted key, its numbered blank line between the header fields and the body",
+        "$ cat -n enc.pem",
+        ["     1\tProc-Type: 4,ENCRYPTED", "     2\tDEK-Info: AES-128-CBC,0123456789ABCDEF", "     3\t", `     4\t${L1}`, `     5\t${L2}`, `     6\t${END}`],
+      ],
     ];
     for (const [name, above, lines] of listings) {
       test(`R3-SC-003: ${name}: the key lines are masked whole and the line above them stays`, () => {
@@ -220,11 +251,37 @@ describe("secrets.private-key-block", () => {
         expect(spans(content, "secrets.private-key-block")).toEqual([tail]);
         const redacted = redactSensitiveText(content);
         expect(redacted.startsWith(`${above}\n`)).toBe(true);
-        expect(redacted).not.toContain(L1);
-        expect(redacted).not.toContain(L2);
+        for (const keyLine of [L1, L2, O1, O2]) expect(redacted).not.toContain(keyLine);
         expect(redacted.endsWith("\nafter the key")).toBe(true);
       });
     }
+
+    test("R4-TP-007: a key tail with CRLF line ends is masked whole, unprefixed and in a grep -n listing", () => {
+      for (const lines of [[L1, L2, END], [`25:${L1}`, `26:${L2}`, `27:${END}`]]) {
+        const tail = lines.join("\r\n");
+        const content = `cut here\r\n${tail}\r\nafter the key`;
+        expect({ lines, spans: spans(content, "secrets.private-key-block") }).toEqual({ lines, spans: [tail] });
+        const redacted = redactSensitiveText(content);
+        expect(redacted).not.toContain(L1);
+        expect(redacted).not.toContain(L2);
+        expect(redacted.startsWith("cut here\r\n")).toBe(true);
+      }
+    });
+
+    test("R4-TP-007: a header-looking field behind another prefix is not the key's header: the text above the body stays", () => {
+      expect(spans(`see the Comment: field\n${BODY}${END}`, "secrets.private-key-block")).toEqual([`${BODY}${END}`]);
+      expect(spans(`a.pem-23-see the Comment: field\na.pem-24-${L1}\na.pem:25:${END}`, "secrets.private-key-block")).toEqual([`a.pem-24-${L1}\na.pem:25:${END}`]);
+    });
+
+    test("R4-RR-002: in a diff, a hunk header, a file header or a line of code directly above the key lines stays", () => {
+      expect(spans(`@@ -10,1 +10,1 @@\n ${END}`, "secrets.private-key-block")).toEqual([END]);
+      expect(spans(`diff --git a/k.pem b/k.pem\n+++ b/k.pem\n+${END}`, "secrets.private-key-block")).toEqual([`+${END}`]);
+      expect(spans(`--- a/k.pem\n-${L2}\n-${END}`, "secrets.private-key-block")).toEqual([`-${L2}\n-${END}`]);
+      expect(spans(`+const key = load();\n+${L1}\n+${L2}\n+${END}`, "secrets.private-key-block")).toEqual([`+${L1}\n+${L2}\n+${END}`]);
+      // A context END under a line that is no diff line at all, and under a diff line indented past its column.
+      expect(spans(`${L2}\n ${END}`, "secrets.private-key-block")).toEqual([END]);
+      expect(spans(`+  ${L2}\n ${END}`, "secrets.private-key-block")).toEqual([END]);
+    });
 
     test("R3-SC-003: a line above whose prefix differs in anything but digits and separators is not masked", () => {
       // Another file's lines, a deeper indentation, a numbered line above an unnumbered END: each ends the mask.
@@ -233,6 +290,10 @@ describe("secrets.private-key-block", () => {
       expect(spans(`26:${L2}\n${END}`, "secrets.private-key-block")).toEqual([END]);
       // Its own lines above are masked, the other file's line above them is not.
       expect(spans(`b.pem-25-${L1}\na.pem-26-${L2}\na.pem:27:${END}`, "secrets.private-key-block")).toEqual([`a.pem-26-${L2}\na.pem:27:${END}`]);
+      // Review R4-PC-005: the padding before a number may differ in width; any other text around the number may not.
+      expect(spans(`x 99999\t${L2}\n100000\t${END}`, "secrets.private-key-block")).toEqual([END]);
+      expect(spans(` 99999 ${L2}\n100000\t${END}`, "secrets.private-key-block")).toEqual([END]);
+      expect(spans(` 99999:${L2}\n100000\t${END}`, "secrets.private-key-block")).toEqual([END]);
     });
 
     test("R3-TP-003: a base64-looking word above an encrypted key's header fields stays", () => {
@@ -248,8 +309,12 @@ describe("secrets.private-key-block", () => {
   });
 
   test("many orphan END lines before a header scan in linear time", () => {
-    const content = `${"-----END PRIVATE KEY-----".repeat(8000)}${"a".repeat(100_000)}-----BEGIN PRIVATE KEY-----`;
-    expect(timed(content)).toBeLessThan(250);
+    const build = (ends: number, letters: number): string => `${"-----END PRIVATE KEY-----".repeat(ends)}${"a".repeat(letters)}-----BEGIN PRIVATE KEY-----`;
+    // Review R3-TP-006: the size ratio, not a bound on the time itself.
+    const small = bestOf(build(2_000, 25_000));
+    const large = bestOf(build(8_000, 100_000));
+    expect(large).toBeLessThan(LINEAR_RATIO_LIMIT * Math.max(small, LINEAR_FLOOR_MS));
+    const content = build(8_000, 100_000);
     // Review R2-TP-007: one span per END line, each from where the last one ended, then the unclosed header.
     const found = spans(content, "secrets.private-key-block");
     expect(found).toHaveLength(8001);
@@ -273,6 +338,17 @@ describe("secrets.private-key-block", () => {
     const large = bestOf(build(2_000));
     expect(large).toBeLessThan(LINEAR_RATIO_LIMIT * Math.max(small, LINEAR_FLOOR_MS));
     expect(spans(build(2_000), "secrets.private-key-block")).toHaveLength(2_000);
+  });
+
+  test("many diff key lines above many context END lines scan in linear time", () => {
+    // Review R4-RR-002: every line above a diff's END is read with its first column cut.
+    const build = (copies: number): string => `-${O1}\n-${O2}\n+${L1}\n+${L2}\n -----END PRIVATE KEY-----\n`.repeat(copies);
+    const small = bestOf(build(500));
+    const large = bestOf(build(2_000));
+    expect(large).toBeLessThan(LINEAR_RATIO_LIMIT * Math.max(small, LINEAR_FLOOR_MS));
+    const found = spans(build(2_000), "secrets.private-key-block");
+    expect(found).toHaveLength(2_000);
+    expect(found[1]).toBe(`-${O1}\n-${O2}\n+${L1}\n+${L2}\n -----END PRIVATE KEY-----`);
   });
 
   test("public keys and certificates are not private keys", () => {

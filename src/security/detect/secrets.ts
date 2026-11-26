@@ -67,6 +67,11 @@ function isSpaceCode(code: number): boolean {
   return code === 32 || code === 9 || code === 13 || code === 11 || code === 12;
 }
 
+// The marker a unified diff puts in the first column of every line of a hunk: ` ` (context), `+`, `-`.
+function isDiffMarkerCode(code: number): boolean {
+  return code === 32 || code === 43 || code === 45;
+}
+
 // The number of backslashes directly before `index`, none before `from` counted.
 function backslashesBefore(content: string, index: number, from: number): number {
   let count = 0;
@@ -115,13 +120,15 @@ function bodyRunStart(content: string, end: number, from: number): number {
   return run;
 }
 
-// What a line prefix looks like, where only its digits and the separators beside them may change from
-// line to line of one listing. Each digit run becomes one token, with the spaces that pad it on the left
-// (`cat -n`'s right-aligned number). A digit run and the `:`/`-` after it are one field token, and so are
-// the fields that follow it directly, so a match line's `name:27:1:` (rg --column) reads like a context
-// line's `name-25-` (grep/rg print `:` after a match line's name and number, `-` after a context line's).
-// A `:`/`-` before a digit run or at the end of the prefix is one separator token (`a.pem:` and `a.pem-`,
-// grep without -n). Every other character stays itself. Tokens are NUL and a letter, a NUL is doubled.
+// What a line prefix looks like, where only its digits, the separators beside them and the spaces that pad
+// a number may change from line to line of one listing. Each digit run becomes one token. The spaces that
+// pad it on the left are no part of the shape, whatever their width, none included: `cat -n` and `nl`
+// right-align the number in six columns, so ` 99999\t` and `100000\t` read alike (review R4-PC-005). A
+// digit run and the `:`/`-` after it are one field token, and so are the fields that follow it directly,
+// so a match line's `name:27:1:` (rg --column) reads like a context line's `name-25-` (grep/rg print `:`
+// after a match line's name and number, `-` after a context line's). A `:`/`-` before a digit run or at the
+// end of the prefix is one separator token (`a.pem:` and `a.pem-`, grep without -n). Every other character
+// stays itself, other spaces included. Tokens are NUL and a letter, a NUL is doubled.
 function prefixShape(text: string): string {
   let shape = "";
   let i = 0;
@@ -146,7 +153,7 @@ function prefixShape(text: string): string {
     } else if (isSpaceCode(code)) {
       let j = i;
       while (j < text.length && isSpaceCode(text.charCodeAt(j))) j += 1;
-      shape += j < text.length && isDigitCode(text.charCodeAt(j)) ? "\u0000W" : text.slice(i, j);
+      if (j === text.length || !isDigitCode(text.charCodeAt(j))) shape += text.slice(i, j);
       i = j;
     } else if (isSeparatorCode(code) && (i + 1 === text.length || isDigitCode(text.charCodeAt(i + 1)))) {
       shape += "\u0000S";
@@ -175,22 +182,42 @@ function keyLineOf(line: string, shape: string, blankShape: string): KeyLine | u
   return prefixShape(text) === blankShape ? "blank" : undefined;
 }
 
+// What a line above a unified diff's END line is to that END's key (review R4-RR-002): its first
+// character, when it is ` `, `+` or `-`, is its whole prefix, whichever of the three it is, and the rest
+// is key body, a header field or nothing, read as an unprefixed line is (`keyLineOf`). `+` is a base64
+// character, so it is cut as the column before the rest is read, never taken as body. A line that starts
+// with anything else (a hunk header, `diff --git`, a line of another file) is none, unless it is blank.
+function diffKeyLineOf(line: string): KeyLine | undefined {
+  if (line.length > 0 && isDiffMarkerCode(line.charCodeAt(0))) return keyLineOf(line.slice(1), "", "");
+  return line.trimEnd().length === 0 ? "blank" : undefined;
+}
+
 // Where an END line with no header before it starts its mask (flow 523 reviews R2-SC-003, R3-SC-001,
-// R3-SC-003): the start of the key body directly above it, never further back than `from`, so never
-// into the block before it. On the END's own line the body is the run before the marker (`bodyRunStart`:
-// base64 and whole JSON escapes); the text before that run is the END line's prefix. A line above is
-// key body when it is that same prefix, digits and the separators beside them aside (`prefixShape`),
-// then base64: what `cat -n`, `grep`/`rg` with or without a file name and line number, `git show`
-// (`-`/`+`), `diff` (`< `), `docker compose logs`, timestamped logs, keryx's `ctx rg` items and an
-// indented value put before every line. A PEM header field or a blank line behind the same prefix
-// counts too (a blank one only under a key line above it). The lines are masked from the first such line
-// up to the first line that is none of these: the line a tail cut starts after, a frame keryx wrote, a
-// record, another file's lines. With none, only the run and the marker are masked. Linear: each
-// character between `from` and the END line is read a bounded number of times.
+// R3-SC-003, R4-RR-002): the start of the key body directly above it, never further back than `from`, so
+// never into the block before it. On the END's own line the body is the run before the marker
+// (`bodyRunStart`: base64 and whole JSON escapes); the text before that run is the END line's prefix. The
+// lines above are read one of two ways, chosen by the END line:
+// - A unified diff's line (`git diff`, `git show`, `git log -p`, `diff -u`): the END line's first character
+//   is ` `, `+` or `-` and the marker follows it directly (for `+-----END` the run took the `+`). Each line
+//   above is read by `diffKeyLineOf`: its first character, any of the three, is its whole prefix, so a
+//   replaced key's `-` and `+` lines above a context END are both read, and an added key's `+=abcd` PGP
+//   checksum line is body.
+// - Any other END line: a line above is read by `keyLineOf` against the END line's prefix, its digits, the
+//   separators beside them and the spaces that pad a number aside (`prefixShape`): what `cat -n`, `nl`,
+//   `grep`/`rg` with or without a file name and line number, `diff` (`< `), `docker compose logs`,
+//   timestamped logs, keryx's `ctx rg` items and an indented value put before every line.
+// Either way a line above is key body (base64, the PGP checksum line included), a PEM header field, or
+// blank (nothing, or the prefix alone). A blank line is masked only under a key line above it, and above
+// a header field only more header fields count. The lines are masked from the first such line up to the
+// first line that is none of these: the line a tail cut starts after, a hunk header (`@@ … @@`), a
+// `diff --git` line, a frame keryx wrote, a record, another file's lines. With none, only the run and the
+// marker are masked. Linear: each character between `from` and the END line is read a bounded number of
+// times.
 function orphanBodyStart(content: string, endIndex: number, from: number): number {
   const run = bodyRunStart(content, endIndex, from);
   let lineStart = run;
   while (lineStart > from && content.charCodeAt(lineStart - 1) !== NEWLINE) lineStart -= 1;
+  const diffLine = endIndex === lineStart + 1 && isDiffMarkerCode(content.charCodeAt(lineStart));
   const prefix = content.slice(lineStart, run);
   const shape = prefixShape(prefix);
   const blankShape = prefixShape(prefix.trimEnd());
@@ -201,7 +228,8 @@ function orphanBodyStart(content: string, endIndex: number, from: number): numbe
     const lineEnd = below - 1; // the newline that ends the line above
     let lineBegin = lineEnd;
     while (lineBegin > from && content.charCodeAt(lineBegin - 1) !== NEWLINE) lineBegin -= 1;
-    const kind = keyLineOf(content.slice(lineBegin, lineEnd), shape, blankShape);
+    const line = content.slice(lineBegin, lineEnd);
+    const kind = diffLine ? diffKeyLineOf(line) : keyLineOf(line, shape, blankShape);
     below = lineBegin;
     if (kind === "blank") continue; // masked only under a key line above it
     if (kind === "header") {

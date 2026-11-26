@@ -2615,14 +2615,16 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     // connection, so an entry the session already stored is skipped. A prompt holding nothing else stores
     // nothing and is answered as delivered, with the duplicates named. It starts no turn, unless the
     // notes for them end the history (R3-LG-005): keryx stopped before the turn they started was
-    // persisted, so that turn runs now, on the stored notes.
+    // persisted, so that turn runs now, on the stored notes, and its answer says so (`resumed: true`,
+    // R4-AR-002). Whenever duplicates' notes end the history, the turn that runs answers them too, with
+    // new results beside them or not (R4-LG-003): `resumedNotes` counts them for `/rewind` below.
     const freshResults = terminalResults === undefined ? undefined : withoutStoredRuns(state, terminalResults);
     const allStored = freshResults !== undefined && freshResults.fresh.length === 0;
-    const resumedNotes = allStored ? trailingNotesAwaitingTurn(state.history, freshResults.duplicates) : 0;
-    const storedAnswer = allStored ? { _meta: { keryx: { terminalResults: { stored: 0, duplicates: freshResults.duplicates } } } } : {};
+    const resumedNotes = freshResults === undefined ? 0 : trailingNotesAwaitingTurn(state.history, freshResults.duplicates);
     if (allStored && resumedNotes === 0) {
-      return { stopReason: "end_turn", ...storedAnswer };
+      return { stopReason: "end_turn", _meta: { keryx: { terminalResults: { stored: 0, duplicates: freshResults.duplicates } } } };
     }
+    const storedAnswer = allStored ? { _meta: { keryx: { terminalResults: { stored: 0, duplicates: freshResults.duplicates, resumed: true } } } } : {};
     // Read ONCE, here: this turn runs with this model to its end, whatever a
     // `session/set_config_option` arriving meanwhile does (flow 288, AC6).
     if ((obj["_meta"] as { keryx?: { resumeIssueQuestions?: unknown } } | undefined)?.keryx?.resumeIssueQuestions === true)
@@ -2850,7 +2852,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         // `/rewind`: a snapshot of the files before each mutating call, and the turn's place in the archive.
         const rewind = rewindFor(sessionId);
         io.beforeMutation = () => rewind.recorder.beforeMutation();
-        // A resumed turn (R3-LG-005) starts at the stored notes it runs on, so rewinding it takes them out too.
+        // A turn that answers stored notes awaiting their turn (R3-LG-005, R4-LG-003: with new results too)
+        // starts at those notes, so rewinding it takes them out with the new ones.
         const resumedInArchive = resumedNotes > 0 && freshResults !== undefined ? Math.min(resumedNotes, trailingNotesAwaitingTurn(archive.messages, freshResults.duplicates)) : 0;
         rewind.recorder.beginTurn({ archiveIndex: archive.messages.length - resumedInArchive, prompt: userLine });
       }
@@ -2863,7 +2866,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // turn `/rewind` recorded above, so rewinding this turn takes them out with it. The turn is
       // keryx's (`origin: "terminal-results"`, review AR2-001): its line is not the operator's, so no
       // `UserPromptSubmit` hook sees or refuses it, and nothing can leave these notes without their turn.
-      // A resumed turn (R3-LG-005) stores nothing: its notes are the stored ones before this line.
+      // Only the new results are stored: a resumed turn's notes (R3-LG-005, R4-LG-003) are the stored ones
+      // before them.
       if (freshResults !== undefined) appendTerminalResultNotes(sessionId, freshResults.fresh);
       const result = await runAgentTurn(io, deps, state.history, userLine, {
         signal: turn.controller.signal,

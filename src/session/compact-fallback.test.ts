@@ -377,6 +377,19 @@ test("R3-LG-004: a halved tail that is still a noop is skipped, not the end of t
   expectBalanced(r.context);
 });
 
+test("R4-TP-008: a full cut that removes nothing is not the answer though its context fits: the halved tails are tried", () => {
+  // The round guard trips on the usage-anchored estimate (the provider's count plus chars/4 of what was
+  // added), while its `fits` reads chars/4 alone: the guard can ask to compact a history `fits` accepts.
+  const h = oneLongTurn(15, 4_000);
+  const fits = under(16_000);
+  expect(fits(h)).toBe(true);
+  expect(compactInTurn(h).noop).toBe(true);
+  const r = compactWithFallback(h, { keepLastUserTurns: 3, fits });
+  expect(r.noop).toBe(false);
+  expect(r.context).toEqual(compactInTurn(h, { tailTokens: 10_000 }).context);
+  expectBalanced(r.context);
+});
+
 test("R3-LG-004: three near-maximum results in a turn under the tail, on the R2-HL3-001 window, give a request that fits", () => {
   const output = Array.from({ length: 1_400 }, (_, i) => `line ${i} of the run output`).join("\n").slice(0, 16_000);
   const notes = Array.from({ length: 3 }, (_, i) => storedNote({ runId: `run-${i}`, exitCode: i % 2, command: `bun test part-${i}`, output }));

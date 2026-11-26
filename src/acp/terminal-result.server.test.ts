@@ -448,6 +448,8 @@ async function loadedSession(d: Desktop, history: NormalizedMessage[]): Promise<
 
 /** The answer a prompt gets when every result it carries is stored and no turn runs. */
 const noTurnAnswer = (duplicates: readonly string[]) => ({ stopReason: "end_turn", _meta: { keryx: { terminalResults: { stored: 0, duplicates } } } });
+/** Review R4-AR-002: the answer when every result is stored and their turn, never recorded, ran now. */
+const resumedAnswer = (duplicates: readonly string[]) => ({ stopReason: "end_turn", _meta: { keryx: { terminalResults: { stored: 0, duplicates, resumed: true } } } });
 
 describe("R3-LG-005: a resend whose notes never got their turn runs that turn", () => {
   test("a session whose history ends with a stored note and no continuation line: the resend runs one turn on it and stores nothing again; a second resend gets the no-turn answer", async () => {
@@ -461,7 +463,8 @@ describe("R3-LG-005: a resend whose notes never got their turn runs that turn", 
 
     const { reply } = await settle(d.h, promptWithResults(d.h, sessionId, [RESULTS[0]]));
     expect(reply.error).toBeUndefined();
-    expect(reply.result).toEqual(noTurnAnswer(["run-1"]));
+    // Review R4-AR-002: the answer says the turn ran; the no-turn answer below has no `resumed` key.
+    expect(reply.result).toEqual(resumedAnswer(["run-1"]));
     // One model call: the stored note, then keryx's line.
     expect(d.sent).toHaveLength(1);
     const tail = d.sent[0]?.messages.slice(-2) ?? [];
@@ -501,6 +504,27 @@ describe("R3-LG-005: a resend whose notes never got their turn runs that turn", 
     // The floor asks for the mutating call; allowed, it runs and the turn gets a rewind snapshot.
     await settle(d.h, promptWithResults(d.h, sessionId, [RESULTS[0]]));
     expect(existsSync(path.join(d.h.projectDir, "resumed"))).toBe(true);
+    expect((await command(d.h, sessionId, "rewind", "1 history")).text).toContain("/rewind confirm");
+    expect((await command(d.h, sessionId, "rewind", "confirm")).effects).toEqual(["transcript"]);
+    expect(loadContext(d.h.projectDir, sessionId, dataDirOf(d.h)).map((m) => m.content)).toEqual(["first question", "first answer"]);
+  }, TIMEOUT_MS);
+
+  test("R4-LG-003: a resend that mixes a note awaiting its turn with a new result runs one turn on both; rewinding it takes both notes out", async () => {
+    const d = desktop([toolRound("x1", "shell_exec", { command: "touch mixed" }), textRound("fixed")], { storedMode: "trust" });
+    const sessionId = await loadedSession(d, [
+      { role: "user", content: "first question", provenance: "project" },
+      { role: "assistant", content: "first answer", provenance: "model" },
+      storedNoteOf(RESULTS[0], "0123456789ab"),
+    ]);
+    // run-1 is stored and awaits its turn; run-2 is new. A turn ran, as for any prompt with a new result.
+    const { reply } = await settle(d.h, promptWithResults(d.h, sessionId, [RESULTS[0], RESULTS[1]]));
+    expect(reply.result).toEqual({ stopReason: "end_turn" });
+    // One turn on both notes: run-1's stored note, run-2's new one, then keryx's line.
+    const heads = (d.sent[0]?.messages.slice(-3) ?? []).map((m) => m.content.split("\n")[0]);
+    expect(heads).toEqual(["[terminal run run-1 result: exit 1]", "[terminal run run-2 result: still running]", TERMINAL_CONTINUATION_LINE]);
+    expect(storedNotes(d.h, sessionId).map((m) => m.content.split("\n")[0])).toEqual(["[terminal run run-1 result: exit 1]", "[terminal run run-2 result: still running]"]);
+    expect(existsSync(path.join(d.h.projectDir, "mixed"))).toBe(true);
+
     expect((await command(d.h, sessionId, "rewind", "1 history")).text).toContain("/rewind confirm");
     expect((await command(d.h, sessionId, "rewind", "confirm")).effects).toEqual(["transcript"]);
     expect(loadContext(d.h.projectDir, sessionId, dataDirOf(d.h)).map((m) => m.content)).toEqual(["first question", "first answer"]);
@@ -618,6 +642,32 @@ describe("AC6: the follow-up turn runs under the untrusted-content floor", () =>
     const { asks } = await settle(h, promptWithResults(h, sessionId, [RESULTS[0]]), () => ACP_PERMISSION_OPTION_IDS.rejectOnce);
     expect(shellAsks(asks)).toHaveLength(1);
     expect(existsSync(path.join(h.projectDir, "auto-ran"))).toBe(false);
+  }, TIMEOUT_MS);
+
+  test("R4-TP-003: the turn a resend resumes on stored notes (R3-LG-005) asks too; the same session's next plain prompt does not", async () => {
+    const d = desktop(
+      [toolRound("x1", "shell_exec", touch("resumed-ran")), textRound("not run"), toolRound("x2", "shell_exec", touch("plain-ran")), textRound("done")],
+      { storedMode: "trust" },
+    );
+    const sessionId = await loadedSession(d, [
+      { role: "user", content: "run the tests", provenance: "project" },
+      { role: "assistant", content: "```sh\nbun test src/acp\n```", provenance: "model" },
+      storedNoteOf(RESULTS[0], "0123456789ab"),
+    ]);
+    const { reply, asks } = await settle(d.h, promptWithResults(d.h, sessionId, [RESULTS[0]]), () => ACP_PERMISSION_OPTION_IDS.rejectOnce);
+    expect(reply.result).toEqual(resumedAnswer(["run-1"]));
+    const asked = shellAsks(asks);
+    expect(asked).toHaveLength(1);
+    const toolCall = (asked[0]?.params as Record<string, unknown>)["toolCall"] as { _meta?: { keryx?: { reasons?: Record<string, unknown> } } };
+    expect(toolCall._meta?.keryx?.reasons?.["untrustedOrigin"]).toBe(true);
+    const optionIds = (((asked[0]?.params as Record<string, unknown>)["options"] ?? []) as { optionId: string }[]).map((o) => o.optionId);
+    expect(optionIds).not.toContain(ACP_PERMISSION_OPTION_IDS.allowAlways);
+    expect(existsSync(path.join(d.h.projectDir, "resumed-ran"))).toBe(false);
+
+    // Control: the same session in the same mode, a plain operator prompt — no ask.
+    const plain = await driveTurn(d.h, sessionId, "go");
+    expect(shellAsks(plain.asks)).toHaveLength(0);
+    expect(existsSync(path.join(d.h.projectDir, "plain-ran"))).toBe(true);
   }, TIMEOUT_MS);
 });
 
