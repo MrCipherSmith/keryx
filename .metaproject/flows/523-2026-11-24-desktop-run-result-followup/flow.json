@@ -11,7 +11,7 @@
   "title": "Desktop Run button: the agent follows the command it asked the user to run",
   "status": "in-progress",
   "createdAt": "2026-11-24T20:53:10.991Z",
-  "updatedAt": "2026-11-26T12:13:12.272Z",
+  "updatedAt": "2026-11-26T13:09:15.230Z",
   "source": {
     "type": "description",
     "ref": null
@@ -523,6 +523,28 @@
       "budget": {},
       "disposition": "completed",
       "dispositionReason": "docs findings answered (R5-LG-001 owner-dismiss limits, R5-DG-002, R5-PC-001/004/007, R5-AR-001, R5-SC-002; R5-PC-005 confirmed); spec 0.3.2 §3.9.5b/§4.4, plan.md and PR body follow T22/T23; AC5 updated via flow ac update; AC12 check exit 0"
+    },
+    {
+      "id": "T25",
+      "title": "Review round 6 docs: narrow the slot-hold, Telegram, resend and give-up claims to the code; round 6 in the PR body (R6-HL-001 docs half, R6-PC-001/002, R6-LG-001, R6-AR-001, R6-TP-003 docs half)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-26T13:01:55.693Z",
+            "outcome": "started",
+            "detail": "523-T25 round-6 docs (brief dispatch/T25-brief.md)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "round-6 docs findings answered (R6-HL-001/R6-DG-001 docs half and a fourth slot-hold limit, R6-PC-001, R6-PC-002, R6-LG-001/R6-TP-002, R6-AR-001, R6-TP-003 docs half); spec 0.3.2 and PR body; code and test minors to a follow-up issue per the owner; AC12 exit 0"
     }
   ],
   "history": [
@@ -928,6 +950,21 @@
       "at": "2026-11-26T12:13:12.272Z",
       "event": "task-done",
       "detail": "T24: Fix round 5: spec, PR body, AC and flow docs (R5-LG-001 owner dismiss limits, R5-DG-002, R5-PC-001/004/007, R5-AR-001, R5-SC-002)"
+    },
+    {
+      "at": "2026-11-26T13:01:28.270Z",
+      "event": "task-added",
+      "detail": "T25: Review round 6 docs: narrow the slot-hold, Telegram, resend and give-up claims to the code; round 6 in the PR body (R6-HL-001 docs half, R6-PC-001/002, R6-LG-001, R6-AR-001, R6-TP-003 docs half)"
+    },
+    {
+      "at": "2026-11-26T13:01:55.693Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 1) — 523-T25 round-6 docs (brief dispatch/T25-brief.md)"
+    },
+    {
+      "at": "2026-11-26T13:09:15.230Z",
+      "event": "task-done",
+      "detail": "T25: Review round 6 docs: narrow the slot-hold, Telegram, resend and give-up claims to the code; round 6 in the PR body (R6-HL-001 docs half, R6-PC-001/002, R6-LG-001, R6-AR-001, R6-TP-003 docs half)"
     }
   ],
   "origin": {

@@ -862,30 +862,54 @@ compaction and the run-id check below all use.
     the waiting results do not go at once: the arbiter sends them after the
     load's render, so the issue-question resume the load starts
     (`resumeIssueQuestions`, sent inside the load) and a turn sent as soon
-    as the load resolves take the slot first (review R2-RR-001). A load
-    whose caller starts a turn in the session itself does not rely on that
-    timing: it holds the session's free turn slot for that turn from the
-    load's start (`loadSession(id, { holdForCaller: true })`,
-    `SessionRegistry.heldForCaller`; review R5-DG-001). The one such caller
-    is a review started from the board or the Reviews tab (`sendReviewTurn`
-    in `review/prWork.ts`): it loads the PR's newest bound session with the
-    hold, awaits the session's mode switch (`raiseMode`, PR #1329), then
-    sends; a review sent in the `/review` dialog's own session, or into a
-    new session it opens, loads nothing and holds nothing. While the hold is
+    as the load resolves take the slot first (review R2-RR-001). A review
+    started from the board or the Reviews tab (`sendReviewTurn` in
+    `review/prWork.ts`) does not rely on that timing when its own open loads
+    the session: that open loads the PR's newest bound session holding the
+    session's free turn slot for the review's turn from the load's start
+    (`loadSession(id, { holdForCaller: true })`,
+    `SessionRegistry.heldForCaller`; review R5-DG-001), and the review then
+    awaits the session's mode switch (`raiseMode`, PR #1329) and sends. A
+    review start that joins an open of the same PR still in flight from
+    "Open in session", "Create Flow" or "Fix findings" (App's one
+    `subjectOpener` coalesces them) gets that open's session, which that
+    open loaded without the hold: nothing holds the slot during the review's
+    mode switch, and the review relies on the render timing, which the
+    awaited switch can lose (Run-result limits, §4.4; review R6-HL-001). A
+    review sent in the `/review` dialog's own session, or into a new session
+    it opens, loads nothing and holds nothing. The review is not the only
+    caller that loads a session and then starts a turn in it: opening an
+    issue session with its first turn (`openIssueSession` in
+    `useAcpSession.ts`, an issue's prepare-flow turn) loads with no hold and
+    relies on the render timing, which holds there because it sends right
+    after the load resolves, with no awaited step between (review
+    R6-AR-001); holding the slot for it too is a follow-up. While the hold is
     on, the session gets no Run results (`sendTerminalResults` answers null,
     so `terminalRuns.flush` skips it) and no queued prompt (the arbiter
-    passes it over). The hold ends when a turn takes the slot, when the
-    caller gives up without sending (`releaseHold` in `sendReviewTurn`'s
-    `finally`: the open failed, the mode switch threw, the send was
-    refused), on a later load of the session, on its release and on a new
-    connection. When the caller or a later load ends the hold without a
-    turn, the arbiter runs for that session at once. So the review's turn
-    goes before the Run results and queued prompts that waited, and they go
-    when that turn ends, in the arbiter's order below. Any turn that takes
-    the slot ends the hold, not only the caller's: an issue-question resume
-    the load sends, or a prompt the user sends in that session meanwhile,
-    takes the slot, and a review sent while that turn runs is refused as
-    busy. An issue-question
+    passes it over). The hold ends when a turn the window starts takes the
+    slot (`runTurn`), when the review start gives up without sending
+    (`releaseHold` in `sendReviewTurn`'s `finally`, which runs on any
+    throw; the give-up the code has while the hold is on is a refused send,
+    `REVIEW_SESSION_BUSY`: a Telegram turn holds the slot, or the window
+    does not hold the session, as after a failed load), on a later load of
+    the session, on its release and on a new connection. A failed mode
+    switch is not a give-up: `raiseMode` never throws; when keryx refuses
+    the switch it resolves false with a notice, the session keeps its mode,
+    and the review is still sent (review R6-TP-003). An open that resolves
+    no session created none and placed no hold. When the review start or a
+    later load ends the hold without a turn, the arbiter runs for that
+    session at once. So the review's turn goes before the Run results and
+    queued prompts that waited, and they go when that turn ends, in the
+    arbiter's order below. Any turn the window starts in the session ends
+    the hold, not only the review's: an issue-question resume the load
+    sends, or a prompt the user sends in that session meanwhile, takes the
+    slot, and a review sent while that turn runs is refused as busy. A
+    Telegram turn does not end the hold (review R6-PC-002): while it runs,
+    nothing the window sends can take the slot, so a Telegram turn still
+    running when the review is sent, after its mode switch, makes the
+    review start fail as busy (its `finally` then ends the hold), and one
+    that ends before then leaves the hold in place, and the review goes
+    first. An issue-question
     resume refused because a turn or a Telegram turn holds the slot is
     queued at the end of the session's queue (review R3-LG-001); opening an
     issue session fails when the resume was neither sent nor queued. When a
@@ -1329,13 +1353,20 @@ Web view:
   and the client's resend, with no record of those calls (§3.9.5b): a
   mutating call the model makes again asks for approval again under the
   floor, and `/rewind` of the resumed turn cannot undo what the earlier
-  attempt changed (review R4-HL-001). The resend rules need a run named in
-  the resend to have one of the notes that end the history: after keryx
-  stopped with notes at the end of the history, a resend that names none
-  of them runs no turn for them when every entry is a duplicate (only runs
-  whose turn was recorded), and when it carries a new result, or for an
-  operator prompt, `/rewind` of the turn that runs leaves those notes
-  behind (reviews R4-LG-003, R5-LG-002). A turn under the
+  attempt changed (review R4-HL-001). The resend rules look for the notes
+  that end the history only through the resend's duplicates: after keryx
+  stopped with notes at the end of the history, a resend none of whose
+  duplicates has one of them runs no turn for them when every entry is a
+  duplicate (only runs whose turn was recorded), and when it carries a new
+  result, or for an operator prompt, `/rewind` of the turn that runs leaves
+  those notes behind (reviews R4-LG-003, R5-LG-002). A new result of a run
+  that has such a note is not a duplicate and does not reach them either,
+  and the AC9 path sends one (review R6-LG-001): keryx stored a run's "Send
+  output now" snapshot and stopped before that turn ended; the run's
+  process ends with its tab open before the desktop sends again, so the
+  desktop sends the run's exit, which is new (a final result after a
+  stored snapshot, §3.9.5b); a normal turn runs, and `/rewind` of it leaves
+  the snapshot note at the end of the context. A turn under the
   20K-token tail whose request misses the guard even with the smallest
   in-turn tail keeps only that 1,250-token tail of itself (and the in-turn
   summary) on every round, where before fix round 3 it was sent whole; that
@@ -1348,11 +1379,21 @@ Web view:
   (§3.9.5b, review R5-DG-001) is one flag per session, not per caller: when
   two review starts on the same session overlap, the first one's failure
   ends the second one's hold, and the second can then meet waiting Run
-  results as busy. A Telegram turn that starts during the review's mode
-  switch still fails the review start as busy, with the session's mode
-  already raised (unchanged from PR #1329). Opening that same session
-  yourself during the mode switch ends the hold: the waiting Run results go
-  first and the review start reports the busy session.
+  results as busy. A Telegram turn does not end the hold (review
+  R6-PC-002): one that starts during the review's mode switch and still
+  runs when the switch answers fails the review start as busy, with the
+  session's mode already raised (unchanged from PR #1329); one that ends
+  before then leaves the hold in place, and the review goes first. Opening
+  that same session yourself during the mode switch ends the hold: the
+  waiting Run results go first and the review start reports the busy
+  session. A review start that joins an open of the same PR still in
+  flight ("Open in session", "Create Flow" or "Fix findings" pressed just
+  before it, §3.9.5b) places no hold, since that open loaded the session
+  without one: when Run results wait for that session and its mode is
+  below the review's, they can take the slot while the mode switch is on
+  its way, and the review start fails as busy with the mode already raised
+  (review R6-HL-001). Holding the bound session before the open, so that a
+  joined open lands in a held slot, is a follow-up.
 - `/delegate` runs (D-14): `pty_open_run(cwd, argv, title, cols, rows)` opens a
   tab whose process is `argv` itself (no shell), with the same login-shell
   environment and the same SIGHUP-then-SIGKILL close as a shell tab; a program
