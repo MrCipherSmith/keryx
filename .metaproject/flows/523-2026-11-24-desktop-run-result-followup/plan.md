@@ -87,14 +87,24 @@ again; keryx stores a result at most once per run id and kind (a running snapsho
 a final result after a stored snapshot is stored and gets its turn, so one session can hold two
 notes for one run) and answers an all-duplicate prompt with `stored: 0`, which the desktop counts
 as delivered (review R2-HL-002, R3-LG-006). The all-duplicate prompt starts no turn, except when
-its stored notes are the last messages of the history: then it runs the follow-up turn on them,
-storing nothing again (R3-LG-005); a turn keryx's own stop cancelled after it was persisted with
-keryx's continuation line is not re-run. A session reload inside the window (`/compact`,
-`/rewind`, a released session, a keryx restart) keeps a live card only where its note is replayed
-(the newest note's place when keryx replays two for one run) or its run can still change (not
-final, or its tab open; a "not sent" card is final whatever its tab does); any other final card
-is dropped (reviews R2-UX-001, R3-FE-001). A byte cut that keeps no whole line sends the cut line
-and `[the last line is longer than 16 KiB and was not sent]` (R3-UX-001).
+its stored notes are the last messages of the history (their turn was never recorded: keryx
+stopped before it ended, and it may have run in part, R4-HL-001): then it runs the follow-up turn
+on them, a full turn under the floor, storing nothing again, and answers `resumed: true` beside
+`stored: 0` (R3-LG-005, R4-AR-002; the no-turn answer has no `resumed` key, and the desktop reads
+neither). A resend that mixes such duplicates with new results runs one turn on all those notes,
+and `/rewind` of it takes them all out (R4-LG-003). A turn keryx's own stop cancelled after it
+was persisted with keryx's continuation line is not re-run. A snapshot prompt that got no answer
+may have been stored: the exit's result that replaces it is then stored as a second note. A
+session reload inside the window (`/compact`, `/rewind`, a released session, a keryx restart)
+keeps a live card only where its note is replayed (the newest note's place when keryx replays
+two for one run) or its run can still change and is not "not sent" (`keptOnReload`: not final,
+or its tab open); any other final card is dropped (reviews R2-UX-001, R3-FE-001). A card in a
+replayed note's place stays there only when the run next sends a result of that note's kind (a
+duplicate); the exit after a replayed snapshot moves it to the end, and the agent's reply follows
+it (R4-LG-002). The run store forgets a run only when its state is final and its tab is closed
+(`runCanChange`), so a "not sent" run keeps a working Show tab while its tab is open (R4-RR-001).
+A byte cut that keeps no whole line sends the cut line and `[the last line is longer than 16 KiB
+and was not sent]` (R3-UX-001).
 
 ### Tasks (see tasks.md for ids)
 

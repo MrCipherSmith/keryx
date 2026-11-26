@@ -11,12 +11,12 @@
   "title": "Desktop Run button: the agent follows the command it asked the user to run",
   "status": "in-progress",
   "createdAt": "2026-11-24T20:53:10.991Z",
-  "updatedAt": "2026-11-26T06:04:08.417Z",
+  "updatedAt": "2026-11-26T09:54:41.222Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:e7f43d6132a04534044ac2fa090a9c684bab8164206f4c3933e30dc2dc02a23d",
+  "acChecksum": "sha256:56d5123206b011382d58c1ec8d2b9940c2f503aa2c639f313a1f799e6f39b5d4",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -391,6 +391,72 @@
       "budget": {},
       "disposition": "completed",
       "dispositionReason": "spec 0.3.2 3.9.5b/4.3/4.4, plan.md and PR body follow fix round 3 (R3-PC-002 BEGIN pairing, R3-PC-004 operatorCards, R3-PC-003 confirmed fixed); no AC text wrong; AC12 check exit 0"
+    },
+    {
+      "id": "T19",
+      "title": "Fix round 4: keryx server findings (R4-RR-002 diff column in the orphan-END mask, R4-PC-005 number padding, R4-LG-003 rewind after a mixed resend, R4-AR-002 resumed flag, tests R4-TP-003/006/007/008, R3-TP-006)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-26T09:06:59.450Z",
+            "outcome": "started",
+            "detail": "523-T19 fix round 4 server (brief dispatch/T19-brief.md)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "9 server findings plus R3-TP-006 fixed (R4-RR-002 orphan-END mask reads a unified diff's first column, R4-PC-005 number padding of any width, R4-LG-003 rewind after a mixed resend, R4-AR-002 resumed flag on the wire, tests R4-TP-003/006/007/008, R3-TP-006 size-ratio check); red on the unfixed source or under named mutants; focused 184/0, private-key fixture tests 61/0, typecheck 0, eslint 0; result results/T19.json"
+    },
+    {
+      "id": "T20",
+      "title": "Fix round 4: desktop findings (R4-RR-001 Show tab on a not-sent card, R4-LG-002 card pinned at a replayed snapshot, R4-AR-001 arbiter, fixtures R4-TP-001/002/004)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-26T09:07:00.037Z",
+            "outcome": "started",
+            "detail": "523-T20 fix round 4 desktop (brief dispatch/T20-brief.md)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "6 desktop findings fixed in 6ec1133fa (R4-RR-001 not-sent run kept while its tab is open, reload rule split from the store's forget rule; R4-LG-002 card stays at a replayed note only for the same kind, appended cards carry no mark; R4-AR-001 arbiter dead resume branch removed, comment states the order; fixtures R4-TP-001/002/004); red on the unfixed source or under named mutants; focused 9 files 200/0, tsc clean, eslint not configured for apps/desktop; result results/T20.json"
+    },
+    {
+      "id": "T21",
+      "title": "Fix round 4: spec 0.3.2, PR body, AC and flow docs for T19/T20 (R4-PC-001..004, R4-HL-001, R4-DG-003, R4-AR-005, R4-DG-005, Known limits)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-26T09:40:46.905Z",
+            "outcome": "started",
+            "detail": "523-T21 fix round 4 docs (brief dispatch/T21-brief.md)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "8 docs findings answered (R4-PC-001..004, R4-HL-001, R4-DG-003, R4-AR-005, R4-DG-005); spec 0.3.2 §3.9.5b and §4.4, plan.md and PR body follow T19/T20; AC9 and AC5 updated via flow ac update; AC12 check exit 0"
     }
   ],
   "history": [
@@ -691,6 +757,61 @@
       "at": "2026-11-26T06:04:08.417Z",
       "event": "task-done",
       "detail": "T18: Fix round 3: spec 0.3.2, PR body, AC and flow docs for T16/T17 (R3-PC-002, R3-PC-003, R3-PC-004, Known limits)"
+    },
+    {
+      "at": "2026-11-26T09:06:47.689Z",
+      "event": "task-added",
+      "detail": "T19: Fix round 4: keryx server findings (R4-RR-002 diff column in the orphan-END mask, R4-PC-005 number padding, R4-LG-003 rewind after a mixed resend, R4-AR-002 resumed flag, tests R4-TP-003/006/007/008, R3-TP-006)"
+    },
+    {
+      "at": "2026-11-26T09:06:48.271Z",
+      "event": "task-added",
+      "detail": "T20: Fix round 4: desktop findings (R4-RR-001 Show tab on a not-sent card, R4-LG-002 card pinned at a replayed snapshot, R4-AR-001 arbiter, fixtures R4-TP-001/002/004)"
+    },
+    {
+      "at": "2026-11-26T09:06:59.450Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 523-T19 fix round 4 server (brief dispatch/T19-brief.md)"
+    },
+    {
+      "at": "2026-11-26T09:07:00.037Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — 523-T20 fix round 4 desktop (brief dispatch/T20-brief.md)"
+    },
+    {
+      "at": "2026-11-26T09:23:03.183Z",
+      "event": "task-done",
+      "detail": "T20: Fix round 4: desktop findings (R4-RR-001 Show tab on a not-sent card, R4-LG-002 card pinned at a replayed snapshot, R4-AR-001 arbiter, fixtures R4-TP-001/002/004)"
+    },
+    {
+      "at": "2026-11-26T09:23:45.315Z",
+      "event": "task-added",
+      "detail": "T21: Fix round 4: spec 0.3.2, PR body, AC and flow docs for T19/T20 (R4-PC-001..004, R4-HL-001, R4-DG-003, R4-AR-005, R4-DG-005, Known limits)"
+    },
+    {
+      "at": "2026-11-26T09:40:46.350Z",
+      "event": "task-done",
+      "detail": "T19: Fix round 4: keryx server findings (R4-RR-002 diff column in the orphan-END mask, R4-PC-005 number padding, R4-LG-003 rewind after a mixed resend, R4-AR-002 resumed flag, tests R4-TP-003/006/007/008, R3-TP-006)"
+    },
+    {
+      "at": "2026-11-26T09:40:46.905Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1) — 523-T21 fix round 4 docs (brief dispatch/T21-brief.md)"
+    },
+    {
+      "at": "2026-11-26T09:54:24.728Z",
+      "event": "ac-updated",
+      "detail": "AC9: \"\"Send output now\" on a running run delivers one snapshot (`state: \"running\"`, no `exitCode`) and starts a follow-up turn, unless the process ends with its tab open before keryx took the snapshot (while its tail is read, while it waits, or when its prompt comes back busy or \"wait\"): then the exit's result (`state: \"exited\"`) goes instead, once; once keryx took the snapshot, the run's later exit updates the card and is not delivered again. [verify: exec `cd apps/desktop && bun test src/session/terminalRun`]\" -> \"\"Send output now\" on a running run delivers one snapshot (`state: \"running\"`, no `exitCode`) and starts a follow-up turn, unless the process ends with its tab open before keryx accepted the snapshot's prompt (while its tail is read, while it waits, or when its prompt comes back busy or \"wait\"): then the exit's result (`state: \"exited\"`) goes instead, once, and keryx stores it as a note of its own even when a snapshot prompt that got no answer was stored; once keryx accepted the snapshot's prompt, the run's later exit updates the card and is not delivered again. [verify: exec `cd apps/desktop && bun test src/session/terminalRun`]\" (fix round 4 (T21, from T20's T16-Q1 and R4-LG-002 tests): the store goes by keryx's answer to the snapshot's prompt, not by whether keryx stored it; after a \"wait\" keryx may already hold the snapshot, and the exit is still sent and stored as a second note (dedupe by run id and kind, R3-LG-006); the verify command is unchanged)"
+    },
+    {
+      "at": "2026-11-26T09:54:25.310Z",
+      "event": "ac-updated",
+      "detail": "AC5: \"keryx (shell profile) stores each `terminalResults` entry as a labelled untrusted user-role note with `provenance: \"harness\"` — nonce envelope, `redactSensitiveText`, `capResultText` — and stores its own continuation sentence as the turn's user line instead of the client's text; an output that contains a forged closing tag cannot end the envelope, and malformed meta (wrong types, more than 8 entries, `exitCode` missing on `exited`) is refused as JSON-RPC invalid params with nothing stored and no turn run. [verify: exec `bun test src/acp/terminal-result` · sensitive: failure-scenario]\" -> \"keryx (shell profile) stores each new `terminalResults` entry (one whose run already has a stored note of the same kind, a running snapshot or a final result, is skipped) as a labelled untrusted user-role note with `provenance: \"harness\"` — nonce envelope, `redactSensitiveText`, `capResultText` — and stores its own continuation sentence as the turn's user line instead of the client's text; an output that contains a forged closing tag cannot end the envelope, and malformed meta (wrong types, more than 8 entries, `exitCode` missing on `exited`) is refused as JSON-RPC invalid params with nothing stored and no turn run. [verify: exec `bun test src/acp/terminal-result` · sensitive: failure-scenario]\" (fix round 4 (T21): \"stores each entry\" ignored the at-most-once dedupe added in fix rounds 1-3 (R2-HL-002, R3-LG-006: by run id and kind); the criterion now says a duplicate entry is skipped; the verify command and sensitivity are unchanged)"
+    },
+    {
+      "at": "2026-11-26T09:54:41.222Z",
+      "event": "task-done",
+      "detail": "T21: Fix round 4: spec 0.3.2, PR body, AC and flow docs for T19/T20 (R4-PC-001..004, R4-HL-001, R4-DG-003, R4-AR-005, R4-DG-005, Known limits)"
     }
   ],
   "origin": {
