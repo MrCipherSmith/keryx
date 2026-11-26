@@ -14,10 +14,14 @@ body {
 }
 /* Content people read or copy stays selectable. */
 .md, .user-msg, .out-pre, .code-pre, pre, code, input, textarea, .criterion-text, .journal-detail, .toast-detail, .exit-tail,
-.sheet-title, .dialog-body p, .ask-question, .flow-error, .info-val, .info-line .truncate {
+.sheet-title, .dialog-body p, .ask-question, .flow-error, .info-val, .info-line .truncate,
+/* Details and lists of issues, pull requests and flows: ids, titles, people, dates. */
+dd, td, .sheet-head h2, .sheet-head .flow-id, .review-detail-message, .review-context strong, .issue-detail-scroll p {
   user-select: text;
   -webkit-user-select: text;
 }
+/* A control inside such a cell keeps its click: dragging over it selects nothing. */
+td button, td select, dd button, dd select { user-select: none; -webkit-user-select: none; }
 h1, h2, h3 { margin: 0; }
 code, pre, kbd { font-family: var(--mono); }
 button { font: inherit; }

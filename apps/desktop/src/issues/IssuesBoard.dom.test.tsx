@@ -399,6 +399,13 @@ test("AC11 the Flow stage filter is gone and a stored stage preference is ignore
   expect(host.textContent).not.toContain("All stages");
 });
 
+test("issue ids, titles, people and dates in the detail panel and the list are on the selectable allowlist", () => {
+  const css = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+  const allow = css.slice(css.indexOf("/* Content people read or copy stays selectable. */"), css.indexOf("user-select: text"));
+  for (const selector of ["dd", "td", ".sheet-head h2", ".sheet-head .flow-id", ".review-detail-message", ".review-context strong"])
+    expect(allow).toContain(selector);
+});
+
 test("My issues shows the issues assigned to the viewer, and a second press shows all again", async () => {
   await render(async (_login, action) => {
     if (action === "list") return page([other(5, { assignees: ["Fixture"] }), other(6, { assignees: ["lee"] }), other(7, { assignees: [] })]);
