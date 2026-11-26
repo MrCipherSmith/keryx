@@ -70,9 +70,48 @@ export function mergeRows(previous: Row[], next: Row[]): Row[] {
   return [...rows.values()];
 }
 
+/** The assignee filter's value for an issue nobody is assigned to. */
+export const UNASSIGNED = "Unassigned";
+
+/** The values of a comma-separated filter, as typed. */
+export function filterChoices(filter: string): string[] {
+  return filter.split(",").map(value => value.trim()).filter(Boolean);
+}
+
 function includesOption(filter: string, values: string[]): boolean {
-  const choices = filter.toLowerCase().split(",").map(value => value.trim()).filter(Boolean);
+  const choices = filterChoices(filter.toLowerCase());
   return !choices.length || values.some(value => choices.includes(value.toLowerCase()));
+}
+
+/** Adds a value to a comma-separated filter, or removes it when it is there (logins compare without case). */
+export function toggleChoice(filter: string, value: string): string {
+  const choices = filterChoices(filter);
+  const rest = choices.filter(choice => choice.toLowerCase() !== value.toLowerCase());
+  return (rest.length === choices.length ? [...choices, value] : rest).join(", ");
+}
+
+function logins(values: string[]): string[] {
+  const seen = new Map<string, string>();
+  for (const value of values) if (value && !seen.has(value.toLowerCase())) seen.set(value.toLowerCase(), value);
+  return [...seen.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+
+/**
+ * The people the Author and Assignee filters offer: everyone on the loaded issues, the viewer, and whoever the
+ * filter already names. GitHub is not asked for a member list, so a person only on a page not loaded yet is absent.
+ */
+export function issuePeople(rows: Row[], filters: Filters, viewer: string): { authors: string[]; assignees: string[] } {
+  return {
+    authors: logins([viewer, ...filterChoices(filters.author), ...rows.map(row => row.issue.author)]),
+    assignees: logins([viewer, ...filterChoices(filters.assignee), ...rows.flatMap(row => row.issue.assignees)]
+      .filter(value => value.toLowerCase() !== UNASSIGNED.toLowerCase())),
+  };
+}
+
+/** True when the assignee filter is exactly the viewer: the "My issues" quick filter is on. */
+export function assignedToViewerOnly(filters: Filters, viewer: string): boolean {
+  const choices = filterChoices(filters.assignee);
+  return choices.length === 1 && choices[0]!.toLowerCase() === viewer.toLowerCase();
 }
 
 export function visibleRows(rows: Row[], f: Filters): Row[] {
@@ -85,7 +124,7 @@ export function visibleRows(rows: Row[], f: Filters): Row[] {
     return searchMatches && (f.state === "all" || issue.state === f.state)
       && (!f.since || issue.updatedAt.slice(0, 10) >= f.since)
       && includesOption(f.repository, [repoName(issue)]) && includesOption(f.author, [issue.author])
-      && includesOption(f.label, issue.labels) && includesOption(f.assignee, issue.assignees.length ? issue.assignees : ["Unassigned"])
+      && includesOption(f.label, issue.labels) && includesOption(f.assignee, issue.assignees.length ? issue.assignees : [UNASSIGNED])
       && (!f.status || (optionId ?? "unassigned") === f.status);
   }).sort((a, b) => {
     const dates = a.issue.updatedAt.localeCompare(b.issue.updatedAt);
