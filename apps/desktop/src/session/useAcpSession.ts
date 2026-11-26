@@ -832,6 +832,9 @@ export function useAcpSession(cwd: string) {
       const l = live.current;
       const client = l.client;
       if (!client || !l.reg.held.has(sessionId)) return false;
+      // A session running a turn gets no review turn (the send is refused as busy), so its mode is left alone and the
+      // caller is not held behind a mode change while that turn runs.
+      if (l.reg.turns.has(sessionId) || l.reg.telegramTurns.has(sessionId)) return false;
       const current = winRef.current.convs[sessionId]?.modes?.currentModeId;
       if (current !== undefined && modeRank(current) >= modeRank(modeId)) return true;
       try {
