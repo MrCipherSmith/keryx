@@ -957,8 +957,14 @@ export interface RunAgentTurnOptions {
    * Flow 274: `"bus-message"` marks a turn the shell began because the
    * busInbox holds a wake-eligible peer message — the same "no operator line,
    * the input IS the notification" shape as `"task-notification"`.
+   *
+   * Flow 523 (review AR2-001): `"terminal-results"` marks a turn keryx started because a command the
+   * operator ran from Keryx Desktop's Run button ended (the ACP host stored its result notes first).
+   * `userLine` is keryx's own continuation sentence, not the operator's: it is stored as an injected
+   * harness line marked `terminalContinuation`, `UserPromptSubmit` does not fire for it, and the turn
+   * holds untrusted content from its start.
    */
-  origin?: "operator" | "task-notification" | "bus-message" | "agent-message";
+  origin?: "operator" | "task-notification" | "bus-message" | "agent-message" | "terminal-results";
   /**
    * The operator's prompt carries content the client marked untrusted (an ACP resource block with
    * `_meta.keryx.untrusted`, such as page elements picked in Keryx Desktop's browser): the turn holds
@@ -1932,7 +1938,23 @@ export interface AgentInstructionContext {
    * repositories' READMEs, so it sits after the trusted orientation, on its own.
    */
   linkedProjects?: string | undefined;
+  /**
+   * Flow 523: the ACP client returns Run results (a run-tracking Keryx Desktop advertised
+   * `initialize.clientCapabilities._meta.keryx.terminalResults: true`), so a reply's single-command shell
+   * block gets a Run button there, and the run's result comes back as a terminal-result note that starts
+   * the next turn by itself (`src/acp/terminal-result.ts`). The host never sets it on a Telegram turn,
+   * whose operator has no Run button (review F-001/RR-001). Absent or false, the instruction is
+   * byte-identical to what it was.
+   */
+  clientReturnsRunResults?: boolean;
 }
+
+/** Flow 523: the bullet a session whose client returns Run results gets (see `AgentInstructionContext.clientReturnsRunResults`). */
+const CLIENT_RUNS_TERMINAL_RULE =
+  "- In the Keryx desktop, a shell code block in your reply that holds exactly one command gets a Run button. " +
+  "When the user runs it, the command's exit code and output come back to you as an untrusted terminal-result note " +
+  "and your next turn starts by itself. So when you suggest a command for the user to run, put one command per block " +
+  "and end your turn; do not ask the user to paste the output.\n";
 
 /**
  * The system-prompt guidance for a session that joined the agent bus,
@@ -2068,6 +2090,7 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "does, then give the command alone in a fenced ```bash block, one command per block. The reason comes first, in the " +
     "same reply as the command; a client that can run it shows a Run button on that block. Never leave such a command " +
     "inline in a sentence, and never give it without the reason.\n" +
+    (ctx.clientReturnsRunResults === true ? CLIENT_RUNS_TERMINAL_RULE : "") +
     "- Tool-call budget: shell_exec, file-mutating shell, workspace_create/workspace_propose, and spawn_subagent " +
     "all share ONE small per-turn pool (distinct non-read actions), separate from the much larger read-tool pool. " +
     (hasGraph
@@ -3212,10 +3235,16 @@ async function runAgentTurnCore(
   } else if (options.origin === "agent-message") {
     history.push({ role: "user", content: scrub(userLine), provenance: "tool", ts: now() });
     io.onHistoryChange?.("user");
+  } else if (options.origin === "terminal-results") {
+    // Flow 523 review AR2-001: keryx wrote this line (the Run results are the harness notes before
+    // it), so it is not an operator line: no `UserPromptSubmit` (rule below), never counted as an
+    // operator turn, and replayed by its marker rather than its text.
+    history.push({ role: "user", content: userLine, provenance: "harness", injected: true, terminalContinuation: true, ts: now() });
+    io.onHistoryChange?.("user");
   } else {
     // Flow 306 (W6 T9): `UserPromptSubmit` fires ONLY for a genuine operator
-    // line — never for the synthesized task-notification/bus-message
-    // "continuation" turns above (there is no real prompt to submit) — and is
+    // line — never for the synthesized task-notification/bus-message/
+    // terminal-results "continuation" turns above (there is no real prompt to submit) — and is
     // skipped for an empty line (nothing to submit). A hook `deny` stops the
     // turn before it reaches the model, reported through `io.onSystem` the
     // same way other turn refusals are surfaced; `additionalContext` is
@@ -3488,7 +3517,9 @@ async function runAgentTurnCore(
   // effect an injected instruction asked for, so it stays usable.
   // Flow 486: so does a report from a process that is not a keryx shell (`keryx report`), at any of the three bus drains
   // (the turn-start drain above, the text-only drain and the round boundary below). A keryx peer's message does not.
-  let untrustedContentSeen = options.origin === "agent-message" || options.untrustedPrompt === true || externalReportAtTurnStart;
+  // Flow 523: a turn a Run's result started reads that untrusted output from its first round.
+  let untrustedContentSeen =
+    options.origin === "agent-message" || options.origin === "terminal-results" || options.untrustedPrompt === true || externalReportAtTurnStart;
   // Flow 425: the review arbiter runs one tier below this model. Only a turn that can ask the operator reports it,
   // so a reviewer subagent on a lighter model does not move the arbiter's tier.
   if (deps.tools.some((tool) => tool.definition.name === "ask_user")) {

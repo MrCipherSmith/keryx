@@ -151,6 +151,8 @@ pub fn run() {
             review::review_rules,
             panels::pty_open,
             panels::pty_open_run,
+            panels::pty_open_command,
+            panels::pty_tail,
             panels::pty_attach,
             panels::pty_write,
             panels::pty_resize,

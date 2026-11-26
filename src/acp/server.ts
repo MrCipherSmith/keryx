@@ -165,6 +165,19 @@ import { settleSessionReviews } from "../review/session/service";
 import { recordSessionReviewRequest, readVisibleSessionReviews, sessionReviewSummaries, sessionReviewsTool } from "./session-reviews";
 import { clientRunsTerminal, createSessionExternalRuns, type DelegateTerminalLaunch, type DelegateTurnResult, type SessionExternalRuns } from "./shell-delegate";
 import { capResultText, delegateResultNote, parseDelegateNote } from "./delegate-turn-hook";
+import {
+  clientTakesTerminalResults,
+  isStoredTerminalResult,
+  parseTerminalResultNote,
+  parseTerminalResults,
+  storedTerminalRuns,
+  TERMINAL_RESULTS_PROMPT,
+  trailingNotesAwaitingTurn,
+  terminalResultNote,
+  terminalResultsMeta,
+  terminalResultText,
+  type TerminalResult,
+} from "./terminal-result";
 import type { RunExternalFn, CreateRunExternalOptions } from "../harness/run-external-factory";
 import type { SlateSessionRef } from "../session/slate-lifecycle";
 import { busyRefusalText, findShellCommand, shellAvailableCommands, viewNotServedText } from "./shell-commands";
@@ -2322,17 +2335,64 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   }
 
   function appendDelegateNotes(sessionId: string, notes: readonly string[]): void {
+    appendInjectedNotes(sessionId, notes, KERYX_ACP_EXTENSION_METHODS.delegateResult, "delegate result");
+  }
+
+  /**
+   * Puts harness-written notes in a session's history as user-role entries (`provenance: "harness"`,
+   * `injected: true`) and persists them at once. `method` names the caller in a model-binding refusal,
+   * `what` the notes in a persist failure, which is logged: the notes stay in the live history.
+   */
+  function appendInjectedNotes(sessionId: string, notes: readonly string[], method: string, what: string): void {
     const state = registry.get(sessionId);
     if (state === undefined || notes.length === 0) return;
     for (const note of notes) state.history.push({ role: "user", content: note, provenance: "harness", injected: true });
     syncAcpArchive(state.archive, state.history);
     if (!registry.canPersist(sessionId)) return;
     try {
-      const { providerId, modelId } = sessionModel(sessionId, KERYX_ACP_EXTENSION_METHODS.delegateResult).binding;
+      const { providerId, modelId } = sessionModel(sessionId, method).binding;
       registry.updateHandle(sessionId, persistHistory(state.handle, state.history, { provider: providerId, model: modelId, archive: state.archive.messages }));
     } catch (cause) {
-      options.logError(`acp: delegate result not persisted: ${cause instanceof Error ? cause.message : String(cause)}`);
+      options.logError(`acp: ${what} not persisted: ${cause instanceof Error ? cause.message : String(cause)}`);
     }
+  }
+
+  /**
+   * `session/prompt`'s `_meta.keryx.terminalResults` (shell profile, flow 523): the results of commands
+   * the operator ran from the client's Run button, validated. `undefined` when the prompt carries none.
+   * Refused as invalid params when malformed, or when combined with an issue launch or a question
+   * resume (a terminal-results prompt is neither), before anything is stored or a turn starts.
+   */
+  function terminalResultsOf(params: Record<string, unknown>): readonly TerminalResult[] | undefined {
+    const method = ACP_AGENT_METHODS.sessionPrompt;
+    const raw = terminalResultsMeta(params);
+    if (raw === undefined) return undefined;
+    const parsed = parseTerminalResults(raw);
+    if (!parsed.ok) refuse(invalidParams(`${method}: _meta.keryx.${parsed.reason}`, { field: "_meta.keryx.terminalResults" }));
+    const keryx = (params["_meta"] as { keryx?: { issueLaunchId?: unknown; resumeIssueQuestions?: unknown } } | undefined)?.keryx;
+    if (keryx?.issueLaunchId !== undefined || keryx?.resumeIssueQuestions !== undefined) {
+      refuse(invalidParams(`${method}: _meta.keryx.terminalResults cannot be combined with issueLaunchId or resumeIssueQuestions`, { field: "_meta.keryx.terminalResults" }));
+    }
+    return parsed.results;
+  }
+
+  /**
+   * `results` split by whether the session already stored them (reviews R2-HL-002, R3-LG-006): by run id
+   * and kind, read from the notes in its live history and its archive, which keeps the notes a compaction
+   * took out of the history. A final result after a stored running snapshot is fresh.
+   */
+  function withoutStoredRuns(state: AcpSessionState, results: readonly TerminalResult[]): { fresh: readonly TerminalResult[]; duplicates: string[] } {
+    const stored = storedTerminalRuns(state.archive.messages, state.history);
+    return {
+      fresh: results.filter((result) => !isStoredTerminalResult(stored, result)),
+      duplicates: results.filter((result) => isStoredTerminalResult(stored, result)).map((result) => result.runId),
+    };
+  }
+
+  /** One labelled untrusted note per terminal result, each with its own nonce, stored before the turn they start. */
+  function appendTerminalResultNotes(sessionId: string, results: readonly TerminalResult[]): void {
+    const notes = results.map((result) => terminalResultNote(result, randomBytes(6).toString("hex")));
+    appendInjectedNotes(sessionId, notes, ACP_AGENT_METHODS.sessionPrompt, "terminal result");
   }
 
   /** `_keryx/delegate_exited` (shell profile): the run's terminal process ended; its hook file is read once more and removed. */
@@ -2520,6 +2580,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         received: promptField,
       }));
     }
+    // Flow 523: the result of a Run in the client's terminal. Validated before anything else, so a
+    // malformed one is refused with nothing stored and no turn; the editor profile does not serve it.
+    const terminalResults = shellProfile ? terminalResultsOf(obj) : undefined;
     const state = registry.get(sessionId);
     if (state === undefined) {
       refuse({
@@ -2527,6 +2590,16 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         message: `Unknown ACP session: ${sessionId}`,
         data: { sessionId },
       });
+    }
+    // Owner 2026-11-25 (review F-001/RR-001): only a run-tracking client sends results. `terminal: true`
+    // alone is /delegate's capability, which desktops released before flow 523 send as well.
+    if (terminalResults !== undefined && !clientTakesTerminalResults(state.clientCapabilities)) {
+      refuse(
+        invalidParams(
+          `${ACP_AGENT_METHODS.sessionPrompt}: _meta.keryx.terminalResults is accepted only from a client that advertised _meta.keryx.terminalResults in its initialize client capabilities`,
+          { field: "_meta.keryx.terminalResults" },
+        ),
+      );
     }
     // Before anything mutates `state.history` (see `refuseIfBusy`). Safe to
     // check synchronously here: `dispatch` starts every handler in wire order
@@ -2538,6 +2611,23 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     refuseIfStopping(ACP_AGENT_METHODS.sessionPrompt);
     requireProvider(ACP_AGENT_METHODS.sessionPrompt);
     touch(sessionId);
+    // Review R2-HL-002: a result is stored at most once per run id and kind (R3-LG-006: a final result
+    // after a stored running snapshot is new). The desktop re-sends results whose prompt was lost with its
+    // connection, so an entry the session already stored is skipped. A prompt holding nothing else stores
+    // nothing and is answered as delivered, with the duplicates named. It starts no turn, unless the
+    // stored notes that end the history hold a note for one of them or more (R3-LG-005, R5-LG-002: a
+    // duplicate whose note sits further up, its turn recorded, does not hide them): keryx stopped before
+    // the turn those notes started was persisted, so that turn runs now, on the stored notes, and its
+    // answer says so (`resumed: true`, R4-AR-002). Whenever such notes end the history, the turn that runs
+    // answers them too, with new results beside them or not (R4-LG-003): `resumedNotes` counts them for
+    // `/rewind` below.
+    const freshResults = terminalResults === undefined ? undefined : withoutStoredRuns(state, terminalResults);
+    const allStored = freshResults !== undefined && freshResults.fresh.length === 0;
+    const resumedNotes = freshResults === undefined ? 0 : trailingNotesAwaitingTurn(state.history, freshResults.duplicates);
+    if (allStored && resumedNotes === 0) {
+      return { stopReason: "end_turn", _meta: { keryx: { terminalResults: { stored: 0, duplicates: freshResults.duplicates } } } };
+    }
+    const storedAnswer = allStored ? { _meta: { keryx: { terminalResults: { stored: 0, duplicates: freshResults.duplicates, resumed: true } } } } : {};
     // Read ONCE, here: this turn runs with this model to its end, whatever a
     // `session/set_config_option` arriving meanwhile does (flow 288, AC6).
     if ((obj["_meta"] as { keryx?: { resumeIssueQuestions?: unknown } } | undefined)?.keryx?.resumeIssueQuestions === true)
@@ -2547,8 +2637,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     // A slash command (flow 288, AC4) is keryx's to answer; it never reaches
     // the model and adds nothing to the transcript. It holds the session's
     // turn slot while it runs, like a turn: `/model` builds a provider, and a
-    // prompt slipping in beside it would race the switch.
-    const command = parseAcpSlashPrompt(promptField);
+    // prompt slipping in beside it would race the switch. A terminal-results prompt's text is the
+    // client's display text, never read: it is not a command either.
+    const command = terminalResults === undefined ? parseAcpSlashPrompt(promptField) : undefined;
     if (command !== undefined) {
       const slot: AcpActiveTurn = { controller: new AbortController(), cancelled: false, permissionRequestIds: new Set() };
       activeTurns.set(sessionId, slot);
@@ -2572,7 +2663,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     const launchId = (obj["_meta"] as { keryx?: { issueLaunchId?: unknown } } | undefined)?.keryx?.issueLaunchId;
     const bound = shellProfile ? issueContextForSession(state.handle.dir, options.dataDir) : undefined;
     const includeSource = bound && (launchId !== undefined || !state.history.some(message => message.role === "user" && !message.injected));
-    const rendered = renderAcpPrompt(includeSource ? [...promptField,
+    // A terminal-results turn's user line is keryx's own continuation sentence, untrusted from its start
+    // (the existing untrusted-prompt floor below), with no operator text in it.
+    const rendered = terminalResults !== undefined ? TERMINAL_RESULTS_PROMPT : renderAcpPrompt(includeSource ? [...promptField,
       { type: "resource", _meta: { keryx: { untrusted: true } },
         resource: { uri: bound.launch.issue.url, text: `GitHub issue (updated ${bound.updatedAt})\n${bound.body}` } }] : promptField);
     const userLine = rendered.text;
@@ -2594,6 +2687,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         modelId,
         toolNames,
         linkedProjects: await loadLinkedProjectsPromptBlock(state.resolvedRoot),
+        // Flow 523: the desktop's Run button and the result note that comes back from it — for a client
+        // that returns Run results, and never on a Telegram turn, whose operator has no Run button.
+        ...(shellProfile && telegram === undefined && clientTakesTerminalResults(state.clientCapabilities) ? { clientReturnsRunResults: true } : {}),
       }),
       controlNonce: controlNonceFor(sessionId),
       idSeq,
@@ -2760,15 +2856,27 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         // `/rewind`: a snapshot of the files before each mutating call, and the turn's place in the archive.
         const rewind = rewindFor(sessionId);
         io.beforeMutation = () => rewind.recorder.beforeMutation();
-        rewind.recorder.beginTurn({ archiveIndex: archive.messages.length, prompt: userLine });
+        // A turn that answers stored notes awaiting their turn (R3-LG-005; R4-LG-003: with new results too;
+        // R5-LG-002: beside a duplicate whose turn was recorded) starts at those notes, so rewinding it
+        // takes them out with the new ones.
+        const resumedInArchive = resumedNotes > 0 && freshResults !== undefined ? Math.min(resumedNotes, trailingNotesAwaitingTurn(archive.messages, freshResults.duplicates)) : 0;
+        rewind.recorder.beginTurn({ archiveIndex: archive.messages.length - resumedInArchive, prompt: userLine });
       }
       // After a `/goal` the session keeps its slate, as the shells do; the goal's own turn skips the
       // close-phrase check once, since `/goal` has just opened the slate it would archive.
       const slate = sessionSlates.get(sessionId);
       const goalTurn = slate !== undefined && slate.goalPrompt !== undefined && slate.goalPrompt === userLine;
       if (slate !== undefined) delete slate.goalPrompt;
+      // Flow 523: the results go in right before the continuation line the turn pushes, inside the
+      // turn `/rewind` recorded above, so rewinding this turn takes them out with it. The turn is
+      // keryx's (`origin: "terminal-results"`, review AR2-001): its line is not the operator's, so no
+      // `UserPromptSubmit` hook sees or refuses it, and nothing can leave these notes without their turn.
+      // Only the new results are stored: a resumed turn's notes (R3-LG-005, R4-LG-003) are the stored ones
+      // before them.
+      if (freshResults !== undefined) appendTerminalResultNotes(sessionId, freshResults.fresh);
       const result = await runAgentTurn(io, deps, state.history, userLine, {
         signal: turn.controller.signal,
+        ...(terminalResults !== undefined ? { origin: "terminal-results" as const } : {}),
         ...(rendered.untrusted ? { untrustedPrompt: true, operatorText: rendered.trustedText } : {}),
         ...(telegram === undefined ? {} : { source: "telegram", automaticReview: false }),
         ...(slate !== undefined ? { slateSession: slate.ref, ...(goalTurn ? { skipCloseTrigger: true } : {}) } : {}),
@@ -2805,7 +2913,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // `finishReasonToStopReason` alone would read as `end_turn`. (An abort
       // during a `submit_result` wrap-up returns `"interrupted"`, which already
       // maps to `cancelled`.)
-      return { stopReason: turn.cancelled ? "cancelled" : finishReasonToStopReason(result.finishReason) };
+      return { stopReason: turn.cancelled ? "cancelled" : finishReasonToStopReason(result.finishReason), ...storedAnswer };
     } finally {
       if (registry.canPersist(sessionId)) finishIssueActivity?.();
       // Released on EVERY exit path — a normal finish, a thrown error, and a
@@ -3061,6 +3169,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
    * The role mapping F-9 asks every implementation to decide explicitly:
    *
    *   `user`      -> `user_message_chunk` (a delegate note: its text + `_meta.keryx.delegateResult`;
+   *                  a terminal-result note: `_meta.keryx.terminalResult`, keryx's continuation line
+   *                  (the message marked `terminalContinuation`) `_meta.keryx.terminalContinuation`;
    *                  skipped when the content is empty —
    *                  mirrors `AgentIO.write`/`onSystem`'s own "nothing to
    *                  say" no-op below).
@@ -3097,6 +3207,18 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       }
       if (message.role === "user") {
         if (message.content.length === 0) continue;
+        // Flow 523 review AR2-001: keryx's continuation line is injected (not the operator's), but it
+        // starts the turn a Run's result began, as the desktop counts it live. Read by its marker,
+        // never its text: the operator may type the same sentence, and the wording may change.
+        if (message.terminalContinuation === true) {
+          parentTurn++;
+          sendUpdate(sessionId, {
+            sessionUpdate: "user_message_chunk",
+            content: textBlock(message.content),
+            _meta: { keryx: { terminalContinuation: true, parentTurn, ...(message.ts ? { recordedAt: message.ts } : {}) } },
+          });
+          continue;
+        }
         // A delegate note replays as what it is: the result text with the run it came from in `_meta`,
         // never the envelope (the model-facing history keeps it). A client that does not know the
         // meta shows the plain text.
@@ -3108,6 +3230,17 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
             sessionUpdate: "user_message_chunk",
             content: textBlock(note.text),
             _meta: { keryx: { delegateResult: note, parentTurn, ...(message.ts ? { recordedAt: message.ts } : {}) } },
+          });
+          continue;
+        }
+        // Flow 523: a terminal-result note replays as its parsed fields (the desktop draws a run card),
+        // never the envelope. Only an injected note: an operator line of the same shape is their text.
+        const terminal = injected ? parseTerminalResultNote(message.content) : undefined;
+        if (terminal !== undefined) {
+          sendUpdate(sessionId, {
+            sessionUpdate: "user_message_chunk",
+            content: textBlock(terminalResultText(terminal)),
+            _meta: { keryx: { terminalResult: terminal, parentTurn, ...(message.ts ? { recordedAt: message.ts } : {}) } },
           });
           continue;
         }

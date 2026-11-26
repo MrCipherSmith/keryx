@@ -26,6 +26,13 @@ export class SessionRegistry<Turn = unknown> {
   readonly telegramTurns = new Map<string, TelegramTurn>();
   /** `_keryx/command` requests in flight per session: keryx may ask a question while one runs. */
   readonly commands = new Map<string, number>();
+  /**
+   * Sessions whose free turn slot a load's caller holds for a turn it starts itself (a review, after its mode
+   * switch): the window sends them no Run results and no queued prompt until a turn takes the slot or the caller
+   * gives up (useAcpSession `holdForCaller` / `releaseHold`). A later load of the session, its release and a new
+   * connection end the hold too.
+   */
+  readonly heldForCaller = new Set<string>();
   /** session/new requests in flight. */
   creating = 0;
   /** The session on screen. Survives a reset, so a restart can reload it. */
@@ -44,6 +51,7 @@ export class SessionRegistry<Turn = unknown> {
     this.turns.clear();
     this.telegramTurns.clear();
     this.commands.clear();
+    this.heldForCaller.clear();
     this.creating = 0;
     this.loadIntents.clear();
     this.orphans = [];
@@ -176,6 +184,7 @@ export class SessionRegistry<Turn = unknown> {
     this.turns.delete(sessionId);
     this.telegramTurns.delete(sessionId);
     this.commands.delete(sessionId);
+    this.heldForCaller.delete(sessionId);
     return this.held.delete(sessionId);
   }
 }

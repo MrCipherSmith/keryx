@@ -101,6 +101,16 @@ describe("switching", () => {
     expect(r.shown).toBe("a");
     expect(r.planSwitch("a")).toBe("load");
   });
+
+  test("R5-DG-001: a slot a load's caller holds is not held past the session's release or a new connection", () => {
+    const r = holding();
+    r.heldForCaller.add("a");
+    r.heldForCaller.add("b");
+    r.release("b");
+    expect([...r.heldForCaller]).toEqual(["a"]);
+    r.reset();
+    expect(r.heldForCaller.size).toBe(0);
+  });
 });
 
 describe("routing updates", () => {

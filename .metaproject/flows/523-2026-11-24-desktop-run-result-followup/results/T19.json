@@ -1,0 +1,156 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "523",
+  "dispatch_id": "523-T19",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Fix round 4, keryx server (src/**): all 9 findings of fix4-server.json and the R3-TP-006 remainder are handled as the brief decided. Two are code fixes in secrets.ts (a diff line's first column, number padding), two are code fixes in server.ts (mixed-resend /rewind, resumed: true on the wire), and the rest are tests that a named mutant turns red. Focused tests: 184 pass, 0 fail; typecheck and eslint clean. Concerns are the limits left open, listed for the docs lane.",
+  "summary_markdown": "## Per finding\n- **R4-RR-002 (+R4-DG-004, R4-LG-004)**: fixed (`secrets.ts`). Red then green: 4 new listing rows (a replaced key under a context END, a key whose last lines changed under its hunk header, an added PGP key with `+=AbCd`, and the same with an armor header and its `+` blank line) were red on the unfixed code and are green now. The removed-key (all `-`) and added-key (all `+`) rows stay green. A new test checks that a `@@` line, `diff --git`/`+++`/`---` lines, a line of code, a non-diff line and an over-indented diff line directly above all stay unmasked. A new linear-time test covers the diff path.\n- **R4-PC-005**: fixed (`prefixShape`). Red then green: the `cat -n` and `nl -s ' '` rows across 99999 -> 100000 were red and are green now. The 9 -> 10 row stays green. Three new negatives check that other text around the number still ends the mask.\n- **R4-TP-006**: test gap closed (double-encoded JSON with `\\\\u002B`, the inner string opening with `\\\"`). It is red under W2-M-01 (no `\\uXXXX` parity check) and under W2-M-02 (no `\\\"` stop).\n- **R4-TP-007**: test gaps closed. The CRLF tail test (unprefixed and grep -n) is red under W2-M-13 (no `trimEnd` in `keyLineOf`). The cat -n encrypted key with a numbered blank line is red under W2-M-17 (blankShape untrimmed) and also under W2-M-13. The `Comment:` behind another prefix test is red under W2-M-14 (the header's prefix is not checked).\n- **R4-TP-008**: test gap closed (`compact-fallback.test.ts`). It is red under W2-M-20 (`!full.noop &&` removed).\n- **R4-TP-003**: test gap closed (the AC6 block). It is red under the finding's mutant: `origin`/`untrustedPrompt` set only when fresh notes were stored. With that mutant no ask is raised, while the old trust-mode rewind test stays green. No code change was needed.\n- **R4-LG-003**: fixed (`server.ts`). Red then green: new server test, mixed resend [run-1 stored and awaiting its turn, run-2 new]. One turn runs on both notes, and `/rewind` leaves `[first question, first answer]`. On the unfixed code the run-1 note was left at the end.\n- **R4-AR-002**: fixed (`server.ts`). Red then green: the R3-LG-005 resume test now expects `resumedAnswer` (with `resumed: true`) and was red on the unfixed code. The no-turn answers (`noTurnAnswer`, no `resumed` key) are unchanged and green.\n- **R3-TP-006 (partial)**: fixed. secrets.test.ts 'many orphan END lines before a header' now uses the file's size-ratio convention (2,000 vs 8,000 ENDs, best of five, ratio 8, 10 ms floor) in place of `< 250` ms. The bounds that predate the PR are left as they were.\n\n## Behavior changes (one rule each, for the spec and PR body)\n1. (model-facing, every redaction consumer; user_visible: what reaches the provider, the stored session and the replay) When an orphan END line is a unified-diff line (its first character is ` `, `+` or `-` and the END marker follows it directly), every line above whose first character is one of those three is read with that character as its whole prefix, whichever of the three it is, and the rest as key body, a PEM header field or a blank line. The mask stops at the first line that starts with anything else. needs_operator: no. alternatives: narrow the spec's git show / git log -p claim instead (the brief chose the code fix).\n2. (same consumers) The spaces that pad a number on the left are no part of a listing's prefix, whatever their width, none included, so a `cat -n` or `nl` listing that crosses line 100000 is masked whole. Any other text around the number must still match. needs_operator: no.\n3. (wire, unreleased) When an all-duplicate resend runs the follow-up turn on stored notes that never got their turn (R3-LG-005), the answer is `_meta.keryx.terminalResults: { stored: 0, duplicates, resumed: true }`, with the turn's own stopReason. The no-turn answer is byte-for-byte as before (no `resumed` key), and a resend with new results still answers `{ stopReason }` alone. The desktop may ignore `resumed`. needs_operator: no.\n4. (user_visible via /rewind) When a resend mixes duplicates whose stored notes end the history with new results, the one turn that runs answers all of them, and `/rewind` of that turn takes the older stored notes out with the new ones, as it does for an all-duplicate resend. needs_operator: no.\n\n## Limits left open\n- A key indented inside a diff (`+    MIIE…` over `     -----END`) is not covered. The diff rule applies only when the END marker directly follows the column, as decided, so there the END line's prefix (`     `) is read by shape, and `+`/`-` lines do not match it.\n- Over-masking under the diff rule: a diff line holding one base64-looking word (`+foo`) directly above a diff key's lines is masked as body, as an unprefixed line is today.\n- Side effect of rule 2: a space before a number anywhere in a prefix is padding now, so `a.pem 25:` reads like `a.pem25:`.\n- R4-LG-003 scope: the count needs at least one duplicate in the resend (`trailingNotesAwaitingTurn` returns 0 for an empty list). A resend holding only new results, or an operator prompt, after keryx stopped with notes at the end of the history still leaves those notes behind on `/rewind`, as before.",
+  "acceptance": [
+    {
+      "criterion": "R4-RR-002 (+R4-DG-004, R4-LG-004), decision 1: a unified diff's first column is read as the whole prefix when the END line is a diff line; replaced key (context END under - and + lines, BEGIN cut off) masks both bodies and keeps the line above the hunk; an added PGP key's +=abcd checksum is masked; all-- and all-+ stay green; a @@ line directly above stays unmasked; the comment above orphanBodyStart says what is read.",
+      "status": "met",
+      "evidence": "secrets.test.ts R3-SC-003 rows: 'git show of a replaced key, its BEGIN cut off…', 'git diff of a key whose last lines changed, under its hunk header', 'git show of an added PGP key, its checksum line under git's +', 'git show of an added PGP key with an armor header and its blank line'. All 4 were red on the unfixed code (bun test: 63 pass, 6 fail with the 2 padding rows) and are green now. 'R4-RR-002: in a diff, a hunk header, a file header or a line of code directly above the key lines stays' and 'many diff key lines above many context END lines scan in linear time' are new and green. The 'git show of a removed key' and 'git show of an added key' rows stay green. secrets.ts: isDiffMarkerCode, diffKeyLineOf, and diffLine in orphanBodyStart; its comment is rewritten."
+    },
+    {
+      "criterion": "R4-PC-005, decision 2: number padding of any width, none included, reads as one shape; cat -n and nl tails crossing 99999 -> 100000 masked; the 9 -> 10 case stays green; a line that differs in other text does not match.",
+      "status": "met",
+      "evidence": "Rows 'cat -n across line 100000, where the padding ends' and 'nl -s ' ' across line 100000, where the padding ends' were red on the unfixed code and are green now. 'cat -n across a digit of width' stays green. Three new negatives in 'R3-SC-003: a line above whose prefix differs…' (`x 99999\\t`, ` 99999 ` and ` 99999:` above `100000\\t`) each mask the END only. prefixShape no longer emits a padding token."
+    },
+    {
+      "criterion": "R4-TP-006 and R4-TP-007, decision 3: the fixtures the findings name, each red under the deliberate break it names.",
+      "status": "met",
+      "evidence": "Run after the fix, each mutant restored before the next. W2-M-01 (parity check dropped): R4-TP-006 double-encoded JSON test red, 68/1. W2-M-02 (BODY_ESCAPE_LETTERS break dropped): same test red, 68/1. W2-M-13 (keyLineOf without trimEnd): 'R4-TP-007: a key tail with CRLF line ends…' red, along with the cat -n encrypted row, 67/2. W2-M-17 (blankShape = prefixShape(prefix)): 'cat -n of an encrypted key, its numbered blank line…' red, 68/1. W2-M-14 (header without the prefix comparison): 'R4-TP-007: a header-looking field behind another prefix…' red, 68/1. git diff afterwards shows only the intended secrets.ts change."
+    },
+    {
+      "criterion": "R3-TP-006 (partial), decision 4: the < 250 ms bound at secrets.test.ts ~:250-252 replaced by the file's size-ratio convention; the older bounds left alone.",
+      "status": "met",
+      "evidence": "'many orphan END lines before a header scan in linear time' now compares bestOf(build(8000 ENDs, 100k letters)) with LINEAR_RATIO_LIMIT * max(bestOf(build(2000, 25k)), LINEAR_FLOOR_MS). Its span assertions (8001 spans) are kept. The 'many unclosed headers' and url-credentials bounds are untouched."
+    },
+    {
+      "criterion": "R4-TP-008, decision 5: a fixture red when `!full.noop &&` is removed from inTurnCutThatFits' early return.",
+      "status": "met",
+      "evidence": "compact-fallback.test.ts 'R4-TP-008: a full cut that removes nothing is not the answer though its context fits…': oneLongTurn(15, 4000) with fits = under(16000). fits(h) is true, the full cut is a noop, the fallback is not a noop, and it equals compactInTurn(h, {tailTokens: 10000}). With W2-M-20 applied it was red (96/1); it is green after the restore. compact.ts is unchanged (git diff empty)."
+    },
+    {
+      "criterion": "R4-LG-003, decision 6: resumed notes computed whenever the trailing stored notes await a turn; server test: stored note for A at the end, resend A + new B -> one turn; /rewind leaves no A or B note.",
+      "status": "met",
+      "evidence": "server.ts: resumedNotes = trailingNotesAwaitingTurn(state.history, freshResults.duplicates) for every terminal-results prompt, not only all-duplicate ones; resumedInArchive / beginTurn unchanged. terminal-result.server.test.ts 'R4-LG-003: a resend that mixes a note awaiting its turn with a new result…' was red on the unfixed code (the context after /rewind kept the run-1 note) and is green now. The test also checks the one model request ends with the run-1 note, the run-2 note and keryx's line, and that each note is stored once."
+    },
+    {
+      "criterion": "R4-AR-002, decision 7: an all-duplicate resend that runs the follow-up turn answers { stored: 0, duplicates, resumed: true }; the no-turn answer has no resumed key; server tests assert both.",
+      "status": "met",
+      "evidence": "server.ts: the no-turn return builds the old answer inline, and storedAnswer (spread into the turn's answer) adds resumed: true. The test helper resumedAnswer is new. The R3-LG-005 resume test expects it and was red on the unfixed code (missing key). The no-turn assertions (noTurnAnswer at the second resend, at the continuation-line case and at R3-LG-006; the literal answers in R2-HL-002) are unchanged and green. The new R4-TP-003 test asserts resumedAnswer too."
+    },
+    {
+      "criterion": "R4-TP-003, decision 8: a server test that the resumed follow-up turn runs under the AC6 floor (a mutating call asks in a mode where a plain turn would not); no code change unless a gap shows.",
+      "status": "met",
+      "evidence": "AC6 block, 'R4-TP-003: the turn a resend resumes on stored notes (R3-LG-005) asks too; the same session's next plain prompt does not'. Trust mode, loaded session ending with a stored note. The resend raises one shell_exec ask with reasons.untrustedOrigin true and no allowAlways option; rejected, the file is absent. Then a plain prompt in the same session runs its touch unasked. With the mutant (origin and untrustedPrompt set only when fresh.length !== 0) it was red (no ask raised); restored, it is green. The floor already reached the resumed turn, so no code change was made."
+    },
+    {
+      "criterion": "Nothing else in src/** regressed; typecheck and eslint clean; exports of src/acp/terminal-result.ts unchanged.",
+      "status": "met",
+      "evidence": "bun test secrets.test.ts + compact-fallback.test.ts + terminal-result.server.test.ts + terminal-result.test.ts: 184 pass, 0 fail (169 before the lane, 15 new). The other src tests with private-key fixtures (bus/pause, tui/herdr-core-status, harness/process/sandbox/tls-ca, lib/hub-machine/live-shell-share): 61 pass, 0 fail. bun run typecheck: exit 0. bunx eslint on the 5 changed src files: exit 0, no output. src/acp/terminal-result.ts was not edited."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/reviews/2026-11-26-review-flow-github-com-mrciphersmith-keryx-pull-1316/research-evidence/fix4-server.json",
+      "kind": "review",
+      "exists": true,
+      "summary": "The findings this round fixes (read only)."
+    },
+    {
+      "path": ".metaproject/reviews/2026-11-26-review-flow-github-com-mrciphersmith-keryx-pull-1316/research-evidence/verifier-p2.txt",
+      "kind": "review",
+      "exists": true,
+      "summary": "The verifier's traces for R4-RR-002 / R4-DG-004 / R4-LG-004 (read only)."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/security/detect/secrets.ts",
+      "change": "modified: isDiffMarkerCode and diffKeyLineOf are new. orphanBodyStart reads every line above a diff END line (column marker then the END marker) through diffKeyLineOf. prefixShape no longer emits a token for the spaces that pad a number. The comments of prefixShape and orphanBodyStart are rewritten."
+    },
+    {
+      "path": "src/security/detect/secrets.test.ts",
+      "change": "modified: O1/O2 old-key lines. New listing rows: 2 padding, 4 diff, and the cat -n numbered blank line. New tests: the double-encoded JSON test, the CRLF test, the header-prefix negative, the diff-stop test and the diff linear-time test. Padding negatives added. The listing loop also checks O1/O2. The 'many orphan END lines' test moved to the size-ratio convention."
+    },
+    {
+      "path": "src/session/compact-fallback.test.ts",
+      "change": "modified: R4-TP-008 test (a noop full cut whose context fits is not returned)."
+    },
+    {
+      "path": "src/acp/server.ts",
+      "change": "modified: resumedNotes is computed for every terminal-results prompt (R4-LG-003). The no-turn answer is built inline, unchanged. The resumed turn's answer carries resumed: true (R4-AR-002). Three comments updated."
+    },
+    {
+      "path": "src/acp/terminal-result.server.test.ts",
+      "change": "modified: resumedAnswer helper; the R3-LG-005 resume test expects it; R4-LG-003 mixed-resend rewind test; R4-TP-003 floor test for the resumed turn, with a plain-prompt control."
+    },
+    {
+      "path": ".metaproject/flows/523-2026-11-24-desktop-run-result-followup/results/T19.json",
+      "change": "added: this result."
+    }
+  ],
+  "findings": [],
+  "questions": [
+    {
+      "id": "T19-Q1",
+      "question": "Should the diff rule also cover a key indented inside a diff (`+    MIIE…` lines over a `     -----END` context line), by cutting the column from every line and comparing the rest by shape?",
+      "why": "Decision 1 reads the column as the whole prefix only when the END marker follows it directly, so an indented key in a diff (a YAML value, a key in a here-doc) still masks only its END marker when its BEGIN is cut off. It is the same class as R4-RR-002, so a later review may raise it.",
+      "options": [
+        {
+          "id": "document-limit",
+          "label": "Leave as decided and list it in the spec's Run-result limits and the PR body's Known limits (docs lane).",
+          "recommended": true
+        },
+        {
+          "id": "extend-rule",
+          "label": "Extend the rule in a follow-up: when the END line starts with a column marker, cut one marker from each line above and compare the rest with the END line's rest by prefixShape."
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 15,
+    "tests_passing": 245,
+    "tests_failing": 0,
+    "coverage_notes": "bun test of the 4 focused files: 169 pass before the lane, 184 pass and 0 fail after (15 new: 12 in secrets.test.ts, 1 in compact-fallback.test.ts, 2 in terminal-result.server.test.ts). The other 4 src test files with private-key fixtures: 61 pass, 0 fail. Not run: the whole suite (owner rule) and the other server.ts-related test files, whose prompts never carry terminalResults, the only input that reaches the changed branch.",
+    "commands_run": [
+      { "command": "bun test src/security/detect/secrets.test.ts src/session/compact-fallback.test.ts src/acp/terminal-result.server.test.ts src/acp/terminal-result.test.ts (before any change)", "result": "exit 0; 169 pass" },
+      { "command": "bun test src/security/detect/secrets.test.ts (new tests, unfixed secrets.ts)", "result": "63 pass, 6 fail (the 2 padding rows and the 4 diff rows, expected red)" },
+      { "command": "bun test src/acp/terminal-result.server.test.ts (new tests, unfixed server.ts)", "result": "24 pass, 3 fail (resumed key missing x2, mixed-resend rewind left the run-1 note)" },
+      { "command": "mutants W2-M-01, W2-M-02, W2-M-13, W2-M-17, W2-M-14 (secrets.ts), W2-M-20 (compact.ts), the floor-only-with-fresh-notes mutant (server.ts)", "result": "each turned its new test red; each restored with Edit before the next; git diff confirms only the intended changes" },
+      { "command": "bun test <4 focused files> (after the fix)", "result": "exit 0; 184 pass, 0 fail" },
+      { "command": "bun test src/bus/pause.test.ts src/tui/herdr-core-status.test.ts src/harness/process/sandbox/tls-ca.test.ts src/lib/hub-machine/live-shell-share.test.ts", "result": "exit 0; 61 pass, 0 fail" },
+      { "command": "bun run typecheck", "result": "exit 0, no diagnostics" },
+      { "command": "bunx eslint src/security/detect/secrets.ts src/security/detect/secrets.test.ts src/session/compact-fallback.test.ts src/acp/server.ts src/acp/terminal-result.server.test.ts", "result": "exit 0, no output" }
+    ],
+    "not_verified": [
+      "The whole suite (owner instruction: CI is the suite evidence).",
+      "The other server.ts-related test files (server-archive, server-mcp, server-models, server-remember-model, shell-session-switch, telegram-session.server, mcp-servers.process): not run. The changed branch is reached only by a prompt carrying terminalResults, which they never send.",
+      "The desktop against this server: the T20 fixture already sends resumed: true, but no desktop test ran against T19's keryx, and no live app was used.",
+      "The redaction consumers' own suites (display-redaction, output-validation, agent notification tail, shell head+tail view): not run separately. They call detectSecrets/redactSensitiveText, whose behaviour the secrets.test.ts listings pin."
+    ],
+    "concerns": [
+      "Limit for the docs lane: a key indented inside a diff (`+    MIIE…` over `     -----END`) is not covered by the diff rule (T19-Q1). The END line's prefix there is read by shape, so `+`/`-` lines do not match it.",
+      "Over-masking under the diff rule: a diff line holding a single base64-looking word (`+foo`, ` bar`) directly above a diff key's lines is masked as key body, as an unprefixed line is today.",
+      "Side effect of the padding rule: a space before a number anywhere in a prefix is padding now (`a.pem 25:` reads like `a.pem25:`). No listing in the tests relies on the difference.",
+      "R4-LG-003 scope: the /rewind adjustment needs at least one duplicate in the resend. A resend of only new results, or an operator prompt, after keryx stopped with notes at the end of the history still leaves those notes behind on /rewind, as before (not in this brief)."
+    ],
+    "doc_deltas": [
+      "specification.md §3.9.5b (~:671-685): replace the git show / git log -p ('-'/'+') clause with the diff rule (behaviour change 1). It now covers a replaced key under a context END, an added key's PGP checksum line, and the stop at a hunk header or diff --git line. Keep 'cat -n and nl at any digit width', now true across line 100000 (behaviour change 2). Add the indented-key-inside-a-diff limit.",
+      "specification.md, beside the all-duplicate answer: document resumed: true on the answer of a resend whose follow-up turn ran (behaviour change 3), and that the no-turn answer has no resumed key.",
+      "PR body Known limits: 'the follow-up-turn count the desktop added is not taken back (when no turn ran)' can now be told apart on the wire (resumed). The mixed-resend /rewind leftover (R4-LG-003) is fixed; the fresh-only and operator-prompt variant is not (concern 4)."
+    ],
+    "routing_audit": "graph_used: no (not-relevant: the brief and the findings named every file and site); wiki_used: no (not-relevant: the owner's decisions are in the brief); ctx_used: yes (keryx ctx rg/run, keryx test related); raw_rg_used: no (bun test output was filtered with grep for fail names, marked keryx:raw)",
+    "workspace_notes": "Edits only under src/** plus this result file. Nothing was staged, committed or stashed. apps/desktop/** (T20) was not touched. src/acp/terminal-result.ts was not edited, so its exports, TERMINAL_OUTPUT_CUT_LINE included, are unchanged. Every mutant was applied and reverted with Edit; git diff of src/session/compact.ts is empty."
+  },
+  "timestamp_utc": "2026-11-26T09:40:00Z"
+}

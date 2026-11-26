@@ -1,0 +1,78 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "523",
+  "dispatch_id": "523-T5",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Host commands pty_open_command(cwd, command, title, cols, rows) -> PtyTab and pty_tail(id, lines) -> String are implemented in the Keryx Desktop Tauri host. Both are registered next to pty_open_run, typed wrappers ptyOpenCommand and ptyTail sit in platform/panels.ts, and 7 new Rust tests carry run_command in their names. AC2's command, the pty module, cargo check, clippy -D warnings and tsc all pass. Concerns for T7: under heavy load the pty layer can lose a short-lived process's output after exit (seen once in a pre-existing test), and a signal-killed process is reported as code 1, never null. Both are pre-existing and left untouched.",
+  "summary_markdown": "- `pty.rs`: `command_args` (refuses an empty, whitespace-only or NUL command), `PtyManager::open_command` (`[user_shell(env), -l, -i, -c, command]`, the rest is `open`'s), `Pty::tail` and `PtyManager::tail` (plain text, clamped 1..=`TAIL_MAX_LINES` = 2000, works after exit until the tab is closed), 7 `run_command_*` tests.\n- `panels.rs`: `open_command_tab`, `#[tauri::command] pty_open_command`, `#[tauri::command] pty_tail` (decodes off the main thread). The env block and the `panel://pty-exit` hook were extracted into `tab_env` and `announce_exit` so they are not copied a third time.\n- `lib.rs`: registers both commands next to `pty_open_run`.\n- `platform/panels.ts`: `ptyOpenCommand`, `ptyTail`.",
+  "acceptance": [
+    {
+      "criterion": "AC2: The host command `pty_open_command(cwd, command, title, cols, rows)` runs `<login shell> -l -i -c <command>` in the project root with a shell tab's login environment, the command's exit code arrives as `panel://pty-exit {id, code}`, and `pty_tail(id, lines)` returns the last `lines` lines of the tab's output as plain text with escape sequences removed. [verify: exec `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml run_command`]",
+      "status": "met",
+      "evidence": "From the repo root, `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml run_command` gave 9 passed, 0 failed: the 7 new pty tests plus 2 pre-existing flows::actions run_command tests that the filter also selects. The tests show that the argv is exactly `-l -i -c <command>` after the shell user_shell resolves (/bin/echo stand-in); that the cwd, TERM=xterm-256color, SHELL and a login-env variable reach the command; that `exit 3` is reported as Some(3) through on_exit; that `echo a && echo b` prints both lines; that tail(3)/tail(2)/tail(0) after exit return escape-free lines with CR overwrites applied, a 2100-line output tails to 2000, and another window's tab or a closed tab is an error; and that an empty, whitespace or NUL command and a non-executable shell are refused with no tab left. panel://pty-exit is emitted by the same announce_exit hook pty_open_run uses; no test drives a Tauri AppHandle, so that emit was not observed at runtime."
+    }
+  ],
+  "artifacts": [
+    { "path": ".metaproject/flows/523-2026-11-24-desktop-run-result-followup/results/T5.task-implementer-output.json", "kind": "implementation-report", "exists": true, "summary": "The same result in the task-implementer-output contract, with top-level project_context_applied for `keryx skills contracts validate --schema task-implementer-output --resolved resolved/T5.implement.json`." },
+    { "path": ".metaproject/flows/523-2026-11-24-desktop-run-result-followup/resolved/T5.implement.json", "kind": "custom", "exists": true, "summary": "Resolved project context; every must_read entry is cited in metrics.project_context_applied." }
+  ],
+  "changed_files": [
+    { "path": "apps/desktop/src-tauri/src/pty.rs", "change": "modified: TAIL_MAX_LINES, command_args, Pty::tail, PtyManager::open_command, PtyManager::tail; 7 run_command_* tests with helpers command_env/open_command/exit_code" },
+    { "path": "apps/desktop/src-tauri/src/panels.rs", "change": "modified: tab_env and announce_exit extracted (open_tab and open_run_tab use them, behaviour unchanged), open_command_tab, Tauri commands pty_open_command and pty_tail; PtyExit doc names pty_open_command" },
+    { "path": "apps/desktop/src-tauri/src/lib.rs", "change": "modified: panels::pty_open_command and panels::pty_tail registered after panels::pty_open_run" },
+    { "path": "apps/desktop/src/platform/panels.ts", "change": "modified: ptyOpenCommand(cwd, command, title, cols, rows) and ptyTail(id, lines) wrappers; onPtyExit doc names ptyOpenCommand" },
+    { "path": ".metaproject/flows/523-2026-11-24-desktop-run-result-followup/results/T5.json", "change": "created: this result" },
+    { "path": ".metaproject/flows/523-2026-11-24-desktop-run-result-followup/results/T5.task-implementer-output.json", "change": "created: the task-implementer-output form of this result" }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 1,
+    "tests_written": 7,
+    "tests_passing": 7,
+    "tests_failing": 0,
+    "coverage_notes": "AC2: argv shape, project root and login env, exit code, shell syntax, plain-text tail after exit with clamp and window/closed refusal, and refusal of empty/NUL commands and an unstartable shell, all covered by tests. Not covered by a test: the panel://pty-exit emit through a real AppHandle.",
+    "project_context_applied": [
+      { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
+      { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
+      { "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc", "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b", "how": "read" },
+      { "path": ".metaproject/rules/stacks/ts-js-node/security.mdc", "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82", "how": "read" },
+      { "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc", "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2", "how": "read" },
+      { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
+      { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "followed" },
+      { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "followed" },
+      { "path": ".metaproject/rules/core/security-baseline.mdc", "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee", "how": "followed" },
+      { "path": ".metaproject/rules/core/async-patterns.mdc", "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa", "how": "followed" },
+      { "path": ".metaproject/rules/core/concurrency-patterns.mdc", "sha256": "73798f634c8f23dd0fb1d4c8c7933df9bac5633eb8abb29971de2e97bdc92eaa", "how": "followed" }
+    ],
+    "commands_run": [
+      { "command": "cargo test --locked --lib run_command (before implementing)", "result": "RED as intended: compile errors E0599/E0425 because open_command, tail and TAIL_MAX_LINES did not exist yet" },
+      { "command": "cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml run_command (repo root, AC2)", "result": "exit 0; 9 passed, 0 failed (7 new + 2 pre-existing flows::actions run_command tests)" },
+      { "command": "cargo test --locked --lib -- pty:: panels:: panel_mcp::", "result": "exit 0; 22 passed, 0 failed" },
+      { "command": "cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml", "result": "exit 0, no warnings" },
+      { "command": "cargo clippy --locked --all-targets -- -D warnings (apps/desktop/src-tauri, as desktop CI)", "result": "exit 0" },
+      { "command": "bunx tsc --noEmit -p apps/desktop", "result": "exit 0, no output" },
+      { "command": "bun --cwd apps/desktop test src/panels", "result": "exit 0; 1199 passed, 0 failed" },
+      { "command": "cargo test --locked (whole crate, 4 runs with T5)", "result": "run 1 FAILED 6: the 4 environmental tests below, the first-version fake-shell T5 test (timed out; since replaced) and pre-existing a_program_runs_directly once. After the rework: 275 passed/0 failed, then twice 271 passed/4 failed (shellenv x3, appupdate::run_status_reads_a_fake_keryx)" },
+      { "command": "cargo test --locked -- --skip run_command (whole crate without T5's tests)", "result": "FAILED: 262 passed, 4 failed, the same shellenv x3 and appupdate tests, so they are pre-existing and environmental here" }
+    ],
+    "not_verified": [
+      "The Tauri commands over real IPC in a running app: no app build was run or installed.",
+      "The panel://pty-exit emit for a command tab at runtime: it uses the same announce_exit hook as pty_open_run, and no test drives an AppHandle.",
+      "zsh as the login shell under the new code path: tests use /bin/sh and /bin/echo. A manual probe of `zsh -l -i -c` under a pty with an isolated HOME printed only the command's output.",
+      "AC2 is not confirmed in the flow (keryx flow ac confirm is the orchestrator's step)."
+    ],
+    "concerns": [
+      "Output loss after a quick exit, pre-existing: a_program_runs_directly_with_its_title_and_reports_its_exit_code failed once in five full-suite runs on its `output contains \"hi there\"` assertion after exit. The likely cause, not proven, is unread pty output dropped when the child closes the last slave fd before the reader drains it (pty.rs drops pair.slave right after spawn). pty_tail after exit depends on this, so T7 may see an empty or short output for a fast command under load.",
+      "A signal exit is reported as code 1, pre-existing: portable-pty 0.9.0 src/lib.rs:214-226 builds a signal status with code 1, and pty.rs passes exit_code(), so panel://pty-exit never carries code null for a signal despite the PtyEvent::Exit/on_exit docs and spec 4.4. The plan's `exitCode: null = ended by a signal` will not be produced for Run tabs. This was read from the source, not observed at runtime.",
+      "Environmental here: shellenv x3 and appupdate::run_status_reads_a_fake_keryx fail in most full-suite runs on this machine, also with T5's tests skipped. All of them execute a freshly written script under load."
+    ],
+    "routing_audit": "graph_used: no (not-relevant: the dispatch named every file; the graph was not built in this worktree); wiki_used: no (not-relevant: spec 4.4 read directly as instructed); ctx_used: yes (keryx ctx rg/read/run for search, file reads and long cargo output); raw_rg_used: no",
+    "workspace_notes":"Gitignored build prerequisites were created and left for later cargo runs in this worktree: apps/desktop/src-tauri/binaries/keryx-aarch64-apple-darwin (a stub sidecar like the one desktop CI writes) and an empty apps/desktop/dist/. Nothing was committed or staged. The parallel lane T6's files (src/acp/**, src/commands/agent.ts) were not read, touched or staged. flow.json and acceptance-criteria.md were not edited."
+  },
+  "timestamp_utc": "2026-11-24T21:32:00Z"
+}

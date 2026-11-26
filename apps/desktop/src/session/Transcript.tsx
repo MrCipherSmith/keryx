@@ -1,13 +1,15 @@
-import { Fragment, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
+import { Fragment, memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 import { BrandMark } from "../components/BrandMark";
 import type { ToolCallContent, ToolKind } from "../acp/types";
-import type { CommandItem, DelegateResultItem, Item } from "./reducer";
+import type { CommandItem, DelegateResultItem, Item, TerminalRunItem } from "./reducer";
 import type { Subagent } from "./activity";
 import { CommandCard } from "./CommandCard";
 import { DelegateResultCard } from "./DelegateResultCard";
-import { blockText } from "./reducer";
+import { TerminalRunCard } from "./TerminalRunCard";
+import { blockText, isUndeliveredRun, streamEndOf } from "./reducer";
 import { ContentBlockView } from "./ContentBlockView";
-import { Markdown } from "../components/Markdown";
+import { formatDuration } from "./duration";
+import { Markdown, RunSessionContext } from "../components/Markdown";
 import type { PrLinks } from "../components/prLinks";
 import { UserMessage } from "./UserMessage";
 import { readReviewCardPlaces, rememberReviewCardPlaces } from "../review/reviewPlacement";
@@ -15,7 +17,7 @@ import type { UserPromptContext } from "./userPrompt";
 import { Icon, type IconName } from "../components/Icon";
 import { Spinner } from "../components/ui";
 import { argLabel, hasRestArgs, primaryInput, quoteArgv, restArgs, visibleProse, visibleText } from "./toolInput";
-import { runInTerminal, runnableCommand } from "../panels/panelBus";
+import { runButtonTitle, runInTerminal, runnableCommand } from "../panels/panelBus";
 
 type ToolItem = Extract<Item, { kind: "tool" }>;
 type BlockItem = Extract<Item, { kind: "block" }>;
@@ -48,12 +50,6 @@ function pretty(v: unknown): string {
   } catch {
     return String(v);
   }
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms} ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} s`;
-  return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
 }
 
 /**
@@ -170,6 +166,7 @@ const ToolRow = memo(function ToolRow({ item, subagentId, onShowSubagent }: { it
   const hasBody = item.content.length > 0 || raw !== "" || hasRestArgs(item.rawInput);
   const dur = item.endedAt !== null ? item.endedAt - item.startedAt : null;
   const runnable = useMemo(() => runnableToolCommand(item), [item]);
+  const runSession = useContext(RunSessionContext);
   return (
     <div className={`tool status-${item.status}${open ? " is-open" : ""}`}>
       <button className="tool-row" onClick={() => setOpen((o) => !o)} aria-expanded={hasBody ? open : undefined} disabled={!hasBody}>
@@ -199,7 +196,11 @@ const ToolRow = memo(function ToolRow({ item, subagentId, onShowSubagent }: { it
               <div className="tool-label">
                 {primary.label}
                 {runnable !== null ? (
-                  <button className="tool-run" onClick={() => runInTerminal(runnable)} title="Run in the terminal panel">
+                  <button
+                    className="tool-run"
+                    onClick={() => runInTerminal(runnable, runSession === null ? undefined : { sessionId: runSession })}
+                    title={runButtonTitle(runSession !== null)}
+                  >
                     <Icon name="play" size={10} /> Run
                   </button>
                 ) : null}
@@ -265,7 +266,8 @@ type Block =
   | { type: "userBlock"; item: BlockItem }
   | { type: "agentBlock"; item: BlockItem; first: boolean }
   | { type: "command"; item: CommandItem }
-  | { type: "delegate"; item: DelegateResultItem };
+  | { type: "delegate"; item: DelegateResultItem }
+  | { type: "terminalRun"; item: TerminalRunItem };
 
 function toBlocks(items: Item[]): Block[] {
   const out: Block[] = [];
@@ -286,6 +288,13 @@ function toBlocks(items: Item[]): Block[] {
     }
     if (it.kind === "delegate") {
       out.push({ type: "delegate", item: it });
+      continue;
+    }
+    // A delivered run's result starts the agent's follow-up turn, as a user message would; a card whose
+    // result has not gone is no turn boundary (the turn it was clicked in may still be writing).
+    if (it.kind === "terminalRun") {
+      out.push({ type: "terminalRun", item: it });
+      if (!isUndeliveredRun(it)) agentTurnOpen = false;
       continue;
     }
     if (it.kind === "block" && it.role === "user") {
@@ -384,12 +393,22 @@ interface Props {
   /** The session's subagents: a tool card whose call spawned one links to it. */
   subagents?: readonly Subagent[];
   onShowSubagent?: (id: string) => void;
+  /** The session shown: a Run clicked in this transcript is its run, and its result goes back to it (flow 523). */
+  sessionId?: string | null;
 }
 
 const NO_CARDS: readonly ReviewCardSlot[] = [];
 const NO_KEYS: readonly string[] = [];
 
-export function Transcript({ items, busy, replaying, empty, reviewCards = NO_CARDS, pinnedReviewKeys = NO_KEYS, onRunCommand, onEditMessage, prLinks, subagents, onShowSubagent }: Props) {
+export function Transcript(props: Props) {
+  return (
+    <RunSessionContext.Provider value={props.sessionId ?? null}>
+      <TranscriptView {...props} />
+    </RunSessionContext.Provider>
+  );
+}
+
+function TranscriptView({ items, busy, replaying, empty, reviewCards = NO_CARDS, pinnedReviewKeys = NO_KEYS, onRunCommand, onEditMessage, prLinks, subagents, onShowSubagent }: Props) {
   const spawned = useMemo(() => {
     const m = new Map<string, string>();
     for (const a of subagents ?? []) if (a.parentToolCallId && !m.has(a.parentToolCallId)) m.set(a.parentToolCallId, a.id);
@@ -413,7 +432,8 @@ export function Transcript({ items, busy, replaying, empty, reviewCards = NO_CAR
   }, [items, replaying, reviewCards, pinnedReviewKeys]);
   const cardsAfter = (index: number) => reviewCards.filter(card => placement.get(card.key) === index)
     .map(card => <Fragment key={`review-${card.key}`}>{card.node}</Fragment>);
-  const last = items[items.length - 1];
+  // The item the turn streams into: the last before the undelivered Run cards that trail the turn.
+  const last = items[streamEndOf(items, busy) - 1];
   const streamingAgent = busy && last?.kind === "agent";
   const streamingThought = busy && last?.kind === "thought";
 
@@ -458,21 +478,20 @@ export function Transcript({ items, busy, replaying, empty, reviewCards = NO_CAR
     el.scrollTo({ top: el.scrollHeight, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   };
 
-  const renderBlock = (b: (typeof blocks)[number], i: number) => {
-    const isLast = i === blocks.length - 1;
+  const renderBlock = (b: (typeof blocks)[number]) => {
     switch (b.type) {
               case "user":
           return <UserMessage key={b.item.id} message={b.item.text} context={b.item.context} failed={b.item.failed} itemId={b.item.id} source={b.item.source} onEdit={onEditMessage} />;
               case "agent":
                 return (
                   <AgentMessage key={b.item.id} first={b.first} text={b.item.text} prLinks={prLinks}
-                    streaming={isLast && streamingAgent} />
+                    streaming={streamingAgent && b.item === last} />
                 );
               case "thought":
                 return (
                   <div key={b.item.id} className={`turn-agent${b.first ? " turn-start" : ""}`}>
                     {b.first ? <AgentLabel /> : null}
-                    <Thought text={b.item.text} live={isLast && streamingThought} />
+                    <Thought text={b.item.text} live={streamingThought && b.item === last} />
                   </div>
                 );
               case "tools":
@@ -488,6 +507,8 @@ export function Transcript({ items, busy, replaying, empty, reviewCards = NO_CAR
                 );
               case "delegate":
                 return <DelegateResultCard key={b.item.id} item={b.item} />;
+              case "terminalRun":
+                return <TerminalRunCard key={b.item.id} item={b.item} />;
               case "command":
                 return <CommandCard key={b.item.id} item={b.item} onRun={onRunCommand} />;
               case "userBlock":
@@ -531,7 +552,7 @@ export function Transcript({ items, busy, replaying, empty, reviewCards = NO_CAR
           {items.length === 0 && reviewCards.length === 0 && !replaying ? empty : null}
           {blocks.map((b, i) => (
             <Fragment key={b.type === "tools" ? `t-${b.items[0]!.id}` : `b-${b.item.id}`}>
-              {renderBlock(b, i)}
+              {renderBlock(b)}
               {cardsAfter(i)}
             </Fragment>
           ))}

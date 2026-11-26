@@ -1,0 +1,134 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "523",
+  "dispatch_id": "523-T10",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Fix round 1, keryx server: AR2-001, DEG2-1, HL4-001, F-001 + RR-001 (server half), LG2-001, TP-005, TP2-001, SC3-001 (server half) fixed in src/** with tests. A terminal-results turn is now keryx's own turn (RunAgentTurnOptions.origin 'terminal-results'): its continuation line is stored as an injected harness line with a structural marker (NormalizedMessage.terminalContinuation, persisted), UserPromptSubmit does not fire for it, the floor is on, and replay keys on the marker. In-turn compaction keeps the latest Run-result head (notes + marked line) verbatim and the summary names removed Run results. The Run guidance bullet and terminalResults acceptance are gated on the new client capability initialize.clientCapabilities._meta.keryx.terminalResults (never on a Telegram turn; terminal: true alone gives neither). A note keeps the LAST 16 KiB of redacted output (capResultText keep: 'tail'). The shared private-key detector fails closed on an END line with no header. 10 new tests were red on the pre-fix sources; the test-gap findings (HL4-001, TP-005, parts of TP2-001) were green at head and each was shown sensitive by a mutation. One user-visible wording choice needs the operator: the leading cut marker.",
+  "summary_markdown": "## Behavior changes\n1. (user_visible, needs_operator) A capped Run output now starts with `[… N earlier bytes not kept]` and keeps its last 16 KiB (was: first 16 KiB + trailing `[… truncated: N more bytes]`). The replayed run card shows this line. Alternatives: reuse the `truncated` wording; drop to the next newline after the cut.\n2. (user_visible, settled by upheld SC3-001) `detectSecrets` masks from the previous block end (or the input start) to an `-----END … PRIVATE KEY-----` line that has no header before it, for every consumer (tool-output redaction, output validation, export audit), mirroring the existing header-without-END rule.\n3. (not user-visible, settled by upheld AR2-001) A terminal-results turn no longer fires UserPromptSubmit; its line is `provenance: harness`, `injected`, `terminalContinuation`.\n4. (model-facing, DEG2-1) Compaction summaries gain a `Run results removed from the active context (terminal-result notes):` section.\n\n## For the orchestrator\n- The desktop must advertise `initialize.clientCapabilities._meta.keryx.terminalResults: true` (T11). Until it does, every terminalResults prompt from that build is refused -32602 and its card says not sent.\n- Spec §3.9.5b (T12) now differs from the code in four places, listed in metrics.doc_deltas.",
+  "acceptance": [
+    {
+      "criterion": "AC5: notes (provenance harness, nonce envelope, redactSensitiveText, capResultText), keryx's continuation line as the turn's user line, forged closing tag cannot end the envelope, malformed meta is invalid params with nothing stored and no turn.",
+      "status": "met",
+      "evidence": "bun test src/acp/terminal-result: 68 pass, 0 fail. The line is stored as an injected harness line marked terminalContinuation (AR2-001); capResultText is used in its tail mode (LG2-001); the malformed list gains the resumeIssueQuestions combination (TP-005)."
+    },
+    {
+      "criterion": "AC6: the follow-up turn runs under the untrusted-content floor, except the floor's existing carve-outs.",
+      "status": "met",
+      "evidence": "terminal-result.server.test.ts AC6 trust (with a plain-prompt control) and auto tests pass. The floor is now set by origin 'terminal-results' (agent.ts untrustedContentSeen) and still by untrustedPrompt. Carve-outs unchanged."
+    },
+    {
+      "criterion": "AC7 (server half): session/load replays each note with _meta.keryx.terminalResult (never the envelope) and the continuation line with _meta.keryx.terminalContinuation; no turn starts.",
+      "status": "met",
+      "evidence": "Stored-session and live end-to-end replay tests pass; they also pin the `$ <command>` fallback text, parentTurn [1,1,1,2] and [0,1], and that a typed note, a typed continuation sentence and an unmarked harness line replay as plain chunks. The desktop half is T11's."
+    },
+    {
+      "criterion": "AC10: the Run sentence only for a client that advertised _meta.keryx.terminalResults: true and only on a non-Telegram turn; absent for terminal: true alone, other clients and Telegram turns; a terminalResults prompt without that capability is invalid params.",
+      "status": "met",
+      "evidence": "Server tests: run-tracking client has the sentence; terminal-only, no-capability and editor-profile clients do not; a Telegram turn of a run-tracking desktop session does not while the desktop turn does; {} and terminal-only clients get -32602 with nothing stored or run. Unit: clientTakesTerminalResults, the bullet with/without clientReturnsRunResults."
+    },
+    {
+      "criterion": "Every listed finding is fixed with a test that fails before the fix and passes after, or a note that it does not reproduce.",
+      "status": "met",
+      "evidence": "Red on pre-fix sources: 10 tests (see metrics.findings). HL4-001 and TP-005 are test gaps that were correct at head (they do not reproduce as defects); TP2-001's text-fallback and injected-gate checks were correct at head too. Each was shown sensitive by a mutation of server.ts that turned its test red (8 mutations, all reverted; server.ts byte-identical to the fixed copy afterwards)."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/reviews/2026-11-25-review-flow-github-com-mrciphersmith-keryx-pull-1316/research-evidence/fix-server.json",
+      "kind": "review",
+      "exists": true,
+      "summary": "The findings this round fixes (read only)."
+    }
+  ],
+  "changed_files": [
+    { "path": "src/acp/server.ts", "change": "terminalResults acceptance and the Run-guidance flag gated on clientTakesTerminalResults (flag never set on a Telegram turn); runAgentTurn gets origin 'terminal-results'; replay keys keryx's continuation line on the terminalContinuation marker (parentTurn++), the text-based isTerminalContinuation branch removed" },
+    { "path": "src/acp/terminal-result.ts", "change": "new clientTakesTerminalResults(capabilities); note output capped to its last 16 KiB after redaction (capResultText keep 'tail'); isTerminalContinuation (text matching) removed; doc comments" },
+    { "path": "src/acp/delegate-turn-hook.ts", "change": "capResultText gains options.keep 'tail': keeps the end, leading `[… N earlier bytes not kept]` marker, never starts inside a UTF-8 character; default head mode unchanged" },
+    { "path": "src/commands/agent.ts", "change": "RunAgentTurnOptions.origin adds 'terminal-results' (line stored provenance harness, injected, terminalContinuation; no UserPromptSubmit; untrustedContentSeen from the start); AgentInstructionContext.clientRunsTerminal renamed clientReturnsRunResults" },
+    { "path": "src/harness/provider/types.ts", "change": "NormalizedMessage.terminalContinuation?: true (store-only marker)" },
+    { "path": "src/session/store.ts", "change": "terminalContinuation persisted and read back for user messages (context.jsonl and archive.jsonl)" },
+    { "path": "src/session/compact.ts", "change": "compactInTurn keeps the latest Run-result head (result notes + marked continuation line) verbatim after the operator message, tail sized without it; buildSummary lists removed Run results (head line + command), carried across summaries" },
+    { "path": "src/security/detect/secrets.ts", "change": "scanPrivateKeyBlocks fails closed on an END line with no header before it (masks from the previous block end or the input start); linear scan kept" },
+    { "path": "src/acp/terminal-result.server.test.ts", "change": "capabilities split (run-tracking vs terminal-only); new: terminal-only/editor/Telegram instruction cases, terminal-only refusal, continuation stored shape, /clear display text, resumeIssueQuestions combination, editor profile, busy refusal, /rewind, replay text/parentTurn/gates" },
+    { "path": "src/acp/terminal-result.test.ts", "change": "tail-cap, LG2-001, multi-byte cut, SC3-001 key-tail and clientTakesTerminalResults tests; isTerminalContinuation test removed; flag rename" },
+    { "path": "src/commands/agent-lifecycle-hooks.test.ts", "change": "AR2-001: origin 'terminal-results' fires no UserPromptSubmit and stores a marked injected harness line" },
+    { "path": "src/session/compact-fallback.test.ts", "change": "DEG2-1: in-turn cut keeps the Run-result head; removed results named in the summary and carried forward; a typed look-alike is not named" },
+    { "path": "src/security/detect/secrets.test.ts", "change": "SC3-001: END without header fails closed; linear time with many orphan END lines" }
+  ],
+  "findings": [],
+  "questions": [
+    {
+      "id": "T10-Q1",
+      "question": "A capped Run output now starts with `[… N earlier bytes not kept]` and keeps its last 16 KiB (shown on the replayed run card). Keep this wording?",
+      "why": "User-visible text the plan and owner decisions did not set (LG2-001 changed the cut direction).",
+      "options": [
+        { "id": "keep", "label": "Keep `[… N earlier bytes not kept]`", "recommended": true },
+        { "id": "truncated", "label": "Use `[… truncated: N earlier bytes]`, closer to the head-cut marker" }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 23,
+    "tests_passing": 269,
+    "tests_failing": 0,
+    "findings": {
+      "AR2-001": "fixed: origin 'terminal-results' in runAgentTurn (injected harness line, terminalContinuation marker, no UserPromptSubmit, floor on), server passes it, replay keys on the marker. Red->green: agent-lifecycle-hooks 'flow 523 review AR2-001' (red: events contained UserPromptSubmit); server AC5 storage test (red: line stored provenance project); server 'TP2-001/AR2-001: replay reads what keryx stored' (red: an operator-typed continuation sentence replayed with terminalContinuation).",
+      "DEG2-1": "fixed: the continuation line no longer counts as an operator turn, so keep-N compaction keeps the notes after the operator message; compactInTurn keeps the latest Run-result head verbatim; summaries name removed Run results. suggested_fix diverged: took option (b), handling in compaction, not (a), notes inside the turn message, because AC5 requires one note per entry and replay/rewind read them as separate messages. Red->green: compact-fallback 'DEG2-1: an in-turn cut keeps…' and 'DEG2-1: older Run results…'.",
+      "HL4-001": "did not reproduce as a defect (the order is correct at head). Added the busy test: refused session-busy, nothing stored, no provider call, one note after the resend. It is green at head; a mutation that appends before refuseIfBusy turns it red. Optional runId dedupe not done.",
+      "F-001": "fixed (server half): clientTakesTerminalResults gates terminalResults acceptance (-32602 otherwise) and the Run bullet; terminal: true alone gives neither. Red->green: server instruction test (red: a terminal-only client got the sentence) and refusal test (red: a terminal-only client was accepted).",
+      "RR-001": "fixed (server half): the bullet is never added when handleSessionPrompt runs with telegram set. Red->green: server 'RR-001: a Telegram turn…' (red: the Telegram turn's instruction had the sentence). Client half (send the capability) is T11.",
+      "LG2-001": "fixed: redact first, then keep the last 16 KiB (capResultText keep 'tail', UTF-8 safe, leading marker). Red->green: terminal-result.test 'LG2-001…' (red: the last line was cut and a truncated marker appended), 'keeps its LAST 16 KiB…', 'multi-byte…'.",
+      "TP-005": "test gaps, all four correct at head (they do not reproduce as defects). Tests added for the /clear display text, the resumeIssueQuestions combination, /rewind removing the notes and line, and the editor profile (meta and instruction). Each was shown sensitive by a mutation: the slash gate, the resumeIssueQuestions half, the append moved before beginTurn, and the shellProfile gates 4a/4b. All red, all reverted.",
+      "TP2-001": "tests added: the `$ <command>` fallback text, parentTurn, the injected gate on notes and the marker gate on the line. The fallback text and the injected gate were correct at head; mutations turned them red. The marker gate was red at head (text matching) and is green now, shared with AR2-001.",
+      "SC3-001": "fixed (server half, shared detector): an END line with no header fails closed. Red->green: secrets.test 'an END line with no header…' (red: no span) and terminal-result.test 'SC3-001…' (red: key body lines stored). Desktop half (capRunOutput partial first line) is T11's."
+    },
+    "commands": [
+      { "command": "bun test src/acp/terminal-result src/security/detect/secrets.test.ts src/session/compact-fallback.test.ts src/commands/agent-lifecycle-hooks.test.ts (baseline, before edits)", "result": "122 pass, 0 fail" },
+      { "command": "bun test src/security/detect/secrets.test.ts (new test, pre-fix detector)", "result": "1 fail: no span for an END-only key tail" },
+      { "command": "bun test src/acp/terminal-result.test.ts (new tests, pre-fix module plus the clientTakesTerminalResults export)", "result": "6 fail: tail cap x3, SC3-001, flag rename x2" },
+      { "command": "bun test src/session/compact-fallback.test.ts (pre-fix)", "result": "2 fail (DEG2-1)" },
+      { "command": "bun test src/commands/agent-lifecycle-hooks.test.ts -t AR2-001 (pre-fix)", "result": "1 fail: UserPromptSubmit fired" },
+      { "command": "git -C <wt> restore --source=HEAD -- <8 fixed source files> (backups in the scratchpad), then bun test terminal-result.server, compact-fallback, agent-lifecycle-hooks, secrets", "result": "10 fail on the pre-fix sources: 6 server (instruction terminal-only, Telegram, AC5 stored shape, terminal-only refusal, replay stored shape, replay gates), 2 DEG2-1, 1 AR2-001 hooks, 1 SC3-001. The fixed files were then copied back and checked with cmp." },
+      { "command": "8 server.ts mutations, one at a time, each running its own -t test", "result": "all red (HL4-001; TP-005 slash, resumeIssueQuestions, rewind order, editor 4a, editor 4b; TP2-001 injected gate, fallback text); all reverted, server.ts byte-identical to the fixed copy" },
+      { "command": "bun test src/acp/terminal-result", "result": "68 pass, 0 fail (AC5/AC6/AC7/AC10 verify command)" },
+      { "command": "bun test the 14 covering files: terminal-result x2, secrets, compact-fallback, compact, compact.reasoning-guard, session/store, agent-lifecycle-hooks, delegate-history-replay, delegate-turn-hook, telegram-session.server, shell-profile, bus/pause, tui/herdr-core-status", "result": "269 pass, 0 fail" },
+      { "command": "bun run typecheck", "result": "tsc --noEmit, exit 0 (run twice, the second time after the last edit)" },
+      { "command": "bunx eslint <the 13 changed src files>", "result": "exit 0, no output" }
+    ],
+    "doc_deltas": [
+      "spec §3.9.5b Turn: the turn also runs with origin 'terminal-results'; keryx's line is stored as an injected harness line marked terminalContinuation; no UserPromptSubmit hook fires for it",
+      "spec §3.9.5b Replay: the continuation line is found by its stored marker, not its text; the 'also when a UserPromptSubmit hook appended context' clause no longer applies",
+      "spec §3.9.5b Notes: the output keeps its last 16 KiB after redaction, behind a leading `[… N earlier bytes not kept]` line (capResultText tail mode), not the head with a trailing truncation marker",
+      "compaction: an in-turn cut keeps the latest Run-result notes and line; summaries list removed Run results"
+    ],
+    "behavior_changes": [
+      { "description": "A capped Run output keeps its last 16 KiB and starts with `[… N earlier bytes not kept]` (shown on a replayed run card and read by the model).", "user_visible": true, "needs_operator": true, "alternatives": ["`[… truncated: N earlier bytes]` wording", "also drop the partial first line after the byte cut"] },
+      { "description": "detectSecrets masks from the previous block end (or the input start) to an orphan `-----END … PRIVATE KEY-----` line, for every consumer, not only Run results.", "user_visible": true, "needs_operator": false, "alternatives": ["mask only the contiguous base64-looking lines before the END line", "apply the rule only in terminalResultNote"] },
+      { "description": "UserPromptSubmit hooks no longer fire on a terminal-results turn; its line is not an operator message to compaction, titles or replay.", "user_visible": false, "needs_operator": false, "alternatives": ["keep firing the hook and append the line before storing the notes (the reviewer's alternative, which needs an owner decision and a Flow 306 rule amendment)"] }
+    ],
+    "assumptions": [
+      "Acceptance and the bullet need _meta.keryx.terminalResults only, not terminal as well; this follows the AC10 wording.",
+      "No stored session has the old continuation shape (provenance project, text-matched) to migrate: PR #1316 is unreleased, so no back-compat path was added."
+    ],
+    "noticed_not_touched": [
+      { "what": "appendTerminalResultNotes stores whatever it is given. If a client re-sends after a lost reply, the same runId gets a second note (HL4-001's optional hardening).", "where": "src/acp/server.ts appendTerminalResultNotes" },
+      { "what": "/delegate notes (DEG2-3, pre-existing) still sit before the next turn's line and can be cut by compaction.", "where": "src/acp/server.ts handOffDelegateResult / appendDelegateNotes" },
+      { "what": "Not traced for ACP sessions: the remote history and TUI conversation-history views now see the continuation line as injected.", "where": "src/remote/history.ts, src/tui/conversation-history.ts" }
+    ],
+    "not_verified": [
+      "whole-repo bun test, the full src/acp suite and bun run lint (owner instruction: focused tests only; CI runs them)",
+      "keryx health run; keryx skills contracts validate --schema task-implementer-input (the dispatch was a prompt brief with no request JSON); keryx skills resolve-context (not run, so the resolved rule set was not re-read this session)",
+      "a live desktop round trip; the desktop capability (T11) is not in this lane",
+      "a real UserPromptSubmit hook process (the agent test uses a fake HookRuntime)"
+    ],
+    "skill_drift": "missing: src/acp has no project-skill",
+    "parallel_lane": "apps/** (T11) and docs/** (T12) were not touched, formatted, staged or reverted. No git stash, no git add, no commit. git restore --source=HEAD touched only the 8 src files this task changed, which were backed up first and restored byte-identical."
+  },
+  "timestamp_utc": "2026-11-25T18:25:00Z"
+}

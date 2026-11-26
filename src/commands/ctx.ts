@@ -4,6 +4,7 @@ import { optionValue } from "../lib/args";
 import { pathExists, writeFileAtomic } from "../lib/fs";
 import { assertNoWritingDiffOption } from "../lib/git-revision";
 import { readJsonFileOr } from "../lib/json";
+import { rgSummaryItem } from "../lib/rg-summary-item";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { redactRaw } from "../security/guard";
 import { sourceForFileRead } from "../security/service";
@@ -1706,7 +1707,7 @@ function renderRgMatches(
     const note = omissionNote(shown.length, item.matches.length, "matches in this file");
     return [
       `- ${item.file}`,
-      ...shown.map((match) => `  - ${match.line}:${match.column} ${truncate(match.text, 180)}`),
+      ...shown.map((match) => rgSummaryItem(match.line, match.column, truncate(match.text, 180))),
       ...(note ? [`  ${note}`] : []),
     ].join("\n");
   });

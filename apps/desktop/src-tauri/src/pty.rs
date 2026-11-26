@@ -82,6 +82,32 @@ impl Ring {
         let skip = since.saturating_sub(start_mark).min(self.bytes.len() as u64) as usize;
         self.bytes.iter().skip(skip).copied().collect()
     }
+
+    /// Earlier output was dropped: what is kept starts wherever the cap cut it, mid-line as like as not.
+    fn dropped(&self) -> bool {
+        self.total > self.bytes.len() as u64
+    }
+}
+
+/// A tab's output tail (`pty_tail`): the last lines as plain text, and whether the ring dropped earlier output.
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PtyTail {
+    pub text: String,
+    pub truncated: bool,
+}
+
+/// The last `lines` lines of kept output `bytes` as plain text. When the ring dropped earlier output
+/// (`truncated`), the kept bytes begin inside a line: that partial first line is left out, so the tail
+/// never starts with a fragment (a token without its prefix, a value without its `NAME=`), and the
+/// caller is told output is missing.
+pub fn tail_of(bytes: &[u8], truncated: bool, lines: usize) -> PtyTail {
+    let whole = if truncated {
+        bytes.iter().position(|&b| b == b'\n').map_or(&[][..], |at| &bytes[at + 1..])
+    } else {
+        bytes
+    };
+    PtyTail { text: tail_lines(&plain_text(whole), lines), truncated }
 }
 
 /// Decode `chunk` after the bytes `carry` held back; keep an incomplete
@@ -176,6 +202,22 @@ pub fn tail_lines(text: &str, lines: usize) -> String {
     all[all.len().saturating_sub(lines)..].join("\n")
 }
 
+/// Most lines `PtyManager::tail` returns.
+pub const TAIL_MAX_LINES: usize = 2000;
+
+/// What follows the user's shell in the argv of a tab that runs exactly one command (the Run
+/// button): a login, interactive shell, so the command sees the PATH, aliases and rc files of a
+/// shell tab. An empty command, and one holding a NUL that no argv can carry, are refused.
+pub fn command_args(command: &str) -> Result<[&str; 4], String> {
+    if command.trim().is_empty() {
+        return Err("Nothing to run: the command is empty".into());
+    }
+    if command.contains('\0') {
+        return Err("The command contains a NUL character".into());
+    }
+    Ok(["-l", "-i", "-c", command])
+}
+
 pub struct Pty {
     pub id: u64,
     pub window: String,
@@ -231,6 +273,15 @@ impl Pty {
 
     pub fn has_exited(&self) -> bool {
         self.exit.lock().unwrap().is_some()
+    }
+
+    /// The last `lines` lines of the kept output as plain text, also after the process exited.
+    pub fn tail(&self, lines: usize) -> PtyTail {
+        let (bytes, truncated) = {
+            let ring = self.ring.lock().unwrap();
+            (ring.since(0), ring.dropped())
+        };
+        tail_of(&bytes, truncated, lines)
     }
 
     /// Wait until output stops arriving for `quiet` (after at least one chunk
@@ -372,6 +423,8 @@ pub struct PtyManager {
     next: AtomicU64,
     /// Agent tabs opened so far per window, for their titles.
     agent_counts: Mutex<HashMap<String, u64>>,
+    /// Bytes each new tab keeps; `RING_BYTES` unless a test sets a smaller ring.
+    ring_cap: Option<usize>,
 }
 
 /// The user's shell from the login environment, `/bin/zsh` otherwise.
@@ -383,6 +436,12 @@ pub fn user_shell(env: &HashMap<String, String>) -> String {
 }
 
 impl PtyManager {
+    /// A manager whose tabs keep only `cap` bytes, so a test can make a ring drop output.
+    #[cfg(test)]
+    fn with_ring_cap(cap: usize) -> Self {
+        PtyManager { ring_cap: Some(cap), ..Default::default() }
+    }
+
     pub fn open(&self, spec: OpenSpec<'_>) -> Result<Arc<Pty>, String> {
         let size = PtySize { rows: spec.rows.max(1), cols: spec.cols.max(1), pixel_width: 0, pixel_height: 0 };
         let pair = native_pty_system().openpty(size).map_err(|e| format!("Could not open a terminal: {e}"))?;
@@ -440,7 +499,7 @@ impl PtyManager {
             master: Mutex::new(pair.master),
             writer: Mutex::new(writer),
             killer: Mutex::new(child.clone_killer()),
-            ring: Mutex::new(Ring::new(RING_BYTES)),
+            ring: Mutex::new(Ring::new(self.ring_cap.unwrap_or(RING_BYTES))),
             activity: Condvar::new(),
             sink: Mutex::new(None),
             exit: Mutex::new(None),
@@ -449,6 +508,21 @@ impl PtyManager {
         spawn_reader(pty.clone(), reader, spec.on_exit, move || child.wait().ok().map(|s| s.exit_code()));
         self.tabs.lock().unwrap().insert(id, pty.clone());
         Ok(pty)
+    }
+
+    /// A tab whose process is the user's shell, resolved as for a shell tab, running exactly
+    /// `command`: `<shell> -l -i -c <command>`. Everything else is `open`'s; `spec.program` is
+    /// replaced. A refused command or a shell that cannot start is an error and no tab exists.
+    pub fn open_command(&self, spec: OpenSpec<'_>, command: &str) -> Result<Arc<Pty>, String> {
+        let args = command_args(command)?;
+        let shell = user_shell(spec.env);
+        self.open(OpenSpec { program: Some((shell.as_str(), &args)), ..spec })
+    }
+
+    /// The last `lines` lines (1 to `TAIL_MAX_LINES`) of a tab's kept output as plain text: also
+    /// after its process exited, until the tab is closed.
+    pub fn tail(&self, window: &str, id: u64, lines: usize) -> Result<PtyTail, String> {
+        Ok(self.get(window, id)?.tail(lines.clamp(1, TAIL_MAX_LINES)))
     }
 
     pub fn get(&self, window: &str, id: u64) -> Result<Arc<Pty>, String> {
@@ -626,6 +700,24 @@ mod tests {
     }
 
     #[test]
+    fn a_tail_says_when_the_ring_dropped_output_and_never_starts_inside_a_line() {
+        let mut whole = Ring::new(64);
+        whole.push(b"ok\nfine\n");
+        assert!(!whole.dropped());
+        assert_eq!(tail_of(&whole.since(0), whole.dropped(), 5), PtyTail { text: "ok\nfine".into(), truncated: false });
+        // The cap cuts the first line after `API_KEY=`: its value is not a line of the tail.
+        let mut cut = Ring::new(8);
+        cut.push(b"API_KEY=abcd\nok\n");
+        assert_eq!(cut.since(0), b"abcd\nok\n");
+        assert!(cut.dropped());
+        assert_eq!(tail_of(&cut.since(0), cut.dropped(), 5), PtyTail { text: "ok".into(), truncated: true });
+        // Nothing but a partial line is kept: an empty tail that still says output was dropped.
+        let mut long = Ring::new(4);
+        long.push(b"abcdefgh");
+        assert_eq!(tail_of(&long.since(0), long.dropped(), 5), PtyTail { text: String::new(), truncated: true });
+    }
+
+    #[test]
     fn pty_runs_in_the_cwd_with_the_env_and_replays_on_attach() {
         let dir = tempfile::tempdir().unwrap();
         let mgr = PtyManager::default();
@@ -791,6 +883,179 @@ mod tests {
         assert!(read_until(&ra, "P=cat G=cat").contains("P=cat"));
         assert!(read_until(&ru, "P=less").contains("P=less"));
         mgr.close_all();
+    }
+
+    /// A command tab's login environment, cut off from the developer's own rc files.
+    fn command_env(home: &Path, shell: &str) -> HashMap<String, String> {
+        let mut env = env();
+        for k in ["ENV", "BASH_ENV", "ZDOTDIR"] {
+            env.remove(k);
+        }
+        env.insert("HOME".into(), home.display().to_string());
+        env.insert("SHELL".into(), shell.into());
+        env
+    }
+
+    fn open_command(
+        mgr: &PtyManager,
+        dir: &Path,
+        env: &HashMap<String, String>,
+        command: &str,
+    ) -> (Result<Arc<Pty>, String>, mpsc::Receiver<Option<u32>>) {
+        let (tx, rx) = mpsc::channel();
+        let spec = OpenSpec {
+            window: "w",
+            owner: Owner::User,
+            cwd: dir,
+            env,
+            cols: 80,
+            rows: 24,
+            program: None,
+            title: Some("run"),
+            on_exit: Some(Box::new(move |_id, code| {
+                let _ = tx.send(code);
+            })),
+        };
+        (mgr.open_command(spec, command), rx)
+    }
+
+    fn exit_code(rx: &mpsc::Receiver<Option<u32>>) -> Option<u32> {
+        rx.recv_timeout(Duration::from_secs(10)).expect("the command never exited")
+    }
+
+    #[test]
+    fn run_command_starts_the_users_shell_as_a_login_interactive_shell_with_exactly_the_command() {
+        let dir = tempfile::tempdir().unwrap();
+        // The user's shell is `echo` here, so the tab prints the arguments it was started with.
+        let env = command_env(dir.path(), "/bin/echo");
+        let mgr = PtyManager::default();
+        let (pty, rx) = open_command(&mgr, dir.path(), &env, "echo 'a b' && exit 3");
+        let pty = pty.unwrap();
+        assert_eq!(exit_code(&rx), Some(0));
+        let out = plain_text(&pty.output_since(0));
+        assert!(out.contains("-l -i -c echo 'a b' && exit 3\n"), "{out:?}");
+        let info = pty.info();
+        assert_eq!((info.title.as_str(), info.owner, info.running), ("run", Owner::User, false));
+        mgr.close("w", pty.id);
+    }
+
+    #[test]
+    fn run_command_runs_in_the_project_root_with_the_login_environment() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut env = command_env(dir.path(), "/bin/sh");
+        env.insert("KERYX_LOGIN_ENV".into(), "kept".into());
+        let mgr = PtyManager::default();
+        let (pty, rx) = open_command(&mgr, dir.path(), &env, r#"echo "T=$TERM S=$SHELL L=$KERYX_LOGIN_ENV"; pwd"#);
+        let pty = pty.unwrap();
+        assert_eq!(exit_code(&rx), Some(0));
+        let out = plain_text(&pty.output_since(0));
+        assert!(out.contains("T=xterm-256color S=/bin/sh L=kept"), "{out:?}");
+        let real = std::fs::canonicalize(dir.path()).unwrap();
+        assert!(out.contains(real.to_str().unwrap()) || out.contains(dir.path().to_str().unwrap()), "{out:?}");
+        mgr.close_all();
+    }
+
+    #[test]
+    fn run_command_reports_the_commands_exit_code() {
+        let dir = tempfile::tempdir().unwrap();
+        let env = command_env(dir.path(), "/bin/sh");
+        let mgr = PtyManager::default();
+        let (pty, rx) = open_command(&mgr, dir.path(), &env, "exit 3");
+        let pty = pty.unwrap();
+        assert_eq!(exit_code(&rx), Some(3));
+        assert_eq!(pty.info().exit_code, Some(3));
+        mgr.close_all();
+    }
+
+    #[test]
+    fn run_command_runs_shell_syntax_through_the_shell() {
+        let dir = tempfile::tempdir().unwrap();
+        let env = command_env(dir.path(), "/bin/sh");
+        let mgr = PtyManager::default();
+        let (pty, rx) = open_command(&mgr, dir.path(), &env, "echo a && echo b");
+        let pty = pty.unwrap();
+        assert_eq!(exit_code(&rx), Some(0));
+        let out = plain_text(&pty.output_since(0));
+        assert!(out.contains("a\nb\n"), "{out:?}");
+        mgr.close_all();
+    }
+
+    #[test]
+    fn run_command_tail_returns_the_last_plain_text_lines_also_after_exit() {
+        let dir = tempfile::tempdir().unwrap();
+        let env = command_env(dir.path(), "/bin/sh");
+        let mgr = PtyManager::default();
+        let command = r"printf '\033[1;32mone\033[0m\n\033]0;title\007two\n50%%\r100%%\n'";
+        let (pty, rx) = open_command(&mgr, dir.path(), &env, command);
+        let id = pty.unwrap().id;
+        assert_eq!(exit_code(&rx), Some(0));
+        assert_eq!(mgr.tail("w", id, 3).unwrap(), PtyTail { text: "one\ntwo\n100%".into(), truncated: false });
+        assert_eq!(mgr.tail("w", id, 2).unwrap().text, "two\n100%");
+        // Fewer than one line is one line.
+        assert_eq!(mgr.tail("w", id, 0).unwrap().text, "100%");
+        assert!(mgr.tail("other", id, 2).is_err(), "another window's tab");
+        mgr.close("w", id);
+        assert!(mgr.tail("w", id, 2).is_err(), "a closed tab");
+    }
+
+    #[test]
+    fn run_command_tail_through_the_manager_says_the_ring_dropped_output_and_starts_on_a_whole_line() {
+        let dir = tempfile::tempdir().unwrap();
+        let env = command_env(dir.path(), "/bin/sh");
+        // 40 lines of 9 bytes each (`line NN` and the terminal's CR LF) through a ring of 60 bytes.
+        let mgr = PtyManager::with_ring_cap(60);
+        let (pty, rx) = open_command(&mgr, dir.path(), &env, r#"i=10; while [ $i -le 49 ]; do echo "line $i"; i=$((i+1)); done"#);
+        let pty = pty.unwrap();
+        let id = pty.id;
+        assert_eq!(exit_code(&rx), Some(0));
+        // The ring really starts inside a line, so a tail that kept it whole would start with a fragment.
+        assert!(!pty.output_since(0).starts_with(b"line "), "the cap must cut a line for this test to mean anything");
+        let tail = mgr.tail("w", id, 100).unwrap();
+        assert!(tail.truncated, "the manager's tail must carry the ring's dropped flag");
+        let lines: Vec<&str> = tail.text.split('\n').collect();
+        assert!(!lines.is_empty() && lines.len() < 40, "{lines:?}");
+        assert!(lines.iter().all(|l| l.starts_with("line ") && l.len() == 7), "{lines:?}");
+        assert_eq!(lines[lines.len() - 1], "line 49");
+        // A tab that kept everything says so.
+        let whole_mgr = PtyManager::default();
+        let (whole, rx) = open_command(&whole_mgr, dir.path(), &env, "echo hi");
+        let whole = whole.unwrap();
+        assert_eq!(exit_code(&rx), Some(0));
+        assert_eq!(whole.tail(5), PtyTail { text: "hi".into(), truncated: false });
+        mgr.close_all();
+        whole_mgr.close_all();
+    }
+
+    #[test]
+    fn run_command_tail_is_capped_at_two_thousand_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        let env = command_env(dir.path(), "/bin/sh");
+        let mgr = PtyManager::default();
+        let (pty, rx) = open_command(&mgr, dir.path(), &env, "i=1; while [ $i -le 2100 ]; do echo $i; i=$((i+1)); done");
+        let id = pty.unwrap().id;
+        assert_eq!(exit_code(&rx), Some(0));
+        let tail = mgr.tail("w", id, usize::MAX).unwrap().text;
+        let lines: Vec<&str> = tail.split('\n').collect();
+        assert_eq!((lines.len(), lines[0], lines[lines.len() - 1]), (TAIL_MAX_LINES, "101", "2100"));
+        mgr.close_all();
+    }
+
+    #[test]
+    fn run_command_refuses_an_empty_command_and_a_shell_that_cannot_start() {
+        let dir = tempfile::tempdir().unwrap();
+        let mgr = PtyManager::default();
+        let env = command_env(dir.path(), "/bin/sh");
+        for command in ["", "  \n\t", "echo a\0b"] {
+            let (pty, _rx) = open_command(&mgr, dir.path(), &env, command);
+            assert!(pty.is_err(), "{command:?} was accepted");
+        }
+        // The user's shell exists but cannot be executed.
+        let shell = dir.path().join("not-executable");
+        std::fs::write(&shell, "#!/bin/sh\n").unwrap();
+        let env = command_env(dir.path(), shell.to_str().unwrap());
+        let (pty, _rx) = open_command(&mgr, dir.path(), &env, "echo hi");
+        assert!(pty.is_err());
+        assert!(mgr.list("w").is_empty(), "a refused or failed start leaves no tab");
     }
 
     #[test]

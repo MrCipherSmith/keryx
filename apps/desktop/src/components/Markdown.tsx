@@ -1,6 +1,6 @@
 import DOMPurify from "dompurify";
 import { Marked, marked } from "marked";
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Menu } from "./Menu";
 import { decoratePrReferences, type PrLinks } from "./prLinks";
 import { githubPrUrl } from "../lib/githubPr";
@@ -8,7 +8,7 @@ import { codeBlockCopyText, revealCodeBlock } from "./codeBlock";
 import { highlightToHtml } from "./highlight";
 import { diffLines, diffStats, looksLikeUnifiedDiff } from "./unifiedDiff";
 import { emptyCache, renderStreaming, type RenderTokens, type StreamFrame } from "./markdownStream";
-import { isShellLang, runInTerminal, runnableCommand } from "../panels/panelBus";
+import { isShellLang, runButtonTitle, runInTerminal, runnableCommand } from "../panels/panelBus";
 import { localImage } from "../platform/commands";
 import { clickedImageLink, decorateImageLinks, loadCached, openImagePreview } from "./imagePreview";
 
@@ -79,12 +79,19 @@ export function renderInline(src: string): string {
   return DOMPurify.sanitize(html, SANITIZE) as string;
 }
 
+/**
+ * The session whose transcript renders this Markdown (set by the transcript): a Run clicked in it is
+ * that session's run and its result goes back to it (flow 523). Null elsewhere (wiki pages, PR text),
+ * where Run only opens the tab.
+ */
+export const RunSessionContext = createContext<string | null>(null);
+
 /** Prevent native WebView navigation; only explicitly handled links can open a browser. */
 function blockLinks(e: React.MouseEvent<HTMLElement>) {
   if ((e.target as HTMLElement).closest("a")) e.preventDefault();
 }
 
-function onClick(e: React.MouseEvent<HTMLDivElement>) {
+function onClick(e: React.MouseEvent<HTMLDivElement>, runSession: string | null) {
   const target = e.target as HTMLElement;
   blockLinks(e);
   const image = clickedImageLink(target);
@@ -99,7 +106,7 @@ function onClick(e: React.MouseEvent<HTMLDivElement>) {
   if (run) {
     const block = run.closest<HTMLElement>(".code-block");
     const command = runnableCommand(codeBlockCopyText(block ?? null, block?.querySelector("code") ?? null));
-    if (command) runInTerminal(command);
+    if (command) runInTerminal(command, runSession === null ? undefined : { sessionId: runSession });
     return;
   }
   const copy = target.closest<HTMLButtonElement>("button.code-copy");
@@ -118,8 +125,11 @@ function onClick(e: React.MouseEvent<HTMLDivElement>) {
   }
 }
 
-/** Wrap every fenced block with a header carrying its language and a copy button. */
-function decorateCodeBlocks(html: string): string {
+/**
+ * Wrap every fenced block with a header carrying its language and a copy button. `tracked`: the message is
+ * in a session's transcript, where a Run's result goes back to the agent (the Run button says so).
+ */
+function decorateCodeBlocks(html: string, tracked: boolean): string {
   if (!html.includes("<pre>")) return html;
   const doc = new DOMParser().parseFromString(`<div>${html}</div>`, "text/html");
   const root = doc.body.firstElementChild;
@@ -177,13 +187,13 @@ function decorateCodeBlocks(html: string): string {
       st.append(add, del);
       head.append(st);
     }
-    // One shell command gets Run (D-13): it is typed into the side panel's terminal. A block that
-    // had hidden characters revealed never does.
+    // One shell command gets Run (D-13): it runs in a terminal tab of its own. A block that had
+    // hidden characters revealed never does.
     if (isShellLang(lang) && wrap.dataset.raw === undefined && runnableCommand(code?.textContent ?? "") !== null) {
       const runBtn = doc.createElement("button");
       runBtn.className = "code-run";
       runBtn.type = "button";
-      runBtn.title = "Run in the terminal panel";
+      runBtn.title = runButtonTitle(tracked);
       runBtn.textContent = "Run";
       head.append(runBtn);
     }
@@ -195,8 +205,8 @@ function decorateCodeBlocks(html: string): string {
 }
 
 /** The final rendering: what every finished message shows. */
-function renderFinal(src: string, repository?: string): string {
-  return decorateCodeBlocks(decoratePrReferences(renderMarkdown(src), repository));
+function renderFinal(src: string, tracked: boolean, repository?: string): string {
+  return decorateCodeBlocks(decoratePrReferences(renderMarkdown(src), repository), tracked);
 }
 
 /** What the message element currently shows. */
@@ -261,6 +271,7 @@ const SETTLE_MS = 250;
 
 export const Markdown = memo(function Markdown({ text, className, prLinks }: { text: string; className?: string; prLinks?: PrLinks }) {
   const ref = useRef<HTMLDivElement>(null);
+  const runSession = useContext(RunSessionContext);
   const [prMenu, setPrMenu] = useState<{ anchor: HTMLAnchorElement; url: string } | null>(null);
   const menuRef = useRef(prMenu);
   const closePrMenu = useCallback(() => {
@@ -275,11 +286,13 @@ export const Markdown = memo(function Markdown({ text, className, prLinks }: { t
     if (menuRef.current && !ref.current?.contains(menuRef.current.anchor)) closePrMenu();
   }, [closePrMenu]);
   const repository = prLinks?.repository;
+  const tracked = runSession !== null;
   const renderTokens = useMemo<RenderTokens>(() => (tokens) =>
-    decorateCodeBlocks(decoratePrReferences(sanitize(marked.parser(tokens)), repository)), [repository]);
+    decorateCodeBlocks(decoratePrReferences(sanitize(marked.parser(tokens)), repository), tracked), [repository, tracked]);
   const r = useRef({
     renderedText: null as string | null,
     repository,
+    tracked,
     latest: text,
     // Kept across a settle: the text usually keeps growing from where it was.
     cache: emptyCache(),
@@ -295,15 +308,16 @@ export const Markdown = memo(function Markdown({ text, className, prLinks }: { t
     const el = ref.current;
     if (!el) return;
     st.latest = text;
-    if (st.renderedText === null || st.repository !== repository) {
+    if (st.renderedText === null || st.repository !== repository || st.tracked !== tracked) {
       if (st.raf) cancelAnimationFrame(st.raf);
       window.clearTimeout(st.settle);
       st.raf = 0;
       st.settle = 0;
       st.repository = repository;
+      st.tracked = tracked;
       st.cache = emptyCache();
       st.renderedText = text;
-      showFinal(el, st.view, renderFinal(text, repository));
+      showFinal(el, st.view, renderFinal(text, tracked, repository));
       closeDetachedMenu();
       return;
     }
@@ -325,7 +339,7 @@ export const Markdown = memo(function Markdown({ text, className, prLinks }: { t
       if (st.raf) cancelAnimationFrame(st.raf);
       st.raf = 0;
       st.renderedText = st.latest;
-      const final = renderFinal(st.latest, repository);
+      const final = renderFinal(st.latest, tracked, repository);
       // When the streamed view already reads exactly like the one-shot rendering, keep its nodes: a
       // pause must not replace the message under the user's selection.
       const frame = renderStreaming(st.latest, st.cache, renderTokens);
@@ -333,7 +347,7 @@ export const Markdown = memo(function Markdown({ text, className, prLinks }: { t
       else showFinal(el, st.view, final);
       closeDetachedMenu();
     }, SETTLE_MS);
-  }, [text, repository, renderTokens, closeDetachedMenu]);
+  }, [text, repository, tracked, renderTokens, closeDetachedMenu]);
 
   // Local-image links get thumbnails, also as the message streams in (throttled to a frame).
   useEffect(() => {
@@ -384,7 +398,7 @@ export const Markdown = memo(function Markdown({ text, className, prLinks }: { t
         if (prLinks && url) {
           e.preventDefault();
           prLinks.openExternal(url);
-        } else onClick(e);
+        } else onClick(e, runSession);
       }}
       onContextMenu={(e) => { if (showPrMenu(e.target)) e.preventDefault(); else blockLinks(e); }}
       onKeyDown={(e) => {

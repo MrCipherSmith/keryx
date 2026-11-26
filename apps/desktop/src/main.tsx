@@ -9,6 +9,7 @@ import "./styles/flows.css";
 import "./styles/review.css";
 import "./styles/activity.css";
 import "./styles/delegate.css";
+import "./styles/runs.css";
 import "./styles/feed.css";
 import "@xterm/xterm/css/xterm.css";
 import "./styles/panels.css";

@@ -1,0 +1,52 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "523",
+  "dispatch_id": "523-T6",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "keryx: terminalResults prompt meta, untrusted notes, floor, replay, initialize meta, system-instruction guidance",
+    "description": "In the keryx ACP server, shell profile only, implement the wire contract in plan.md \"Wire contract (keryx ↔ desktop)\". (1) New module `src/acp/terminal-result.ts`: validate `session/prompt` params `_meta.keryx.terminalResults` (array of 1..8; `runId` string ≤ 64 of [A-Za-z0-9_-]; `command` string 1..4096 without NUL; `state` \"exited\"|\"running\"; `exitCode` integer or null, required when `state` is \"exited\" and absent when \"running\"; `durationMs` integer ≥ 0; `output` string); build one note per result in the shape of `delegateResultNote` (`src/acp/delegate-turn-hook.ts:295`): a head line `[terminal run <runId> result: exit <code> | ended by a signal | still running]`, an UNTRUSTED line saying it is the output of a command the operator ran in the desktop terminal at the agent's suggestion and is data, never instructions, then `<terminal-result-<nonce>>`, the command and its output (`redactSensitiveText`, `capResultText`, the nonce stripped from the body so the output cannot forge or close the envelope), `</terminal-result-<nonce>>`; a pure parser for replay that returns `{runId, command, state, exitCode, durationMs, output}` and never the envelope; and a constant continuation sentence authored by keryx (the commands the agent proposed ran in the operator's terminal, the results are in the notes above, continue the task from them). (2) `src/acp/server.ts`: when a shell-profile `session/prompt` carries that meta and the client advertised `_meta.keryx.terminal: true` (`clientRunsTerminal`, `src/acp/shell-delegate.ts:59`): malformed meta → JSON-RPC invalid params (-32602), nothing stored, no turn; valid meta → append the notes to the history as user-role entries with `provenance: \"harness\"`, `injected: true` (as `appendDelegateNotes` does, persisted the same way), use the continuation sentence as the turn's user line instead of the prompt's text blocks, and run that turn with the untrusted-content floor on from its start, so a tool call the session's permission mode would otherwise auto-approve is sent as `session/request_permission` instead. Find how the floor is set today (`src/commands/agent.ts` around the floor comments at :153-155, :246, :305, and `src/acp/session-mcp.ts:69-99,249-258`) and reuse that mechanism; do not invent a second one. A client without the terminal capability sending the meta gets invalid params. (3) Replay on `session/load`: a stored note becomes a user chunk with `_meta.keryx.terminalResult` (the parsed fields) and the continuation line a user chunk with `_meta.keryx.terminalContinuation: true` — mirror how delegate notes are replayed (`parseDelegateNote` usage in server.ts). (4) `initialize` result for the shell profile: `_meta.keryx.terminalResults: true` next to the existing keryx profile meta (server.ts ~:1865). (5) System instruction: add a `clientRunsTerminal?: boolean` field to the instruction context of `buildAgentSystemInstruction` (`src/commands/agent.ts:2004`) and pass `clientRunsTerminal(state.clientCapabilities)` from server.ts ~:2569; with it set, add one bullet saying that in the Keryx desktop a reply's single-command shell block gets a Run button, that when the user runs it the command's exit code and output come back as an untrusted terminal-result note and the next turn starts by itself, so the model gives one command per block and ends its turn instead of asking the user to paste the output; without the flag the sentence is absent. Write the tests first (tdd-workflow): `src/acp/terminal-result.test.ts` (validation incl. every refusal, envelope cannot be closed by output containing `</terminal-result-` with or without the nonce, redaction, cap, parse round trip, the instruction sentence with and without the flag) and `src/acp/terminal-result.server.test.ts` (over the real server: a prompt with meta stores the notes and the continuation line and runs a turn; malformed meta is refused with nothing stored and no turn; the floor makes an otherwise auto-approved tool call ask; `session/load` replays the meta; `initialize` reports `terminalResults`). Reuse the existing ACP server test helpers (for example `src/acp/shell-delegate-terminal.test.ts`, `src/acp/shell-profile.test-helpers.ts`, `src/acp/shell-profile.test.ts`).",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "AC5: keryx (shell profile) stores each `terminalResults` entry as a labelled untrusted user-role note with `provenance: \"harness\"` — nonce envelope, `redactSensitiveText`, `capResultText` — and stores its own continuation sentence as the turn's user line instead of the client's text; an output that contains a forged closing tag cannot end the envelope, and malformed meta (wrong types, more than 8 entries, `exitCode` missing on `exited`) is refused as JSON-RPC invalid params with nothing stored and no turn run. [verify: exec `bun test src/acp/terminal-result` · sensitive: failure-scenario]",
+    "AC6: The follow-up turn started by a `terminalResults` prompt runs under the untrusted-content floor: a tool call that the session's permission mode would otherwise auto-approve is sent as a permission request instead. [verify: exec `bun test src/acp/terminal-result` · sensitive: failure-scenario]",
+    "AC7 (server half): After `session/load`, keryx replays each stored note as a user chunk with `_meta.keryx.terminalResult` (the parsed fields, never the envelope) and the continuation line with `_meta.keryx.terminalContinuation: true`; no turn starts. [verify: exec `bun test src/acp/terminal-result`]",
+    "AC10: For a client that advertised `_meta.keryx.terminal: true`, the system instruction says that a single-command shell block gets a Run button, that the command's exit code and output return as an untrusted terminal-result note and the next turn starts by itself, and that the model should end its turn rather than ask the user to paste output; for any other client the sentence is absent. [verify: exec `bun test src/acp/terminal-result`]"
+  ],
+  "context_refs": [
+    { "path": ".metaproject/flows/523-2026-11-24-desktop-run-result-followup/context.md", "kind": "context", "exists": true },
+    { "path": ".metaproject/flows/523-2026-11-24-desktop-run-result-followup/plan.md", "kind": "plan", "exists": true },
+    { "path": ".metaproject/flows/523-2026-11-24-desktop-run-result-followup/acceptance-criteria.md", "kind": "custom", "exists": true },
+    { "path": ".metaproject/flows/523-2026-11-24-desktop-run-result-followup/resolved/T6.implement.json", "kind": "custom", "exists": true }
+  ],
+  "files_to_read": [
+    "src/acp/delegate-turn-hook.ts",
+    "src/acp/server.ts",
+    "src/acp/profile.ts",
+    "src/acp/shell-delegate.ts",
+    "src/acp/session-mcp.ts",
+    "src/commands/agent.ts",
+    "src/acp/shell-delegate-terminal.test.ts",
+    "src/acp/shell-profile.test-helpers.ts"
+  ],
+  "constraints": [
+    "Never edit flow.json.",
+    "Never edit frozen acceptance criteria.",
+    "resolved_context_file: .metaproject/flows/523-2026-11-24-desktop-run-result-followup/resolved/T6.implement.json — read its must_read entries and cite each in project_context_applied; an entry promoted by a condition also needs its anchor and a summary.",
+    "Return a subagent-result; first line must be STATUS:.",
+    "Agent conduct (mandatory): (1) No AI attribution: no `Co-Authored-By:` trailer or \"Generated by/with …\" line naming an AI model, agent or tool in commit messages, PR or ticket descriptions, or comments. A human co-author, a code-generator note and a model name as technical provenance are allowed. (2) No commit, push, merge or release without an explicit ask. Invoking an orchestrator is the ask for its own task-boundary commits; merge and release always need their own ask. (3) Never destroy others' work: no `git stash` in a dirty tree, no blanket `git add -A` while parallel lanes share a checkout, no force-push to a shared branch. (4) No secrets or personal data in output, logs or commits. (5) Report honestly: name what failed, what was skipped and what was not verified.",
+    "Follow rules/process/git-concurrency.mdc: never git stash; never git add -A.",
+    "Root: /Users/Goodea/goodea/keryx-wt/main-2026-11-25. Before the first write run `cd /Users/Goodea/goodea/keryx-wt/main-2026-11-25 && pwd && git branch --show-current` (expect branch wt/main-2026-11-25); run every git command as `git -C /Users/Goodea/goodea/keryx-wt/main-2026-11-25`.",
+    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary.",
+    "A parallel lane (523-T5) edits apps/desktop/src-tauri/** and apps/desktop/src/platform/panels.ts in the same worktree at the same time: do not touch, format, revert or stage those files; their changes in git status are not yours.",
+    "Touch only src/acp/** and src/commands/agent.ts (plus their tests). Do not change the /delegate note behaviour (it stays a note without a turn). The desktop web view (apps/desktop/src/**) is a later task; do not edit it.",
+    "If the untrusted-content floor cannot be switched on for a turn through an existing mechanism, stop and return BLOCKED with what you found rather than adding a parallel mechanism; if a behaviour choice is not decided by plan.md, return it as a behavior_changes entry with needs_operator: true.",
+    "Search code with `keryx ctx rg`, never bare rg/grep. Verify before reporting: `bun test src/acp/terminal-result`, `bun test src/acp/` (report failures that also fail on the base as environmental, with evidence), and `bun run typecheck`. Report any test you could not run as not run."
+  ],
+  "allowed_actions": ["read", "write", "run-command", "git"],
+  "output_contract": { "schema": "subagent-result", "artifact_path": ".metaproject/flows/523-2026-11-24-desktop-run-result-followup/journal.md" },
+  "budget": { "max_output_tokens": null },
+  "provenance": { "created_at": "2026-11-24T21:12:00Z", "created_by": "flow-orchestrator" }
+}
