@@ -12,7 +12,9 @@ import { publicProjectReport } from "./report-overlay";
 import { renderRoundBlock, ROUND_BLOCK_VERSION, type RoundBlock, type RoundBlockFinding } from "./pr-comments";
 import { findingStatus, quoteSha256, readRoundNumber } from "./round-record";
 import { recordFinishedRound } from "./round-registry";
-import { computeVerdict, type VerdictFinding } from "./verdict";
+import { computeVerdict, premiseRecords, type VerdictFinding } from "./verdict";
+import { withSpendSection } from "./dispatch-usage";
+import type { PremiseQuestionDecision } from "./operator-decisions";
 import { computeReadiness, failingItems, readinessRefusal, type ReadinessOptions, type ReadinessReport } from "./readiness";
 import { cardPressFields, type CardPress, type ConfirmedVia, type ManagedReviewManifest } from "./types";
 
@@ -126,6 +128,52 @@ export function mentionsFindingId(report: string, id: string): boolean {
   return new RegExp(`(?<!${ID_CHAR})${escaped}(?!${ID_CHAR})`).test(report);
 }
 
+/** A report heading that opens a held-for-the-operator section the orchestrator wrote by hand. */
+const HELD_HEADING = /^(#{2,4})[ \t]+Held for\b/i;
+
+/**
+ * The report with every hand-written "Held for …" section removed, up to the next heading of the same or a higher level.
+ * Such a section is written before the operator answers, so it goes stale the moment a premise question is decided;
+ * publish states the held and decided findings from the package's own records instead ({@link heldSection}).
+ */
+export function withoutHeldSections(report: string): string {
+  const lines = report.split("\n");
+  const kept: string[] = [];
+  let skipping = 0;
+  for (const line of lines) {
+    const heading = /^(#{1,6})[ \t]/.exec(line);
+    if (skipping > 0 && heading !== null && heading[1]!.length <= skipping) skipping = 0;
+    const held = HELD_HEADING.exec(line);
+    if (held !== null) { skipping = held[1]!.length; continue; }
+    if (skipping === 0) kept.push(line);
+  }
+  return kept.join("\n").replace(/\n{3,}/g, "\n\n");
+}
+
+/**
+ * What the posted review says about held findings, from findings.json and operator-decisions.json at the moment of
+ * publishing: the findings still waiting for an answer, and the ones the operator has answered (and how). Empty when
+ * there are neither.
+ */
+export function heldSection(held: readonly VerdictFinding[], decisions: readonly PremiseQuestionDecision[]): string {
+  const latest = new Map<string, PremiseQuestionDecision>();
+  for (const decision of decisions) latest.set(decision.finding, decision);
+  const parts: string[] = [];
+  if (held.length > 0) {
+    parts.push("### Held for a decision", "", ...held.map((finding) => `- **${finding.id}** (${finding.severity}): ${finding.problem}`), "");
+  }
+  if (latest.size > 0) {
+    const shortId = (finding: string) => finding.slice(finding.lastIndexOf("#") + 1);
+    parts.push("### Decided by the operator", "", ...[...latest.values()].map((decision) =>
+      `- **${shortId(decision.finding)}**: ${decision.answer === "dismiss" ? "dismissed" : "upheld"}${decision.reason.trim() ? ` (${oneLine(decision.reason)})` : ""}`), "");
+  }
+  return parts.length === 0 ? "" : `\n${parts.join("\n")}`;
+}
+
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
 function minorsLeftOut(count: number): string {
   return `- … ${count} more minor finding(s) — see verdict-interim.md / \`keryx review verdict\``;
 }
@@ -236,14 +284,19 @@ export async function publishReview(packageDir: string, options: PublishOptions)
   if (partial && event === "APPROVE") {
     throw new Error(`A partial review cannot approve: ${failing.length} readiness item(s) are failing (${failing.map((item) => item.id).join(", ")}). Use --event COMMENT or REQUEST_CHANGES, or repair the items.`);
   }
-  const report = publicProjectReport(await readFile(path.join(packageDir, "report.md"), "utf8").catch(() => ""));
+  const stored = await readFile(path.join(packageDir, "report.md"), "utf8").catch(() => "");
+  // The spend as research.json states it now (a ledger run after ingest changes it), and no hand-written held section:
+  // keryx renders held and decided findings from the package below.
+  const research = await readJsonFileOr<unknown>(path.join(packageDir, "research.json"), undefined);
+  const report = withoutHeldSections(publicProjectReport(withSpendSection(stored, research)));
   if (report === "") throw new Error(`Review ${manifest.reviewId} has no report.md body to publish.`);
   // The first line names the reviewed commit; a report whose first line already passes `review complete`'s head gate keeps it.
   const movedLine = moved === undefined || firstLineSaysMoved(report, reviewedHead)
     ? "" : `${headMovedLine({ reviewedHead: reviewedHead!, currentHead: moved })}\n\n`;
-  const head = `${movedLine}${partial ? `${partialPublishHeader(readiness).join("\n")}\n` : ""}${runModeHeader(packageDir)}${report}\n`;
+  const [verdict, { decisions }] = await Promise.all([computeVerdict(packageDir), premiseRecords(packageDir)]);
+  const head = `${movedLine}${partial ? `${partialPublishHeader(readiness).join("\n")}\n` : ""}${runModeHeader(packageDir)}${report}\n${heldSection(verdict.held, decisions)}`;
   const foot = runModeFooter(packageDir);
-  const minors = minorSection((await computeVerdict(packageDir)).minors, report, PUBLISHED_BODY_LIMIT - head.length - foot.length - ROUND_BLOCK_LIMIT);
+  const minors = minorSection(verdict.minors, report, PUBLISHED_BODY_LIMIT - head.length - foot.length - ROUND_BLOCK_LIMIT);
   const visible = `${head}${minors}${foot}`;
   const findings = await readJsonFileOr<unknown>(path.join(packageDir, "findings.json"), []);
   const roundBlock = buildRoundBlock({ body: visible, round: readRoundNumber(packageDir) ?? 1, reviewId: manifest.reviewId, reviewedHead, findings: Array.isArray(findings) ? findings : [] });

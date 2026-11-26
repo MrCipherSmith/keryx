@@ -41,6 +41,9 @@ export const NO_TEXT_PLACEHOLDER = "(subagent produced no text)";
 /** The `## Token spend` heading report.md carries (see withSpendSection). */
 export const SPEND_HEADING = "## Token spend";
 
+/** What the totals under {@link SPEND_HEADING} cover, stated under them. */
+export const SPEND_SCOPE_NOTE = "_Reviewer dispatches only: the orchestrating session's own tokens are not counted._";
+
 /**
  * One dispatch's token use. `partial` marks counts taken before the dispatch finished (a child stopped at its deadline,
  * whose request in flight had not reported yet): they are a lower bound, and a total that holds one says so. `reported`
@@ -245,7 +248,9 @@ export function withSpendSection(report: string, research: unknown): string {
   if (usage === null || typeof usage !== "object") return report;
   const totals = usage as Partial<UsageTotals>;
   if (typeof totals.dispatches !== "number" || typeof totals.known !== "number") return report;
-  const section = `${SPEND_HEADING}\n\n${usageTotalsLine(totals as UsageTotals)}\n`;
+  // The totals are the reviewer dispatches `keryx review ledger` read from raw/: the orchestrating session's own tokens
+  // (and a verifier or premise judge whose reply was not saved there) are not in them, so the section says so.
+  const section = `${SPEND_HEADING}\n\n${usageTotalsLine(totals as UsageTotals)}\n\n${SPEND_SCOPE_NOTE}\n`;
   const lines = report.split("\n");
   const start = lines.findIndex((line) => line.trimEnd() === SPEND_HEADING);
   if (start === -1) return `${report.endsWith("\n") ? report : `${report}\n`}\n${section}`;

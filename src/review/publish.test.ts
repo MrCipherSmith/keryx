@@ -7,7 +7,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "../commands/review";
 import { withFileLock } from "../lib/fs";
-import { buildRoundBlock, mentionsFindingId, minorSection, partialPublishHeader, PUBLISHED_BODY_LIMIT, publishReview, reviewEvent, ROUND_BLOCK_LIMIT, type PostResult, type ReviewEvent } from "./publish";
+import { buildRoundBlock, heldSection, mentionsFindingId, minorSection, partialPublishHeader, PUBLISHED_BODY_LIMIT, publishReview, reviewEvent, ROUND_BLOCK_LIMIT, withoutHeldSections, type PostResult, type ReviewEvent } from "./publish";
+import type { PremiseQuestionDecision } from "./operator-decisions";
 import { parseRoundBlocks, renderRoundBlock } from "./pr-comments";
 import { quoteSha256 } from "./round-record";
 import { computeReadiness } from "./readiness";
@@ -113,6 +114,51 @@ describe("publishReview", () => {
     expect(body.startsWith("# Review\n\nRequest changes.\n")).toBe(true);
     // Flow 458: the only additions are the hidden round block and (flow 521) the shared duplicate marker at the foot.
     expect(body.replace(/\n<!-- keryx:round .* -->\n\n<!-- keryx-desktop-review pr7932-r1#r1 -->\n$/, "")).toBe("# Review\n\nRequest changes.\n");
+  });
+
+  test("the keryx:* machine blocks of report.md (findings, premises) are never posted; the prose around them is", async () => {
+    makePackage({ ready: true });
+    write("report.md", [
+      "# Review", "", "Request changes.", "",
+      "```json keryx:findings", '[{"id":"F-1","quote":"SECRET-FINDINGS-JSON"}]', "```", "",
+      "Questions follow.", "",
+      "  ~~~~ keryx:premises", '  {"judge":"review-premise","premises":[]}', "  ~~~~", "",
+      "End of report.", "",
+    ].join("\n"));
+    const io = seams();
+    await publishReview(pkg, { event: "COMMENT", post: io.post, confirm: io.confirm });
+    const body = io.posts[0]!.body;
+    expect(body).not.toContain("keryx:findings");
+    expect(body).not.toContain("SECRET-FINDINGS-JSON");
+    expect(body).not.toContain("keryx:premises");
+    expect(body).toContain("Request changes.\n\nQuestions follow.\n\nEnd of report.");
+    // The package keeps them: ingest reads the stored report.md.
+    expect(readFileSync(path.join(pkg, "report.md"), "utf8")).toContain("keryx:findings");
+  });
+
+  test("a hand-written Held section is not posted: it was written before the operator answered", async () => {
+    makePackage({ ready: true });
+    write("report.md", "# Review\n\nRequest changes.\n\n### Held for a decision\n- **HL-3:** stale question.\n\n### Questions\n1. Why?\n");
+    const io = seams();
+    await publishReview(pkg, { event: "COMMENT", post: io.post, confirm: io.confirm });
+    const body = io.posts[0]!.body;
+    expect(body).not.toContain("stale question");
+    expect(body).toContain("Request changes.\n\n### Questions\n1. Why?");
+  });
+
+  test("withoutHeldSections stops at the next heading of the same or a higher level", () => {
+    const report = "# R\n\n## Findings\n### Held for the operator\n- a\n#### detail\n- b\n### Next\nkept\n## Held for a decision\nx\n## Tail\ny\n";
+    expect(withoutHeldSections(report)).toBe("# R\n\n## Findings\n### Next\nkept\n## Tail\ny\n");
+  });
+
+  test("heldSection lists the findings still awaiting an answer and the latest answer per decided finding", () => {
+    const decision = (finding: string, answer: "uphold" | "dismiss", reason: string) =>
+      ({ kind: "premise-question", finding, answer, reason, quote: answer, at: "2026-11-26T10:14:45Z", actor: "operator", confirmedVia: "desktop-card", subject: {} }) as unknown as PremiseQuestionDecision;
+    const text = heldSection([{ ...minor("T6", "no shape test"), severity: "minor" }], [
+      decision("pkg#HL-3", "uphold", "first"), decision("pkg#HL-3", "dismiss", "documented in\nthe PR body"), decision("L-02", "uphold", ""),
+    ]);
+    expect(text).toBe("\n### Held for a decision\n\n- **T6** (minor): no shape test\n\n### Decided by the operator\n\n- **HL-3**: dismissed (documented in the PR body)\n- **L-02**: upheld\n");
+    expect(heldSection([], [])).toBe("");
   });
 
   test("flow 458: the round block round-trips publish -> parse, and published.json records head and review id", async () => {

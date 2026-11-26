@@ -15,7 +15,7 @@ test("AC5 the start turn names the skill, the PR, the reviewed range and the exa
   const settings = deskOptionsKey(options);
   expect(text.split("\n")).toEqual([
     `Review pull request ${url} with the review-orchestrator skill (${REVIEW_SKILL_PATH}).`,
-    "This is a Desktop review: keep its state with `keryx review state` as the skill's \"Desktop review state\" section says.",
+    "This is a Desktop review: keep its state with `keryx review state` as the skill's \"Desktop review state\" section says (a copy of the skill without that section is older than this keryx: follow `keryx review state --help` instead).",
     `Review this revision: base ${revision.baseSha}, head ${revision.headSha}.`,
     `First run: keryx review state open --pr ${url} --base ${revision.baseSha} --head ${revision.headSha} --viewer Me --session nav-session --settings '${settings}' --source desktop`,
     "Launch settings: mode auto; adaptive on; max parallel 4; limits 30 min, 200000 tokens; models strong anthropic/opus / light openai/mini; Flow 524.",

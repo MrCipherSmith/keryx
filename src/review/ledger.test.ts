@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { requiredReviewers } from "./coverage";
 import { type LedgerInputs, type RawFile, buildLedger, isEmptyOutput, ledgerBlockers, parseReviewResult, rawDispatchUsages, rawUsage, unreadableInputClaim } from "./ledger";
-import { MAX_DISPATCH_TOKENS, NO_TEXT_PLACEHOLDER, SPEND_HEADING, formatOtherUsageLine, formatUsageLine, splitUsage, usageTotals, usageTotalsLine, withSpendSection } from "./dispatch-usage";
+import { MAX_DISPATCH_TOKENS, NO_TEXT_PLACEHOLDER, SPEND_HEADING, SPEND_SCOPE_NOTE, formatOtherUsageLine, formatUsageLine, splitUsage, usageTotals, usageTotalsLine, withSpendSection } from "./dispatch-usage";
 import { loadRaws } from "../commands/review-ledger";
 import type { MutationRecord } from "./mutate";
 import { emptyRetryState, planRetry, scopeFingerprint } from "./retry-plan";
@@ -1213,10 +1213,10 @@ describe("token spend per dispatch (flow 460, AC7)", () => {
   test("withSpendSection appends the section, and a re-ingest replaces a stale one instead of keeping it", () => {
     const research = { usage: usageTotals([{ tokens_in: 1, tokens_out: 1 }]) };
     const current = usageTotalsLine(research.usage);
-    expect(withSpendSection("# R\n", research)).toBe(`# R\n\n${SPEND_HEADING}\n\n${current}\n`);
-    expect(withSpendSection(`# R\n\n${SPEND_HEADING}\n\nold\n`, research)).toBe(`# R\n\n${SPEND_HEADING}\n\n${current}\n`);
+    expect(withSpendSection("# R\n", research)).toBe(`# R\n\n${SPEND_HEADING}\n\n${current}\n\n${SPEND_SCOPE_NOTE}\n`);
+    expect(withSpendSection(`# R\n\n${SPEND_HEADING}\n\nold\n`, research)).toBe(`# R\n\n${SPEND_HEADING}\n\n${current}\n\n${SPEND_SCOPE_NOTE}\n`);
     // Only the section is replaced: a heading after it, and the text under that heading, stay.
-    expect(withSpendSection(`# R\n\n${SPEND_HEADING}\n\nold\n\n## Notes\n\nkept\n`, research)).toBe(`# R\n\n${SPEND_HEADING}\n\n${current}\n\n## Notes\n\nkept\n`);
+    expect(withSpendSection(`# R\n\n${SPEND_HEADING}\n\nold\n\n## Notes\n\nkept\n`, research)).toBe(`# R\n\n${SPEND_HEADING}\n\n${current}\n\n${SPEND_SCOPE_NOTE}\n\n## Notes\n\nkept\n`);
     expect(withSpendSection("# R\n", {})).toBe("# R\n");
   });
 
