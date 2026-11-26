@@ -378,12 +378,15 @@ describe("trailingNotesAwaitingTurn (R3-LG-005): stored notes whose turn was nev
   const storedOf = (entry: Record<string, unknown>): NormalizedMessage => ({ role: "user", content: terminalResultNote(accepted(entry), NONCE), provenance: "harness", injected: true });
   const asked: NormalizedMessage = { role: "assistant", content: "```sh\nbun test\n```", provenance: "model" };
 
-  test("the count of the notes that end the history when every run id has one of them; 0 when anything follows them or a run id is not among them", () => {
+  test("the count of the notes that end the history when one run id or more has one of them; 0 when anything follows them or no run id is among them", () => {
     const one = storedOf(exited({ runId: "run-1" }));
     const two = storedOf(running({ runId: "run-2" }));
     expect(trailingNotesAwaitingTurn([asked, one, two], ["run-1", "run-2"])).toBe(2);
     expect(trailingNotesAwaitingTurn([asked, one, two], ["run-2"])).toBe(2);
-    expect(trailingNotesAwaitingTurn([one, asked, two], ["run-1", "run-2"])).toBe(0);
+    // Review R5-LG-002: run-1's turn was recorded (the reply after its note); run-2's note ends the history
+    // and still awaits its turn. Naming run-1 beside it does not hide it; naming run-1 alone finds nothing.
+    expect(trailingNotesAwaitingTurn([one, asked, two], ["run-1", "run-2"])).toBe(1);
+    expect(trailingNotesAwaitingTurn([one, asked, two], ["run-1"])).toBe(0);
     const line: NormalizedMessage = { role: "user", content: TERMINAL_CONTINUATION_LINE, provenance: "harness", injected: true, terminalContinuation: true };
     expect(trailingNotesAwaitingTurn([asked, one, line], ["run-1"])).toBe(0);
     expect(trailingNotesAwaitingTurn([asked, one, { role: "assistant", content: "ok", provenance: "model" }], ["run-1"])).toBe(0);

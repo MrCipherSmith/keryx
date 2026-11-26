@@ -257,10 +257,12 @@ export function isStoredTerminalResult(stored: ReadonlyMap<string, StoredTermina
 }
 
 /**
- * How many stored notes end `history` when every one of `runIds` has a note among them; `0` otherwise
- * (review R3-LG-005). A message after them — keryx's continuation line, a reply, anything else — means
- * the turn those notes started was recorded. With nothing after them it never was: keryx stopped
- * between storing the notes and the end of their turn, which is when a turn is persisted. Pure.
+ * How many stored notes end `history` when at least one of `runIds` has a note among them; `0` otherwise
+ * (reviews R3-LG-005, R5-LG-002). A message after them — keryx's continuation line, a reply, anything
+ * else — means the turn those notes started was recorded. With nothing after them it never was: keryx
+ * stopped between storing the notes and the end of their turn, which is when a turn is persisted. That
+ * holds whatever else `runIds` names: a run whose note sits further up had its turn recorded (its answer
+ * may have been lost with the connection) and does not hide the notes after it. Pure.
  */
 export function trailingNotesAwaitingTurn(history: readonly NormalizedMessage[], runIds: readonly string[]): number {
   const trailing = new Set<string>();
@@ -271,7 +273,7 @@ export function trailingNotesAwaitingTurn(history: readonly NormalizedMessage[],
     trailing.add(head.runId);
     count += 1;
   }
-  return runIds.length > 0 && runIds.every((runId) => trailing.has(runId)) ? count : 0;
+  return runIds.some((runId) => trailing.has(runId)) ? count : 0;
 }
 
 /**

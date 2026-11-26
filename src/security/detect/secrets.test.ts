@@ -153,7 +153,7 @@ describe("secrets.private-key-block", () => {
     });
 
     test("R4-TP-006: a key in JSON encoded twice (`+` written `\\u002B`, then escaped again) is masked from its body: never between two backslashes, never over the inner string's quote", () => {
-      // An encoder that writes `+` as `+` (System.Text.Json's default), its output encoded again: `\\u002B`
+      // An encoder that writes `+` as `\u002B` (System.Text.Json's default), its output encoded again: `\\u002B`
       // is an escaped backslash and the letters `u002B`, and the inner string opens with `\"`.
       const inner = JSON.stringify({ k: `${L1}\n${L2}\n-----END PRIVATE KEY-----` }).replace(/\+/g, "\\u002B");
       const outer = JSON.stringify({ payload: inner });
@@ -228,6 +228,8 @@ describe("secrets.private-key-block", () => {
       ["git show of an added PGP key, its checksum line under git's +", "@@ -0,0 +1,12 @@", [`+${L1}`, `+${L2}`, "+=AbCd", "+-----END PGP PRIVATE KEY BLOCK-----"]],
       ["git show of an added PGP key with an armor header and its blank line", "@@ -0,0 +1,14 @@", ["+Comment: a test key", "+", `+${L1}`, `+${L2}`, "+=AbCd", "+-----END PGP PRIVATE KEY BLOCK-----"]],
       ["diff", "1,27d0", [`< ${L1}`, `< ${L2}`, `< ${END}`]],
+      // Review R5-TP-002: one character before the END that is no diff marker is a prefix like any other.
+      ["a #-commented key tail, its one-character prefix no diff marker", "$ tail -3 conf.sh", [`#${L1}`, `#${L2}`, `#${END}`]],
       ["docker compose logs", "app-1  | loading the TLS key", [`app-1  | ${L1}`, `app-1  | ${L2}`, `app-1  | ${END}`]],
       ["timestamped log lines", "2026-11-25T10:00:00.997Z loading the key", [`2026-11-25T10:00:00.998Z ${L1}`, `2026-11-25T10:00:00.999Z ${L2}`, `2026-11-25T10:00:01.000Z ${END}`]],
       ["keryx ctx rg summary items", "- certs/key.pem", [rgSummaryItem(25, 1, L1), rgSummaryItem(26, 1, L2), rgSummaryItem(27, 1, END)]],
@@ -283,7 +285,28 @@ describe("secrets.private-key-block", () => {
       expect(spans(`+  ${L2}\n ${END}`, "secrets.private-key-block")).toEqual([END]);
     });
 
-    test("R3-SC-003: a line above whose prefix differs in anything but digits and separators is not masked", () => {
+    test("R5-TP-002: a diff that changes only the END line masks the context key lines with the removed END, and the added END on its own", () => {
+      // The key file gains its final newline: git prints the body lines as context, the removed END, its
+      // no-newline marker line and the added END.
+      const removed = [` ${L1}`, ` ${L2}`, `-${END}`].join("\n");
+      const added = `+${END}`;
+      const content = ["@@ -25,3 +25,3 @@", removed, "\\ No newline at end of file", added].join("\n");
+      expect(spans(content, "secrets.private-key-block")).toEqual([removed, added]);
+      const redacted = redactSensitiveText(content);
+      expect(redacted.startsWith("@@ -25,3 +25,3 @@\n")).toBe(true);
+      expect(redacted).toContain("\n\\ No newline at end of file\n");
+      for (const keyLine of [L1, L2]) expect(redacted).not.toContain(keyLine);
+    });
+
+    test("R5-TP-002: in a diff, a line with no marker ends the mask wherever it is, unless it is empty", () => {
+      // The previous hunk ends with a key line, then the next hunk's header: the mask stops at the header.
+      expect(spans(`+${O1}\n@@ -30,2 +30,2 @@\n ${L2}\n ${END}`, "secrets.private-key-block")).toEqual([` ${L2}\n ${END}`]);
+      // An armored key in context lines whose blank line lost its column (its space trimmed) is one key.
+      const armored = [" Comment: a test key", "", ` ${L1}`, ` ${L2}`, " =AbCd", " -----END PGP PRIVATE KEY BLOCK-----"].join("\n");
+      expect(spans(`@@ -1,14 +1,14 @@\n${armored}`, "secrets.private-key-block")).toEqual([armored]);
+    });
+
+    test("R3-SC-003, R4-PC-005: a line above whose prefix differs in anything but its digits, the separators beside them and the spaces that pad a number is not masked", () => {
       // Another file's lines, a deeper indentation, a numbered line above an unnumbered END: each ends the mask.
       expect(spans(`b.pem-26-${L2}\na.pem:27:${END}`, "secrets.private-key-block")).toEqual([END]);
       expect(spans(`      ${L2}\n    ${END}`, "secrets.private-key-block")).toEqual([END]);

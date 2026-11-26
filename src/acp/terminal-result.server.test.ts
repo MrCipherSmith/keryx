@@ -529,6 +529,59 @@ describe("R3-LG-005: a resend whose notes never got their turn runs that turn", 
     expect((await command(d.h, sessionId, "rewind", "confirm")).effects).toEqual(["transcript"]);
     expect(loadContext(d.h.projectDir, sessionId, dataDirOf(d.h)).map((m) => m.content)).toEqual(["first question", "first answer"]);
   }, TIMEOUT_MS);
+
+  // Review R5-LG-002: run-1's turn was recorded and its answer lost with the connection, so the desktop
+  // resends run-1; run-2 ended while the session was parked, and keryx stopped after storing its note and
+  // before its turn ended. run-2's note ends the history with nothing after it.
+  const answeredThenAwaiting = (): NormalizedMessage[] => [
+    { role: "user", content: "first question", provenance: "project" },
+    { role: "assistant", content: "```sh\nbun test src/acp\n```", provenance: "model" },
+    storedNoteOf(RESULTS[0], "0123456789ab"),
+    { role: "user", content: TERMINAL_CONTINUATION_LINE, provenance: "harness", injected: true, terminalContinuation: true },
+    { role: "assistant", content: "one test fails", provenance: "model" },
+    storedNoteOf(RESULTS[1], "ba9876543210"),
+  ];
+  const headOf = (message: NormalizedMessage | undefined): string | undefined => message?.content.split("\n")[0];
+  const LINT_RESULT = { runId: "run-3", command: "bun run lint", state: "exited", exitCode: 0, durationMs: 900, output: "no problems" } as const;
+
+  test("R5-LG-002: a resend of a duplicate whose turn was recorded and the note that ends the history runs that note's turn once; the duplicate alone does not", async () => {
+    const d = desktop([textRound("the dev server is up"), textRound("must not be used")]);
+    const sessionId = await loadedSession(d, answeredThenAwaiting());
+
+    // No duplicate is among the notes that end the history: the no-turn answer, as before.
+    const alone = promptWithResults(d.h, sessionId, [RESULTS[0]]);
+    expect((await d.h.waitFor((f) => f.id === alone && f.method === undefined)).result).toEqual(noTurnAnswer(["run-1"]));
+    expect(d.sent).toHaveLength(0);
+
+    const { reply } = await settle(d.h, promptWithResults(d.h, sessionId, [RESULTS[0], RESULTS[1]]));
+    expect(reply.error).toBeUndefined();
+    expect(reply.result).toEqual(resumedAnswer(["run-1", "run-2"]));
+    // One model call: run-2's stored note, then keryx's line. Nothing is stored again.
+    expect(d.sent).toHaveLength(1);
+    expect((d.sent[0]?.messages.slice(-2) ?? []).map(headOf)).toEqual(["[terminal run run-2 result: still running]", TERMINAL_CONTINUATION_LINE]);
+    expect(storedNotes(d.h, sessionId).map(headOf)).toEqual(["[terminal run run-1 result: exit 1]", "[terminal run run-2 result: still running]"]);
+    expect(loadContext(d.h.projectDir, sessionId, dataDirOf(d.h)).at(-1)).toMatchObject({ role: "assistant", content: "the dev server is up" });
+
+    // That turn is recorded now: a second resend runs nothing.
+    const again = promptWithResults(d.h, sessionId, [RESULTS[0], RESULTS[1]]);
+    expect((await d.h.waitFor((f) => f.id === again && f.method === undefined)).result).toEqual(noTurnAnswer(["run-1", "run-2"]));
+    expect(d.sent).toHaveLength(1);
+  }, TIMEOUT_MS);
+
+  test("R5-LG-002: a resend of that duplicate, that note and a new result runs one turn; rewinding it takes both notes out and keeps the recorded turn", async () => {
+    const d = desktop([toolRound("x1", "shell_exec", { command: "touch resumed-mixed" }), textRound("fixed")], { storedMode: "trust" });
+    const history = answeredThenAwaiting();
+    const sessionId = await loadedSession(d, history);
+    const { reply } = await settle(d.h, promptWithResults(d.h, sessionId, [RESULTS[0], RESULTS[1], LINT_RESULT]));
+    expect(reply.result).toEqual({ stopReason: "end_turn" });
+    // One turn on run-2's stored note and run-3's new one, then keryx's line.
+    expect((d.sent[0]?.messages.slice(-3) ?? []).map(headOf)).toEqual(["[terminal run run-2 result: still running]", "[terminal run run-3 result: exit 0]", TERMINAL_CONTINUATION_LINE]);
+    expect(existsSync(path.join(d.h.projectDir, "resumed-mixed"))).toBe(true);
+
+    expect((await command(d.h, sessionId, "rewind", "1 history")).text).toContain("/rewind confirm");
+    expect((await command(d.h, sessionId, "rewind", "confirm")).effects).toEqual(["transcript"]);
+    expect(loadContext(d.h.projectDir, sessionId, dataDirOf(d.h)).map((m) => m.content)).toEqual(history.slice(0, -1).map((m) => m.content));
+  }, TIMEOUT_MS);
 });
 
 describe("R3-LG-006: a result is a duplicate by run id and kind", () => {

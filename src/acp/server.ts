@@ -2614,10 +2614,12 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     // after a stored running snapshot is new). The desktop re-sends results whose prompt was lost with its
     // connection, so an entry the session already stored is skipped. A prompt holding nothing else stores
     // nothing and is answered as delivered, with the duplicates named. It starts no turn, unless the
-    // notes for them end the history (R3-LG-005): keryx stopped before the turn they started was
-    // persisted, so that turn runs now, on the stored notes, and its answer says so (`resumed: true`,
-    // R4-AR-002). Whenever duplicates' notes end the history, the turn that runs answers them too, with
-    // new results beside them or not (R4-LG-003): `resumedNotes` counts them for `/rewind` below.
+    // stored notes that end the history hold a note for one of them or more (R3-LG-005, R5-LG-002: a
+    // duplicate whose note sits further up, its turn recorded, does not hide them): keryx stopped before
+    // the turn those notes started was persisted, so that turn runs now, on the stored notes, and its
+    // answer says so (`resumed: true`, R4-AR-002). Whenever such notes end the history, the turn that runs
+    // answers them too, with new results beside them or not (R4-LG-003): `resumedNotes` counts them for
+    // `/rewind` below.
     const freshResults = terminalResults === undefined ? undefined : withoutStoredRuns(state, terminalResults);
     const allStored = freshResults !== undefined && freshResults.fresh.length === 0;
     const resumedNotes = freshResults === undefined ? 0 : trailingNotesAwaitingTurn(state.history, freshResults.duplicates);
@@ -2852,8 +2854,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         // `/rewind`: a snapshot of the files before each mutating call, and the turn's place in the archive.
         const rewind = rewindFor(sessionId);
         io.beforeMutation = () => rewind.recorder.beforeMutation();
-        // A turn that answers stored notes awaiting their turn (R3-LG-005, R4-LG-003: with new results too)
-        // starts at those notes, so rewinding it takes them out with the new ones.
+        // A turn that answers stored notes awaiting their turn (R3-LG-005; R4-LG-003: with new results too;
+        // R5-LG-002: beside a duplicate whose turn was recorded) starts at those notes, so rewinding it
+        // takes them out with the new ones.
         const resumedInArchive = resumedNotes > 0 && freshResults !== undefined ? Math.min(resumedNotes, trailingNotesAwaitingTurn(archive.messages, freshResults.duplicates)) : 0;
         rewind.recorder.beginTurn({ archiveIndex: archive.messages.length - resumedInArchive, prompt: userLine });
       }

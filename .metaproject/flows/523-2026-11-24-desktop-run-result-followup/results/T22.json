@@ -1,0 +1,110 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "523",
+  "dispatch_id": "523-T22",
+  "status": "DONE",
+  "summary": "Fix round 5, keryx server (src/**): R5-LG-002 is fixed: trailingNotesAwaitingTurn counts the trailing notes when at least one duplicate is among them (some, not every). Two new server tests went red on the unfixed code and are green now. R5-TP-002 is closed with three fixtures plus one for the blank-line side; each one turns red under the break it names, and secrets.ts is unchanged. The two nits in secrets.test.ts are fixed. Focused tests: 162 pass, 0 fail. Typecheck and eslint are clean.",
+  "summary_markdown": "## Per finding\n- **R5-LG-002 (and the open part of R4-LG-003)**: fixed. `src/acp/terminal-result.ts` `trailingNotesAwaitingTurn` now returns the count of the stored notes that end the history when `runIds.some(...)` has a note among them. It used to need `every`. The docstring says why: a run whose note sits further up had its turn recorded and does not hide the notes after it. In `server.ts` only comments changed (~:2613-2622, ~:2857-2859); the call sites are the same. Red then green:\n  - Server test 'R5-LG-002: a resend of a duplicate whose turn was recorded and the note that ends the history runs that note's turn once; the duplicate alone does not'. History: [question, ask, D note, continuation line, D reply, A note]. Resending [D] alone gets the no-turn answer and no model call. Resending [D, A] makes one model call whose tail is [A note, keryx's line], answers `{ stored: 0, duplicates: [run-1, run-2], resumed: true }` and stores nothing again. A second resend gets the no-turn answer. On the unfixed code it was red at the `resumed` assertion (the no-turn answer came back).\n  - Server test 'R5-LG-002: a resend of that duplicate, that note and a new result runs one turn; rewinding it takes both notes out and keeps the recorded turn'. Resending [D, A, C] runs one turn on [A note, C note, line]. After `/rewind 1 history` and confirm, the context is the history without A's note, so D's recorded turn stays. On the unfixed code it was red because the context after `/rewind` still ended with A's note.\n  - Unit test `terminal-result.test.ts` (old :386): `[one, asked, two]` with [run-1, run-2] is now 1 (it was 0). A new assertion checks that the same history with [run-1] alone gives 0. The test title is updated.\n- **R5-TP-002**: test gaps closed, and no change to `secrets.ts` was needed (no fixture showed a real gap). Each break was applied to `secrets.ts` alone, the file was run, and the original was copied back before the next break. Each break turned exactly 1 test red (72 pass, 1 fail), and that test was the new one:\n  - (a) Listing row 'a #-commented key tail, its one-character prefix no diff marker' (`$ tail -3 conf.sh` over `#L1`, `#L2`, `#END`, masked whole). It is red when the marker conjunct is removed from the diff selector (`const diffLine = endIndex === lineStart + 1;`).\n  - (b) Test 'R5-TP-002: a diff that changes only the END line…' (`@@ -25,3 +25,3 @@`, ` L1`, ` L2`, `-END`, `\\ No newline at end of file`, `+END`). It expects two spans, [context lines plus the removed END] and [`+END`], and the hunk header and no-newline line stay unmasked. It is red when `-` is left out of the diff END markers (selector accepts only ` ` and `+`).\n  - (c) Test 'R5-TP-002: in a diff, a line with no marker ends the mask wherever it is, unless it is empty', first assertion (`+O1`, `@@ -30,2 +30,2 @@`, ` L2`, ` END`). It gives one span starting at ` L2`, and it is red when stop becomes skip (`diffKeyLineOf` fallthrough → `return \"blank\";`).\n  - (c2) The same test, second assertion: an armored key in context lines whose blank line lost its column (an empty line between ` Comment: a test key` and ` L1`) is masked whole. It is red when an empty unmarked line stops the walk (`return undefined;`). This pins the other side of the same fallthrough.\n- **Nits**: `secrets.test.ts` ~:156 now says the encoder writes `+` as `\\u002B` (that is what the fixture's `.replace(/\\+/g, \"\\\\u002B\")` does). The old text said `+` as `+`. The Edit tool decodes a `\\u002B` it is given into `+`, which is probably how the comment got mangled, so this one line was written with a byte-exact script. The R3-SC-003 test title at ~:286 now reads 'R3-SC-003, R4-PC-005: a line above whose prefix differs in anything but its digits, the separators beside them and the spaces that pad a number is not masked'.\n\n## Behaviour changes (one plain sentence each, for the spec and PR body)\n1. When the desktop resends a run whose turn was recorded together with a run whose note ends the history and never got its turn, keryx now runs that waiting turn once and answers `stored: 0, duplicates, resumed: true` instead of the no-turn answer.\n2. When such a resend also carries a new result, one turn runs on the waiting note and the new one, and `/rewind` of that turn now takes both notes out (before, the waiting note was left at the end of the context).\n3. A resend in which no duplicate is among the notes that end the history keeps the old answers: no turn when every entry is a duplicate, and a normal turn on the new results when some are new.\n4. Secret masking does not change: R5-TP-002 adds tests only.\n\n## Limits left open (unchanged by this lane)\n- If keryx stopped with notes at the end of the history, a resend that names none of them still leaves them behind on `/rewind`: for example a resend of only new results, or an operator prompt. This is the Known limit as already written (pr-context.md:83, spec:1268-1271).",
+  "acceptance": [
+    {
+      "criterion": "R5-LG-002, decision 1: trailingNotesAwaitingTurn counts the trailing stored notes when at least one duplicate is among them (some, not every); docstring and the unit test that pinned every() updated; server tests for [D, A] (one model call, the resumed answer) and [D, A, C] (/rewind takes A's and C's notes out), each red on the unfixed code; a resend with no duplicate among the trailing notes keeps today's answer.",
+      "status": "met",
+      "evidence": "terminal-result.ts:259-277: the docstring is rewritten and the gate is now `runIds.some((runId) => trailing.has(runId)) ? count : 0` (an empty list still gives 0). server.ts: only comments changed at the R2-HL-002/R3-LG-005 block and the resumedInArchive line. Before the fix, `bun test src/acp/terminal-result.server.test.ts src/acp/terminal-result.test.ts -t 'R5-LG-002|trailingNotesAwaitingTurn'` gave 0 pass, 3 fail: the unit test (expected 1, got 0), the [D, A] test at the resumed-answer assertion (no `resumed` key), and the [D, A, C] test at the post-rewind context (A's note still at the end). After the fix both files give 89 pass, 0 fail. The [D, A] test first checks that [D] alone gets noTurnAnswer with no model call, and it ends by checking that a second [D, A] resend gets noTurnAnswer."
+    },
+    {
+      "criterion": "R5-TP-002, decision 2: three fixtures in secrets.test.ts, each red under its named break: (a) one-character non-marker prefix before an END, red when the selector's marker check is removed; (b) a '-'-prefixed END with ' '/'+' lines above, red when '-' is left out of the diff END markers; (c) an unmarked line inside the walk that is not the first line of the input, red when stop becomes skip. No secrets.ts change unless a fixture shows a gap.",
+      "status": "met",
+      "evidence": "A scratchpad script applied each break to secrets.ts alone, ran `bun test src/security/detect/secrets.test.ts`, and copied the saved original back afterwards. (a) `diffLine = endIndex === lineStart + 1`: 72 pass / 1 fail, the '#-commented key tail' listing row. (b) selector accepting only ' ' and '+': 72/1, 'R5-TP-002: a diff that changes only the END line…'. (c) diffKeyLineOf fallthrough `return \"blank\"`: 72/1, 'R5-TP-002: in a diff, a line with no marker ends the mask…'. (c2) fallthrough `return undefined`: 72/1, the same test (its armored-blank assertion). No pre-existing test failed under any break, which confirms the finding's gap. Afterwards `git status --short -- src` does not list secrets.ts, and the unbroken file gives 73 pass, 0 fail."
+    },
+    {
+      "criterion": "Decision 3: the encoder comment at secrets.test.ts ~:156 says what the fixture does; the R3-SC-003 test title at ~:286 says what it tests now.",
+      "status": "met",
+      "evidence": "Line 156 now reads 'An encoder that writes `+` as `\\u002B` (System.Text.Json's default)…', with a literal backslash, checked with sed. The title is now 'R3-SC-003, R4-PC-005: a line above whose prefix differs in anything but its digits, the separators beside them and the spaces that pad a number is not masked'."
+    },
+    {
+      "criterion": "Nothing else in src/** regressed; exports of src/acp/terminal-result.ts the desktop test imports keep their names; typecheck and eslint clean.",
+      "status": "met",
+      "evidence": "`bun test src/acp/terminal-result src/security/detect/secrets` gives 162 pass, 0 fail, 726 expect() calls across 3 files. `bun test src/acp/shell-profile.test.ts` (the only other src test file that sends terminalResults) gives 20 pass, 0 fail. `bun run typecheck` exits 0 with no diagnostics. `bunx eslint` on the 5 changed src files exits 0 with no output. No export of terminal-result.ts was renamed, added or removed."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/reviews/2026-11-26-review-flow-github-com-mrciphersmith-keryx-pull-1316-r02/research-evidence/fix5-server.json",
+      "kind": "review",
+      "exists": true,
+      "summary": "The two findings this round fixes (read only)."
+    },
+    {
+      "path": ".metaproject/reviews/2026-11-26-review-flow-github-com-mrciphersmith-keryx-pull-1316-r02/research-evidence/verifier-p2.txt",
+      "kind": "review",
+      "exists": true,
+      "summary": "The verifier's trace for R5-LG-002 (read only)."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/acp/terminal-result.ts",
+      "change": "modified: trailingNotesAwaitingTurn gates on some() instead of every(); docstring rewritten (R5-LG-002)."
+    },
+    {
+      "path": "src/acp/server.ts",
+      "change": "modified: comments only, at the R2-HL-002/R3-LG-005 resend block and at the resumedInArchive /rewind start; no logic change."
+    },
+    {
+      "path": "src/acp/terminal-result.test.ts",
+      "change": "modified: trailingNotesAwaitingTurn test title; [one, asked, two] with both ids is 1; new assertion that [run-1] alone is 0."
+    },
+    {
+      "path": "src/acp/terminal-result.server.test.ts",
+      "change": "modified: answeredThenAwaiting history helper, headOf, LINT_RESULT; two R5-LG-002 tests ([D] then [D, A] resumed once; [D, A, C] one turn and /rewind)."
+    },
+    {
+      "path": "src/security/detect/secrets.test.ts",
+      "change": "modified: listing row for a #-prefixed key tail; two R5-TP-002 tests (END-only diff; unmarked line stops / empty line is blank); encoder comment and R3-SC-003 title fixed."
+    },
+    {
+      "path": ".metaproject/flows/523-2026-11-24-desktop-run-result-followup/results/T22.json",
+      "change": "added: this result."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 5,
+    "tests_passing": 182,
+    "tests_failing": 0,
+    "coverage_notes": "5 new tests: 2 in terminal-result.server.test.ts and 3 in secrets.test.ts (1 listing row, 2 tests). 1 unit test changed. The focused files give 162 pass, 0 fail (89 in the ACP files, 73 in secrets). shell-profile.test.ts gives 20 pass, 0 fail. The whole suite was not run (owner rule).",
+    "commands_run": [
+      { "command": "bun test src/acp/terminal-result.server.test.ts src/acp/terminal-result.test.ts -t 'R5-LG-002|trailingNotesAwaitingTurn' (new tests, unfixed code)", "result": "0 pass, 3 fail (expected red: unit 1 vs 0; [D, A] no resumed key; [D, A, C] A's note left after /rewind)" },
+      { "command": "bun test src/acp/terminal-result.server.test.ts src/acp/terminal-result.test.ts (after the fix)", "result": "exit 0; 89 pass, 0 fail" },
+      { "command": "bun test src/security/detect/secrets.test.ts (new fixtures, unchanged secrets.ts)", "result": "exit 0; 73 pass, 0 fail" },
+      { "command": "breaks (a), (b), (c), (c2) applied one at a time to secrets.ts by a scratchpad script, the original copied back after each", "result": "each 72 pass / 1 fail, the failing test being the new fixture that names the break; secrets.ts unchanged afterwards" },
+      { "command": "bun test src/acp/terminal-result src/security/detect/secrets", "result": "exit 0; 162 pass, 0 fail, 726 expect() calls" },
+      { "command": "bun test src/acp/shell-profile.test.ts", "result": "exit 0; 20 pass, 0 fail" },
+      { "command": "bun run typecheck", "result": "exit 0, no diagnostics" },
+      { "command": "bunx eslint src/acp/server.ts src/acp/terminal-result.ts src/acp/terminal-result.test.ts src/acp/terminal-result.server.test.ts src/security/detect/secrets.test.ts", "result": "exit 0, no output" }
+    ],
+    "not_verified": [
+      "The whole suite (owner instruction: CI is the suite evidence).",
+      "The other server.ts test files besides shell-profile.test.ts. The changed gate is reached only by a prompt carrying terminalResults, and only the three run files send one.",
+      "That my breaks (a), (b), (c), (c2) are the same as the finding's mutants R5-TP-W2-M04, -M06, -M09 and -M10. Those mutants are listed in the finding but not defined in the evidence I read, so I named my own breaks.",
+      "The desktop against this server, and the live app: apps/desktop/** was not touched or run.",
+      "The timing of the trigger: the trace's two states (a turn recorded with its answer lost, and keryx stopping between storing a note and the end of its turn) are built from a stored session, not reproduced live."
+    ],
+    "concerns": [
+      "The Edit tool turns a literal `\\u002B` into `+` when it writes a file. That is probably how the secrets.test.ts:156 comment got mangled, and a later lane that edits lines holding such escapes with that tool could change fixtures without noticing."
+    ],
+    "doc_deltas": [
+      "specification.md §3.9.5b (~:633-635 and ~:646-647, as cited in the finding): change the 'every one of them among the notes that end the history' rule to 'one of them or more among the notes that end the history'. A duplicate whose note sits further up (its turn recorded) does not stop the waiting turn (behaviour changes 1-3).",
+      "PR body / spec §4.4 Run-result limits: the R4-LG-003 /rewind leftover is now fixed for every resend that names at least one trailing note. The remaining limit, as already written, is a resend that names none of them (only new results, or an operator prompt)."
+    ],
+    "routing_audit": "graph_used: no (not-relevant: the findings named every site and the class_scope enumeration was rechecked with ctx rg); wiki_used: no (not-relevant: the decisions are in the brief); ctx_used: yes (keryx ctx rg for the call sites and test files, ctx run for typecheck, ctx diff --stat); raw_rg_used: no (bun test output was filtered with grep for fail and count lines, and one sed/od byte check was marked keryx:raw)",
+    "workspace_notes": "Edits only under src/**, plus this result file and a scratchpad script outside the repo. Nothing was staged, committed or stashed, and no git checkout or restore was used. apps/desktop/** and docs/** were not touched. The .metaproject entries in git status were already modified before this lane. The breaks were reverted by copying back a scratchpad copy of the original secrets.ts, and git status confirms the file is unchanged."
+  },
+  "timestamp_utc": "2026-11-26T11:30:00Z"
+}
