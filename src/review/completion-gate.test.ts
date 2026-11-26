@@ -224,6 +224,27 @@ test("reviewRunSeenInHistory finds a skill_load of the review skill or an execut
   expect(reviewRunSeenInHistory([call("write_file", JSON.stringify({ path: "notes.md", content: "run keryx review start" }))])).toBe(false);
 });
 
+test("a lookup or a help request is not a review run; a later start still is", () => {
+  const shell = (command: string) => ({ toolCalls: [{ name: "shell_exec", arguments: JSON.stringify({ command }) }] });
+  // A flow-preparation session asks whether its Flow has a PR: no review was started, so the gate has nothing to hold.
+  expect(reviewRunSeenInHistory([shell("keryx review pr-context --flow 023")])).toBe(false);
+  expect(reviewRunSeenInHistory([shell("keryx review pr-context --pr https://github.com/o/r/pull/1 --json")])).toBe(false);
+  expect(reviewRunSeenInHistory([shell("keryx review board --json --repo o/r")])).toBe(false);
+  expect(reviewRunSeenInHistory([shell("keryx review reviews --json")])).toBe(false);
+  expect(reviewRunSeenInHistory([shell("keryx review accounts list --json")])).toBe(false);
+  expect(reviewRunSeenInHistory([shell("keryx review --help")])).toBe(false);
+  expect(reviewRunSeenInHistory([shell("keryx review state --help 2>&1 | head -60")])).toBe(false);
+  expect(reviewRunSeenInHistory([shell("keryx review pr-context --flow 023"), shell("keryx review start --target pr --target-ref 1")])).toBe(true);
+  expect(reviewRunSeenInHistory([shell("keryx review pr-context --flow 023 && keryx review status pr-1")])).toBe(true);
+});
+
+test("decideReviewGate accepts the stop of a session that only looked a PR up", () => {
+  const shell = (command: string) => ({ toolCalls: [{ name: "shell_exec", arguments: JSON.stringify({ command }) }] });
+  const runSeen = reviewRunSeenInHistory([shell("keryx review pr-context --flow 023")]);
+  const open = { reviewId: "(no package yet)", packageDir: "", blockers: ["no review package this session opened or named"], signature: "s" };
+  expect(decideReviewGate({ open: open as Parameters<typeof decideReviewGate>[0]["open"], runSeen, continues: 0, stalls: 0, lastSignature: undefined })).toEqual({ action: "accept" });
+});
+
 test("sessionStartedAt is the first message timestamp", () => {
   expect(sessionStartedAt([{}, { ts: "2026-10-10T08:00:00.000Z" }, { ts: "2026-10-10T09:00:00.000Z" }])).toBe(
     Date.parse("2026-10-10T08:00:00.000Z"),
