@@ -374,7 +374,7 @@ export function parseReviewResult(reply: string): ParsedResult | undefined {
   // A host's `KERYX_USAGE` line (flow 460) is not part of the reviewer's reply.
   const raw = splitUsage(reply).body;
   const labelled = labelledFence(raw);
-  if (labelled !== undefined) return labelled.result ?? lenientReviewResult(raw.slice(labelled.at));
+  if (labelled !== undefined) return labelled.result ?? lenientReviewResult(raw.slice(labelled.at)) ?? statusLineResult(raw);
   const marked = afterMarker(raw)?.result;
   if (marked !== undefined) return marked;
   // A reply that looks cut off gives no result, whatever complete list or object stands before the cut: the lost part may
@@ -386,7 +386,55 @@ export function parseReviewResult(reply: string): ParsedResult | undefined {
   if (holdsResultList(raw)) return lenientReviewResult(raw);
   const strict = scannedResult(raw);
   if (strict !== undefined) return strict;
-  return lenientReviewResult(raw);
+  return lenientReviewResult(raw) ?? statusLineResult(raw);
+}
+
+/** The statuses a reviewer result may carry (reviewer-finding.schema.json). */
+const RESULT_STATUSES = ["DONE_WITH_CONCERNS", "DONE", "NEEDS_CONTEXT", "BLOCKED"] as const;
+
+/** A `STATUS: <value>` line at the start of a line, after at most a quote, list, heading or emphasis prefix. */
+const STATUS_LINE = new RegExp(`(?<![^\\n])[ \\t>*_#-]*STATUS[*_]*:[*_ \\t]*(${RESULT_STATUSES.join("|")})\\b`, "g");
+
+/** Reviewer-shaped but for the status: a reviewer name or a findings array, and no `status` of its own. */
+function lacksOnlyStatus(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const object = value as Record<string, unknown>;
+  return object.status === undefined && (typeof object.reviewer === "string" || Array.isArray(object.findings));
+}
+
+/**
+ * The last resort: a reviewer that put its status on the `STATUS:` line the reviewer skills' Output Contract asks for and
+ * left it out of the result object. The object is read as the strict rules would choose it (the last ```REVIEW_RESULT
+ * fence, else the object after the last marker, else the last top-level reviewer-shaped object, fenced first) and given
+ * that line's status. Only a status the schema knows counts, only one value (two different `STATUS:` lines give none),
+ * and only for an object with a reviewer name or a findings array and no status of its own.
+ */
+function statusLineResult(raw: string): ParsedResult | undefined {
+  const inFence = fenceTester(raw);
+  const statuses = new Set([...raw.matchAll(STATUS_LINE)].filter((line) => !inFence(line.index!)).map((line) => line[1]!));
+  if (statuses.size !== 1) return undefined;
+  const status = [...statuses][0]!;
+  const withStatus = (value: Record<string, unknown>): ParsedResult => ({ ...value, status }) as ParsedResult;
+
+  const labelled = [...raw.matchAll(/```REVIEW_RESULT[ \t]*\r?\n([\s\S]*?)```/gi)];
+  if (labelled.length > 0) {
+    const parsed = tryParse(labelled[labelled.length - 1]![1]!);
+    return lacksOnlyStatus(parsed) ? withStatus(parsed) : undefined;
+  }
+  const markers = [...raw.matchAll(MARKER)].filter((marker) => !inFence(marker.index!)).slice(-MAX_MARKERS);
+  for (let at = markers.length - 1; at >= 0; at -= 1) {
+    const start = markers[at]!.index! + markers[at]![0].length;
+    const { end } = objectEnd(raw, start);
+    if (end === undefined) continue;
+    const parsed = tryParse(raw.slice(start, end + 1));
+    if (lacksOnlyStatus(parsed)) return withStatus(parsed);
+  }
+  const { found, truncated } = topLevelObjects(raw);
+  if (truncated) return undefined;
+  const shaped = found.filter(({ value }) => lacksOnlyStatus(value));
+  const fenced = shaped.filter(({ start }) => inFence(start));
+  const chosen = (fenced.length > 0 ? fenced : shaped).at(-1)?.value;
+  return lacksOnlyStatus(chosen) ? withStatus(chosen) : undefined;
 }
 
 /** Why `parseReviewResult` found nothing in a reply, naming what is missing (reviewer, status, slices, findings). */

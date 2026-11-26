@@ -256,6 +256,18 @@ describe("publish, mark, note, list", () => {
     expect((await markReview(root, ID, "ready", opts)).review.state).toBe("published");
   });
 
+  test("a new open of the published revision starts the next round; the published one keeps its sessions", async () => {
+    await open();
+    await updateReviewRound(root, ID, { state: "ready", verdict: "request-changes" }, opts);
+    await recordPublication(root, ID, { verdict: "request-changes" }, opts);
+    const again = await open({ sessionId: "s2" });
+    expect(again.action).toBe("advanced");
+    expect(again.round).toMatchObject({ number: 2, baseSha: sha("a"), headSha: sha("b"), sessionId: "s2" });
+    expect(again.review.rounds[0]!.sessions.map((session) => session.id)).toEqual(["s1"]);
+    // An unpublished round of the same revision is still reused, as before.
+    expect((await open({ sessionId: "s3" })).action).toBe("reused");
+  });
+
   test("mark refuses a review without rounds and anything but closed on a closed review", async () => {
     await open();
     await markReview(root, ID, "closed", opts);

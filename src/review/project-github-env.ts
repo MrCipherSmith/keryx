@@ -26,7 +26,9 @@ const GITHUB_COMMANDS = new Set(["review", "flow", "shell", "ci", "conform"]);
  */
 export async function applyProjectGithubAccount(args: string[], cwd = process.cwd(), env: NodeJS.ProcessEnv = process.env): Promise<void> {
   const [command, sub] = args;
-  if (!command || !GITHUB_COMMANDS.has(command) || (command === "review" && sub === "accounts")) return;
+  // `review accounts` manages the binding itself, and `review state` only reads and writes the local review record:
+  // neither calls gh, so neither waits on the account store or `gh auth token`.
+  if (!command || !GITHUB_COMMANDS.has(command) || (command === "review" && (sub === "accounts" || sub === "state"))) return;
   if (env.GH_TOKEN || env.GITHUB_TOKEN) return;
   try {
     const bound = await projectGithubEnvironment(cwd, env);

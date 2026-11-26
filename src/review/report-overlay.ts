@@ -4,6 +4,7 @@ import path from "node:path";
 import { isNotFound } from "../lib/fs";
 import { resolveMainCheckoutRoot } from "../lib/git-worktrees";
 import type { PublicationSettings } from "./desk-publication-types";
+import { stripMachineFences } from "./machine-fences";
 
 const text = (value: unknown) => typeof value === "string" ? value.trim() : "";
 const object = (value: unknown): Record<string, unknown> | undefined =>
@@ -185,6 +186,7 @@ export function retainProjectReportOverlay(overlay: ReviewOverlay | undefined, r
   return rendered + "\n\n" + metadata;
 }
 
+/** What a person reads: no `keryx:*` machine block (findings, premises, verifications, slots) and no slot markers. */
 export function publicProjectReport(report: string): string {
-  return report.replace(slotsFence, "").replace(savedSlotMarker, "").trim();
+  return stripMachineFences(report.replace(slotsFence, "").replace(savedSlotMarker, "")).trim();
 }

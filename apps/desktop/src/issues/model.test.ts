@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { IssueSummary } from "../../../../src/integrations/issues-contract";
 import { boundSessionIndex, type SessionInfo } from "../acp/types";
-import { DEFAULT_SOURCE, defaultFilters, groupForRow, issueGroups, issueSubject, SOURCES, visibleRows, type ProjectBoard, type Row } from "./model";
+import { assignedToViewerOnly, DEFAULT_SOURCE, defaultFilters, groupForRow, issueGroups, issuePeople, issueSubject, SOURCES, toggleChoice, visibleRows, type ProjectBoard, type Row } from "./model";
 
 const issue: IssueSummary = {
   ref: { host: "github.com", nodeId: "I_a", repositoryId: "R_a", owner: "org", repo: "sample", number: 3, url: "https://github.com/org/sample/issues/3" },
@@ -36,6 +36,28 @@ describe("issue filters and sources", () => {
     expect(Object.keys(defaultFilters)).not.toContain("stage");
     const rows: Row[] = [{ issue: { ...issue, work: { stage: "done" } } }, { issue: { ...closed, work: { stage: "none" } } }];
     expect(visibleRows(rows, { ...defaultFilters, state: "all" })).toHaveLength(2);
+  });
+
+  test("the people filters offer the loaded issues' people, the viewer and the names already chosen", () => {
+    const rows: Row[] = [{ issue: { ...issue, author: "sam", assignees: ["lee", "Ada"] } }, { issue: { ...closed, author: "Sam", assignees: [] } }];
+    const people = issuePeople(rows, { ...defaultFilters, author: "gone", assignee: "Unassigned, lee" }, "me");
+    expect(people.authors).toEqual(["gone", "me", "sam"]);
+    // "Unassigned" is the dialog's own first choice, not a person.
+    expect(people.assignees).toEqual(["Ada", "lee", "me"]);
+  });
+
+  test("a choice toggles in and out of a comma-separated filter without regard to case", () => {
+    expect(toggleChoice("", "lee")).toBe("lee");
+    expect(toggleChoice("lee", "Ada")).toBe("lee, Ada");
+    expect(toggleChoice("lee, Ada", "LEE")).toBe("Ada");
+  });
+
+  test("My issues is on only while the assignee filter is the viewer alone", () => {
+    expect(assignedToViewerOnly({ ...defaultFilters, assignee: "Fixture" }, "fixture")).toBe(true);
+    expect(assignedToViewerOnly({ ...defaultFilters, assignee: "fixture, lee" }, "fixture")).toBe(false);
+    expect(assignedToViewerOnly(defaultFilters, "fixture")).toBe(false);
+    const rows: Row[] = [{ issue: { ...issue, assignees: ["Fixture"] } }, { issue: { ...closed, state: "open", assignees: ["lee"] } }];
+    expect(visibleRows(rows, { ...defaultFilters, assignee: "fixture" })).toHaveLength(1);
   });
 
   test("the project repository is the default source and the viewer scopes stay selectable", () => {

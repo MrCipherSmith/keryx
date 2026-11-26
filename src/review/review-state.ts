@@ -281,7 +281,9 @@ export async function openReviewRound(projectRoot: string, input: OpenRoundInput
     const reopened = current?.state === "closed";
 
     const last = currentRound(review);
-    if (last && last.baseSha === baseSha && last.headSha === headSha && settingsMatch(last.settingsKey, settingsKey)) {
+    // A round already published is finished: a new review of the same revision starts the next round instead of
+    // writing its plan, findings and sessions into the record of what was posted.
+    if (last && last.baseSha === baseSha && last.headSha === headSha && settingsMatch(last.settingsKey, settingsKey) && !isPublished(review, last)) {
       if (last.settingsKey === null && settingsKey !== null) last.settingsKey = settingsKey;
       const restarted = sessionId !== null && sessionId !== last.sessionId;
       if (restarted) addSession(last, sessionId, at);

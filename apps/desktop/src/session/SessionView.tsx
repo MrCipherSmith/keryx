@@ -28,7 +28,8 @@ import { commitChatAttachments, discardChatAttachment, gitRepository, openPullRe
 import { isTauri } from "../platform/backend";
 import { browserOpen } from "../platform/panels";
 import type { PrLinks } from "../components/prLinks";
-import { lostText, type QueuedPrompt, type Usage } from "./reducer";
+import { lostText, type Usage } from "./reducer";
+import { QueuePanel } from "./QueuePanel";
 import { desktopReviewRequest, resolveMode, resolveModel, type UiActions } from "./commandRunner";
 import { modelOption, type useAcpSession } from "./useAcpSession";
 import type { ProjectGitHubAccount } from "../platform/githubAccounts";
@@ -458,7 +459,19 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
         <div className="composer-dock">
           {pinnedReviews}
           {state.plan.length > 0 ? <PlanCard plan={state.plan} /> : null}
-          <QueueChips queue={state.queue} onRemove={s.removeQueued} />
+          <QueuePanel
+            queue={state.queue}
+            busy={state.busy}
+            onForce={s.forceQueued}
+            onRemove={s.removeQueued}
+            onEdit={(index) => {
+              const text = state.queue[index]?.text;
+              if (text === undefined) return;
+              s.removeQueued(index);
+              fill(text);
+              handle()?.focus();
+            }}
+          />
           <Composer
             ref={composerRef}
             sessionId={state.sessionId}
@@ -533,23 +546,6 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
     </div>
   );
 });
-
-function QueueChips({ queue, onRemove }: { queue: QueuedPrompt[]; onRemove: (index: number) => void }) {
-  if (queue.length === 0) return null;
-  return (
-    <ul className="queue-chips" aria-label="Queued prompts">
-      {queue.map((q, i) => (
-        <li key={q.id} className="queue-chip" title={q.text}>
-          <span className="queue-chip-n">{i + 1}</span>
-          <span className="queue-chip-text truncate">{q.text}</span>
-          <button className="icon-btn icon-btn-sm" onClick={() => onRemove(i)} aria-label={`Remove queued prompt ${i + 1}`} title="Remove">
-            <Icon name="x" size={12} />
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 function ExitBanner({ exit, onRestart }: { exit: { code: number | null; stderrTail: string } | null; onRestart: () => void }) {
   const [open, setOpen] = useState(false);
