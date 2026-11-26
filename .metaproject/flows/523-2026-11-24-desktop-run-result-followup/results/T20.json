@@ -1,0 +1,62 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "523",
+  "dispatch_id": "523-T20",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Fix round 4 in apps/desktop: all 6 findings fixed (R4-RR-001 with R4-LG-001 and R4-DG-001; R4-LG-002 with R4-DG-002 and R4-AR-003; R4-AR-001; R4-TP-001; R4-TP-002; R4-TP-004). Every behaviour fix was shown red on the unfixed code, and every test-gap fix was shown red under a named mutant. New rules the owner may see: (1) a not-sent run stays in the run store while its tab is open, so its Show tab works and closing the tab removes the button; a reload still drops a not-sent card. (2) A card a reload put in a replayed note's place stays there only when the note is the same kind as what the run sends next (a snapshot for a snapshot, a final result for a final result). Otherwise, for example the exit after a replayed snapshot, the card moves to the end and the agent's reply follows it, as on base. (3) A card a reload appends at the end carries no mark from an earlier reload. The arbiter's order is unchanged: its second pass no longer carries the resume branch that could not succeed, and its doc comment now states the order. Concerns: eslint has no configuration for apps/desktop, so tsc is the only static check. After a card moves away from a snapshot's place, that snapshot note is not drawn again until the next reload, as on base.",
+  "summary_markdown": "- **R4-RR-001 (+R4-LG-001, R4-DG-001)**: there are now two rules. `runCanChange` (reducer.ts) is back to the base rule and is the run store's forget rule (`forgetIfDone`): a final state, not-sent included, with its tab closed. The new `keptOnReload` (reducer.ts, used only by `keepLiveRuns`) is `runCanChange` minus not-sent, so a reload still drops a not-sent card whatever its tab does. Doc comments for both rules, `keepLiveRuns`, `forgetIfDone` and the reducer's not-sent guard are rewritten. The guard at `terminalRun` stays.\n- **R4-LG-002 (+R4-DG-002, R4-AR-003)**: `TerminalRunItem.inHistory` is now `RunNoteKind` (`\"running\" | \"final\"`), set by `keepLiveRuns` from the replayed note's state. `terminalSent` keeps a card in place only when the mark equals the kind of the result now sent (`noteKindOf(card.state)`). Every other sent card moves to the end with its mark dropped. `keepLiveRuns`'s append path removes any earlier mark. `TerminalRunView` omits `inHistory`, so the store's dispatch type cannot carry a placement mark.\n- **R4-AR-001**: arbiter doc comment states the order (front-of-queue issue-question resume, then `terminalRuns.flush()`, then the next queued prompt). The second pass skips a resume at the front instead of trying it again.\n- **R4-TP-001**: the lost-connection fixture now has two cases. In the no-turn case, the replay is note + continuation line + reply, the duplicate answer streams nothing, and the full transcript order is asserted. In the resumed-turn case, the replay is the note alone, the reply streams while the re-sent prompt is open, the answer is `{stopReason: end_turn, _meta.keryx.terminalResults: {stored: 0, duplicates: [runId], resumed: true}}`, and the full order and no user bubble are asserted.\n- **R4-TP-002**: T16-Q1 now builds a history keryx can produce. The first reload replays the snapshot alone, the exit goes for the first time (`sent[1]`, state exited) and is answered `wait`, then the second reload replays snapshot + reply + exit and the placement assertions run.\n- **R4-TP-004**: the unknown-scenario test asserts that the fixture's stderr contains `unknown scenario lost-conection`.",
+  "acceptance": [
+    {
+      "criterion": "Each finding in fix4-desktop.json is fixed with a test that fails without the fix (or, for a pure test gap, one a deliberate break turns red), and nothing else in apps/desktop/** regressed.",
+      "status": "met",
+      "evidence": "Unfixed code with the new and updated tests: 68 pass, 12 fail. The failures were the 5 R4-RR-001 path cases, the real-store card DOM case, both R2-UX-001 tests, R4-LG-002, R4-AR-003, and the R3-FE-001 and T16-Q1 mark assertions. After the fix: 200 pass, 0 fail across 9 focused files; tsc --noEmit -p apps/desktop clean. Mutants run after the fix, each restored and re-checked with cmp: M1 (terminalSent keeps any marked card) turns R4-LG-002 red on its order assertion. M2 (the append keeps the earlier mark) turns R4-AR-003 red. M3 (runCanChange false for not-sent, the T17 rule) turns 8 tests red, including all 5 R4-RR-001 paths and the DOM case. M4 (base keepLiveRuns: the first note gets the live card) turns T16-Q1 red. F1 (terminalSent moves every sent card) turns lost-connection red in case (a), and in case (b) alone the card lands after x, y and z. F2 (the stream end skips every trailing live card) turns case (b) red, with the reply above w's card. G1 (no unknown-scenario guard) and G2 (the fixture fails on start with another message) both turn R3-FE-002 red."
+    }
+  ],
+  "artifacts": [],
+  "changed_files": [
+    { "path": "apps/desktop/src/session/reducer.ts", "change": "modified: runCanChange back to the base rule (the store's); new keptOnReload for keepLiveRuns; RunNoteKind and noteKindOf; inHistory holds the replayed note's kind; terminalSent keeps a card in place only on a kind match and drops the mark on cards it moves; the keepLiveRuns append drops an earlier mark; TerminalRunView omits inHistory; doc comments" },
+    { "path": "apps/desktop/src/session/terminalRuns.ts", "change": "modified: forgetIfDone doc comment names the two rules (no code change: it calls runCanChange, which is the base rule again)" },
+    { "path": "apps/desktop/src/session/useAcpSession.ts", "change": "modified: arbiter doc comment states the three-step order; the second pass skips a front-of-queue resume (dead branch removed)" },
+    { "path": "apps/desktop/src/session/terminalRuns.test.ts", "change": "modified: noteUpdate/agentUpdate/reload helpers; T16-Q1 rebuilt on a producible history; new R4-LG-002 and R4-AR-003 tests; R3-FE-001 asserts the 'final' mark; both R2-UX-001 tests expect the store to keep the not-sent run until its tab closes; new R4-RR-001 describe with 5 paths into not-sent" },
+    { "path": "apps/desktop/src/session/terminalRunCard.dom.test.tsx", "change": "modified: R4-RR-001 case through the real run store (Show tab reaches the host's showTab; the tab's close removes the button)" },
+    { "path": "apps/desktop/src/session/terminalRunDelivery.dom.test.tsx", "change": "modified: the unknown-scenario test asserts the guard's message on stderr" },
+    { "path": "apps/desktop/src/test/terminal-run-delivery.fixture.tsx", "change": "modified: lost-connection z case without the invented post-idle chunk and with a full-order check; new w case for the resumed turn (reply streams while the re-sent prompt is open, answer with resumed: true); helpers; header comment" },
+    { "path": ".metaproject/flows/523-2026-11-24-desktop-run-result-followup/results/T20.json", "change": "created: this result" }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 8,
+    "tests_passing": 200,
+    "tests_failing": 0,
+    "coverage_notes": "bun test (apps/desktop): terminalRuns.test.ts + terminalRunCard.dom.test.tsx = 74 passed; terminalRunDelivery.dom.test.tsx = 6 passed (all 5 fixture scenarios + the unknown-scenario case). For the reducer and arbiter changes, these also ran: reducer.test.ts, subagentHistory.test.ts, activity.test.ts, sessionRegistry.test.ts, commandRunner.test.ts, and shell/ProjectNavigation.dom.test.tsx (runs the issue-question-resume fixture). All 9 files: 200 passed, 0 failed. Before this lane, the three run test files had 72 tests; they now have 80 (8 new). Not run: the whole desktop suite, vite build, a live app.",
+    "commands_run": [
+      { "command": "cd apps/desktop && bun test src/session/terminalRuns.test.ts src/session/terminalRunCard.dom.test.tsx src/session/terminalRunDelivery.dom.test.tsx (before any change)", "result": "exit 0; 72 passed" },
+      { "command": "same three files, new tests on the unfixed source", "result": "68 passed, 12 failed (expected red)" },
+      { "command": "cd apps/desktop && bun test <9 focused files>", "result": "exit 0; 200 passed, 0 failed" },
+      { "command": "mutants M1-M4 (reducer) against terminalRuns.test.ts + terminalRunCard.dom.test.tsx; F1-F2 (reducer) and G1-G2 (fixture guard) against terminalRunDelivery.dom.test.tsx; F1/F2 against case (b) alone via bun src/test/terminal-run-delivery.fixture.tsx lost-connection", "result": "every mutant red; files restored (cmp)" },
+      { "command": "bunx tsc --noEmit -p apps/desktop", "result": "exit 0, no output" },
+      { "command": "bunx eslint <7 changed files> (and with --no-ignore)", "result": "0 errors; 7 warnings, all 'File ignored': the repo's eslint config has no configuration for apps/desktop" }
+    ],
+    "not_verified": [
+      "The whole desktop suite (owner instruction: CI is the suite evidence).",
+      "Lint: eslint does not cover apps/desktop in this repo, so no lint rule ran on these files.",
+      "T19's server change (resumed: true): the fixture sends that field, and the desktop ignores the answer's body. Nothing here ran against T19's keryx.",
+      "A live app: nothing was clicked through."
+    ],
+    "concerns": [
+      "Behaviour changes for the docs lane, one rule each. (a) user_visible: a not-sent run stays in the run store while its tab is open, so its card's Show tab opens the tab and closing the tab removes the button; the store forgets the run only once its tab is closed and its process's end was seen. (b) user_visible: a reload still drops a not-sent card whatever its tab does, and nothing the run does afterwards (its exit, its tab's close) draws the card again. (c) user_visible: a card a reload put in a replayed note's place stays there only when that note is the same kind as the result the run sends next (a 'still running' snapshot for a snapshot, a final result for a final result). For example, after a replayed snapshot the exit goes as a new note, the card moves to the end, and the agent's reply follows it. (d) A card a reload appends at the end carries no placement mark from an earlier reload, so it moves to the end when its result goes. (e) needs_operator: no; the arbiter's order is unchanged (front-of-queue issue-question resume, then waiting Run results, then the next queued prompt).",
+      "Spec follow-up for the docs lane: spec section 4.4 ('The run store uses the same runCanChange test when it forgets a run') no longer holds. The store and the reload now have two rules: runCanChange for the store, keptOnReload (runCanChange minus not-sent) for a reload.",
+      "Residual, same as base: when a card moves away from a replayed snapshot's place (rule c), that snapshot note is not drawn in its place until the next reload, which replays both notes. alternatives: keep a copy of the replayed note in keepLiveRuns and leave it behind on the move. Not done, since the brief asks for the base move.",
+      "Not changed (carried from T17): the arbiter does not wake when a Telegram turn the window lost in a replay finishes."
+    ],
+    "routing_audit": "graph_used: no (not-relevant: the brief and the findings named every file and site); wiki_used: no (not-relevant: the owner's decisions are in the brief); ctx_used: yes (keryx ctx rg/run/show/read); raw_rg_used: no",
+    "workspace_notes": "Edits only under apps/desktop/** plus this result file. Nothing was staged, committed or stashed, and src/** (T19's lane) was not touched; src/acp/server.ts and src/acp/terminal-result.ts were only read. The mutation scripts live in the session scratchpad. Every mutated file was restored, checked with cmp, and re-tested green."
+  },
+  "timestamp_utc": "2026-11-26T09:20:36Z"
+}

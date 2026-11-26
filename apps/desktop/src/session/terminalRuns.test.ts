@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { PtyTab } from "../platform/panels";
-import { initialState, reducer, type Action, type Item, type TerminalRunItem } from "./reducer";
+import { initialState, reducer, type Action, type Item, type RoutedUpdate, type TerminalRunItem } from "./reducer";
 import {
   BUSY_RETRY_MAX_MS,
   BUSY_RETRY_MS,
@@ -554,6 +554,21 @@ describe("PF-002: a run that can no longer change is dropped from the store; its
   });
 });
 
+/** keryx's replay of a run's stored note (`_meta.keryx.terminalResult`) into s1. */
+function noteUpdate(at: number, runId: string, command: string, result: { state: "running" } | { state: "exited"; exitCode: number }): RoutedUpdate {
+  return { sessionId: "s1", at, update: {
+    sessionUpdate: "user_message_chunk", content: { type: "text", text: `$ ${command}` },
+    _meta: { keryx: { terminalResult: { runId, command, durationMs: 0, output: "", ...result } } },
+  } };
+}
+const agentUpdate = (at: number, text: string): RoutedUpdate => ({ sessionId: "s1", at, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text } } });
+/** A session/load of s1 whose replay is `updates`. */
+function reload(r: ReturnType<typeof rig>, updates: RoutedUpdate[]): void {
+  r.dispatch({ t: "loadStart", sessionId: "s1" });
+  r.dispatch({ t: "updates", updates });
+  r.dispatch({ t: "loadDone", sessionId: "s1", show: false });
+}
+
 describe("FE-W1-001: a reload of the session keeps the cards of the runs the window still tracks", () => {
   test("a running run's card survives loadStart/loadDone with its actions, and its exit updates that one card", async () => {
     const r = rig();
@@ -612,6 +627,8 @@ describe("FE-W1-001: a reload of the session keeps the cards of the runs the win
       { sessionId: "s1", at: 2, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "The build passed." } } },
     ] });
     r.dispatch({ t: "loadDone", sessionId: "s1", show: false });
+    // The replayed note holds a final result, the one this run sends again: keryx answers it as a duplicate.
+    expect(r.card(runId).inHistory).toBe("final");
     r.runs.resume("s1");
     r.runs.flush("s1");
     expect(r.sent).toHaveLength(2);
@@ -629,36 +646,80 @@ describe("FE-W1-001: a reload of the session keeps the cards of the runs the win
     const r = rig();
     const dev = r.start("bun run dev", 5);
     await r.runs.sendNow(dev);
-    // keryx stored the snapshot, then the connection was lost with no answer; the process exits meanwhile.
+    // keryx stored the snapshot and recorded its turn, then the connection was lost with no answer; the
+    // process exits meanwhile, and its exit's result waits for s1 to be held again.
     r.sent[0]!.settle({ kind: "wait" });
     await r.settled();
     await r.runs.exited(5, 0);
-    r.dispatch({ t: "loadStart", sessionId: "s1" });
-    r.dispatch({ t: "updates", updates: [
-      { sessionId: "s1", at: 1, update: {
-        sessionUpdate: "user_message_chunk", content: { type: "text", text: "$ bun run dev" },
-        _meta: { keryx: { terminalResult: { runId: dev, command: "bun run dev", state: "running", durationMs: 0, output: "" } } },
-      } },
-      { sessionId: "s1", at: 2, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Still starting." } } },
-      { sessionId: "s1", at: 3, update: {
-        sessionUpdate: "user_message_chunk", content: { type: "text", text: "$ bun run dev" },
-        _meta: { keryx: { terminalResult: { runId: dev, command: "bun run dev", state: "exited", exitCode: 0, durationMs: 0, output: "" } } },
-      } },
-    ] });
-    r.dispatch({ t: "loadDone", sessionId: "s1", show: false });
+    expect(r.sent).toHaveLength(1);
+    const snapshotNote = noteUpdate(1, dev, "bun run dev", { state: "running" });
+    // The load holds s1 again: keryx has the snapshot only, and the exit goes for the first time.
+    reload(r, [snapshotNote, agentUpdate(2, "Still starting.")]);
+    r.runs.resume("s1");
+    r.runs.flush("s1");
+    expect(r.sent[1]!.results.map((x) => [x.runId, x.state])).toEqual([[dev, "exited"]]);
+    // keryx stored the exit as a second note, then the connection was lost again with no answer.
+    r.sent[1]!.settle({ kind: "wait" });
+    await r.settled();
+    reload(r, [snapshotNote, agentUpdate(2, "Still starting."), noteUpdate(3, dev, "bun run dev", { state: "exited", exitCode: 0 })]);
     const cards = () => r.items().filter((i): i is TerminalRunItem => i.kind === "terminalRun");
     expect(r.items().map((i) => i.kind)).toEqual(["terminalRun", "agent", "terminalRun"]);
     expect(cards()[0]).toMatchObject({ runId: dev, replayed: true, state: "sent-while-running" });
     expect(cards()[1]!.replayed).toBeUndefined();
-    expect(cards()[1]!.inHistory).toBe(true);
+    expect(cards()[1]!.inHistory).toBe("final");
     const snapshot = cards()[0]!;
     r.runs.resume("s1");
     r.runs.flush("s1");
-    r.sent.at(-1)!.settle({ kind: "done" });
+    expect(r.sent[2]!.results).toEqual(r.sent[1]!.results);
+    r.sent[2]!.settle({ kind: "done" });
     await r.settled();
     expect(r.items().map((i) => i.kind)).toEqual(["terminalRun", "agent", "terminalRun"]);
     expect(cards()[0]).toEqual(snapshot);
     expect(cards()[1]!.state).toBe("sent");
+  });
+
+  test("R4-LG-002: a card a reload put in a snapshot note's place moves to the end when the run's exit goes: keryx stores it as a new note and the agent's reply follows the card", async () => {
+    const r = rig();
+    const dev = r.start("bun run dev", 5);
+    await r.runs.sendNow(dev);
+    // keryx stored the snapshot and recorded its turn; its answer was lost. The process then ends with its
+    // tab open: the exit's result replaces the snapshot that waits.
+    r.sent[0]!.settle({ kind: "wait" });
+    await r.settled();
+    await r.runs.exited(5, 0);
+    expect(r.card(dev)).toMatchObject({ state: "waiting", exitCode: 0 });
+    reload(r, [noteUpdate(1, dev, "bun run dev", { state: "running" }), agentUpdate(2, "Still starting.")]);
+    expect(r.items().map((i) => i.kind)).toEqual(["terminalRun", "agent"]);
+    expect(r.card(dev).inHistory).toBe("running");
+    r.runs.resume("s1");
+    r.runs.flush("s1");
+    expect(r.sent[1]!.results.map((x) => x.state)).toEqual(["exited"]);
+    const order = () => r.items().map((i) => (i.kind === "terminalRun" ? i.runId : i.kind === "agent" ? i.text : i.kind));
+    expect(order()).toEqual(["Still starting.", dev]);
+    expect(r.card(dev).inHistory).toBeUndefined();
+    // The follow-up turn's reply streams after the card, as its own message.
+    r.dispatch({ t: "busy", sessionId: "s1", busy: true });
+    r.dispatch({ t: "updates", updates: [agentUpdate(3, "It exited cleanly.")] });
+    expect(order()).toEqual(["Still starting.", dev, "It exited cleanly."]);
+  });
+
+  test("R4-AR-003: a card a later reload appends at the end (the replay no longer holds its note) keeps no mark from the earlier reload, and moves when its result goes", async () => {
+    const r = rig();
+    const runId = r.start("make", 5);
+    await r.runs.exited(5, 0);
+    r.sent[0]!.settle({ kind: "wait" });
+    await r.settled();
+    reload(r, [noteUpdate(1, runId, "make", { state: "exited", exitCode: 0 }), agentUpdate(2, "The build passed.")]);
+    expect(r.card(runId).inHistory).toBe("final");
+    // A compaction removed the note while the result still waits: the next replay has only its summary.
+    reload(r, [agentUpdate(1, "Summary.")]);
+    expect(r.items().map((i) => i.kind)).toEqual(["agent", "terminalRun"]);
+    expect(r.card(runId).inHistory).toBeUndefined();
+    r.dispatch({ t: "notice", sessionId: "s1", level: "info", text: "later" });
+    r.runs.resume("s1");
+    r.runs.flush("s1");
+    expect(r.sent).toHaveLength(2);
+    expect(r.items().map((i) => i.kind)).toEqual(["agent", "notice", "terminalRun"]);
   });
 
   test("R2-UX-001: a run that can no longer change (closed, could not start, not sent, its tab closed) is not drawn again after a reload; one that can is kept at the end", async () => {
@@ -681,12 +742,16 @@ describe("FE-W1-001: a reload of the session keeps the cards of the runs the win
     };
     const runIds = () => r.items().filter((i): i is TerminalRunItem => i.kind === "terminalRun").map((i) => i.runId);
     reload();
-    // The not-sent run's process had ended, its tab is still open: not sent is final whatever its tab does, so it is not kept.
+    // The not-sent run's process had ended, its tab is still open: a reload treats not sent as final whatever
+    // its tab does, so its card is not kept. The store still holds the run until its tab closes (R4-RR-001).
     expect(r.items().map((i) => i.kind)).toEqual(["agent", "terminalRun"]);
+    expect(runIds()).toEqual([waits]);
+    expect(r.runs.tracked()).toBe(2);
+    // Its tab's close does not draw the card again, and the store lets the run go.
+    r.runs.closed(6);
     expect(runIds()).toEqual([waits]);
     expect(r.runs.tracked()).toBe(1);
     // A later reload (a /rewind that removed its turn) does not bring a closed run back either.
-    r.runs.closed(6);
     reload();
     expect(runIds()).toEqual([waits]);
   });
@@ -700,11 +765,72 @@ describe("FE-W1-001: a reload of the session keeps the cards of the runs the win
     r.dispatch({ t: "updates", updates: [{ sessionId: "s1", at: 1, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Newest reply." } } }] });
     r.dispatch({ t: "loadDone", sessionId: "s1", show: false });
     expect(r.items().map((i) => i.kind)).toEqual(["agent"]);
-    // The process ends after the card went: nothing draws it again.
+    // The process ends after the card went: nothing draws it again. Its tab is still open, so the store keeps it…
     await r.runs.exited(6, 0);
+    expect(r.items().map((i) => i.kind)).toEqual(["agent"]);
+    expect(r.runs.tracked()).toBe(1);
+    // …until the tab closes, which draws nothing either.
+    r.runs.closed(6);
     expect(r.items().map((i) => i.kind)).toEqual(["agent"]);
     expect(r.runs.tracked()).toBe(0);
   });
+});
+
+describe("R4-RR-001: a not-sent run stays in the store while its tab is open: Show tab works, and the tab's close reaches the card", () => {
+  const long = `echo ${"a".repeat(RUN_COMMAND_MAX_CHARS)}`;
+  // Every way into "not sent", each ending with the run's process over and its tab 5 still open.
+  const paths: Array<[string, () => Promise<{ r: ReturnType<typeof rig>; runId: string }>]> = [
+    ["a keryx without terminalResults", async () => {
+      const r = rig({ accepts: false });
+      const runId = r.start("bun test", 5);
+      await r.runs.exited(5, 0);
+      return { r, runId };
+    }],
+    ["a command over 4096 characters", async () => {
+      const r = rig();
+      const runId = r.start(long, 5);
+      await r.runs.exited(5, 0);
+      return { r, runId };
+    }],
+    ["a results prompt keryx refused", async () => {
+      const r = rig();
+      const runId = r.start("ls", 5);
+      await r.runs.exited(5, 0);
+      r.sent[0]!.settle({ kind: "refused", error: "invalid params" });
+      await r.settled();
+      return { r, runId };
+    }],
+    ["a reconnect to a keryx without terminalResults", async () => {
+      const r = rig({ accepts: null });
+      const runId = r.start("ls", 5);
+      await r.runs.exited(5, 0);
+      r.setAccepts(false);
+      r.runs.flush();
+      return { r, runId };
+    }],
+    ["a refused Send output now, then the exit", async () => {
+      const r = rig();
+      const runId = r.start("bun run dev", 5);
+      await r.runs.sendNow(runId);
+      r.sent[0]!.settle({ kind: "refused", error: "invalid params" });
+      await r.settled();
+      await r.runs.exited(5, 0);
+      return { r, runId };
+    }],
+  ];
+  for (const [path, reach] of paths) {
+    test(`${path}: Show tab still shows the tab; only its close updates the card, and then the store forgets the run`, async () => {
+      const { r, runId } = await reach();
+      expect(r.card(runId)).toMatchObject({ state: "not-sent", exitCode: 0, tabOpen: true });
+      expect(r.runs.tracked()).toBe(1);
+      expect(r.runs.showTab(runId)).toBe(true);
+      expect(r.shown).toEqual([5]);
+      r.runs.closed(5);
+      expect(r.card(runId)).toMatchObject({ state: "not-sent", tabOpen: false });
+      expect(r.runs.tracked()).toBe(0);
+      expect(r.runs.showTab(runId)).toBe(false);
+    });
+  }
 });
 
 describe("TP-004: branches no other test reaches", () => {

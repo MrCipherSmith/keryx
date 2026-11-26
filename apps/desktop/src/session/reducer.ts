@@ -90,14 +90,25 @@ export interface TerminalRunItem {
   /** Drawn from the session's history on load. */
   replayed?: boolean;
   /**
-   * A reload put this live card in the place of its replayed note: it stays there when its result is sent
-   * again (`terminalSent` moves only cards that have no note in the transcript).
+   * A reload put this live card in the place of its replayed note, a note of this kind (`keepLiveRuns`). When
+   * the result the run sends next is of the same kind, keryx holds it already and answers a duplicate: the
+   * card stays there, before the agent's reply to the note. A result of the other kind (the exit after a
+   * "still running" snapshot) is a new note at the end of keryx's history with a turn of its own:
+   * `terminalSent` moves the card to the end and drops the mark.
    */
-  inHistory?: boolean;
+  inHistory?: RunNoteKind;
 }
 
-/** A run card's fields; the reducer keeps its id. */
-export type TerminalRunView = Omit<TerminalRunItem, "kind" | "id">;
+/** The kind of note keryx stores for a run's result (flow 523): a "still running" snapshot, or the final result. */
+export type RunNoteKind = "running" | "final";
+
+/** The note a sent card stands for, a replayed one included: a snapshot is the one sent while its process ran. */
+function noteKindOf(state: TerminalRunState): RunNoteKind {
+  return state === "sent-while-running" ? "running" : "final";
+}
+
+/** A run card's fields as the run store or a replayed note gives them; the reducer keeps the card's id and place mark. */
+export type TerminalRunView = Omit<TerminalRunItem, "kind" | "id" | "inHistory">;
 
 /** A live run card whose result has not gone to the agent (yet, or ever): not a turn of its own. */
 export function isUndeliveredRun(item: Item | undefined): boolean {
@@ -108,13 +119,23 @@ export function isUndeliveredRun(item: Item | undefined): boolean {
 export const FINAL_RUN_STATES: ReadonlySet<TerminalRunState> = new Set<TerminalRunState>(["sent", "sent-while-running", "closed", "start-failed", "not-sent"]);
 
 /**
- * A live run that can still change: its state is not final, or its tab is still open (its exit, Show tab).
- * A "not sent" run is final whatever its tab does: its result will never go, so nothing the tab does changes
- * what the card is for, and a reload drops the card as it drops a closed or could-not-start one.
+ * The run store's rule: a live run its tab or its process can still change, so the store keeps it
+ * (`terminalRuns.ts` forgetIfDone). Its state is not final, or its tab is still open (its exit, Show tab, the
+ * tab's close), a "not sent" run included: its Show tab works and its tab's close reaches its card.
  */
 export function runCanChange(run: Pick<TerminalRunItem, "state" | "tabOpen">): boolean {
-  if (run.state === "not-sent") return false;
   return !FINAL_RUN_STATES.has(run.state) || run.tabOpen;
+}
+
+/**
+ * The reload's rule, stricter than the store's (R2-UX-001): a live run whose card a reload keeps at the end
+ * (`keepLiveRuns`) is one that can still change, unless it is "not sent". That card goes whatever its tab
+ * does: its result will never go, so nothing the tab does changes what the card is for, and a reload drops it
+ * as it drops a closed or could-not-start one. The store still holds the run until its tab closes; the
+ * updates that follow do not draw the card again (`terminalRun`).
+ */
+function keptOnReload(run: Pick<TerminalRunItem, "state" | "tabOpen">): boolean {
+  return run.state !== "not-sent" && runCanChange(run);
 }
 
 /**
@@ -712,11 +733,12 @@ function routeUpdates(state: WindowState, updates: readonly RoutedUpdate[]): Win
 /**
  * A reload (after /compact or /rewind, a return to a session keryx released, a restart) keeps the cards of
  * the runs the window still tracks (flow 523): a replayed note of such a run shows the live card in the
- * note's place, and a run that can still change (starting, running, waiting, or its tab still open: its
- * exit and Show tab change it) keeps its card at the end. Any other card goes with the history it was
- * in: a delivered run's card comes back from keryx's note, as the history now has it, and a run that ended
- * without reaching the agent (closed, could not start, not sent) has no note, so it is not drawn again
- * below newer messages, nor brought back from a turn /rewind removed.
+ * note's place, marked with the note's kind (`inHistory`), and a run that can still change (starting,
+ * running, waiting, or its tab still open: its exit and Show tab change it), unless it is "not sent", keeps
+ * its card at the end, unmarked (`keptOnReload`). Any other card goes with the history it was in: a delivered
+ * run's card comes back from keryx's note, as the history now has it, and a run that ended without
+ * reaching the agent (closed, could not start, not sent) has no note, so it is not drawn again below newer
+ * messages, nor brought back from a turn /rewind removed.
  */
 function keepLiveRuns(loaded: ConvState, previous: readonly Item[]): ConvState {
   const live = new Map<string, TerminalRunItem>();
@@ -732,11 +754,12 @@ function keepLiveRuns(loaded: ConvState, previous: readonly Item[]): ConvState {
     if (i.kind !== "terminalRun" || newestNote.get(i.runId) !== n) return i;
     const run = live.get(i.runId)!;
     live.delete(i.runId);
-    return { ...run, id: i.id, inHistory: true };
+    return { ...run, id: i.id, inHistory: noteKindOf(i.state) };
   });
   let nextId = loaded.nextId;
-  for (const run of live.values()) {
-    if (runCanChange(run)) items.push({ ...run, id: nextId++ });
+  // At the end, in no note's place: a mark an earlier reload set does not hold here.
+  for (const { inHistory: _earlierPlace, ...run } of live.values()) {
+    if (keptOnReload(run)) items.push({ ...run, id: nextId++ });
   }
   return { ...loaded, items, nextId };
 }
@@ -804,20 +827,26 @@ export function reducer(state: WindowState, a: Action): WindowState {
       return withConv(state, a.sessionId, (c) => {
         // The live card, never a replayed note of the same run (keryx can hold a snapshot and its exit).
         const at = c.items.findIndex((i) => i.kind === "terminalRun" && i.runId === a.run.runId && i.replayed !== true);
-        // A "not sent" card a reload dropped is not drawn again by a late update of the store (the process's exit).
+        // A "not sent" card a reload dropped is not drawn again by a late update of the store (the process's
+        // exit, the tab's close: the store holds such a run until its tab closes).
         if (at < 0 && a.run.state === "not-sent") return c;
         if (at < 0) return { ...c, nextId: c.nextId + 1, items: [...c.items, { ...a.run, kind: "terminalRun", id: c.nextId }] };
-        return { ...c, items: c.items.map((i, n) => (n === at ? { ...a.run, kind: "terminalRun" as const, id: i.id, ...(i.kind === "terminalRun" && i.inHistory ? { inHistory: true } : {}) } : i)) };
+        // The store's view carries no place mark: the card keeps its own.
+        return { ...c, items: c.items.map((i, n) => (n === at ? { ...a.run, kind: "terminalRun" as const, id: i.id, ...(i.kind === "terminalRun" && i.inHistory ? { inHistory: i.inHistory } : {}) } : i)) };
       });
     case "terminalSent":
       return withConv(state, a.sessionId, (c) => {
         const sent = new Set(a.runIds);
-        // A card a replay put in its note's place stays there: the agent's reply to the note follows it. A
-        // replayed note is history and never moves.
-        const isSent = (i: Item): i is TerminalRunItem =>
-          i.kind === "terminalRun" && sent.has(i.runId) && i.inHistory !== true && i.replayed !== true;
-        const cards = a.runIds.flatMap((id) => c.items.filter((i): i is TerminalRunItem => isSent(i) && i.runId === id));
-        return { ...c, parentTurn: c.parentTurn + 1, items: [...c.items.filter((i) => !isSent(i)), ...cards] };
+        // A card a reload put in its note's place stays there when keryx holds that note for this send already
+        // (the same kind: a duplicate), so the agent's reply to the note follows it. Any other sent card goes to
+        // the end, unmarked: keryx stores its result as a new note at the end, and the turn's reply follows it.
+        // A replayed note is history and never moves.
+        const moves = (i: Item): i is TerminalRunItem =>
+          i.kind === "terminalRun" && sent.has(i.runId) && i.replayed !== true && i.inHistory !== noteKindOf(i.state);
+        const cards = a.runIds
+          .flatMap((id) => c.items.filter((i): i is TerminalRunItem => moves(i) && i.runId === id))
+          .map(({ inHistory: _movedFrom, ...card }) => card);
+        return { ...c, parentTurn: c.parentTurn + 1, items: [...c.items.filter((i) => !moves(i)), ...cards] };
       });
     case "terminalUnsent":
       return withConv(state, a.sessionId, (c) => (c.parentTurn > 0 ? { ...c, parentTurn: c.parentTurn - 1 } : c));

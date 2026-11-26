@@ -28,5 +28,13 @@ test("R2-HL-002: a results prompt with no answer when keryx exits or is restarte
 });
 
 test("R3-FE-002: a scenario name the fixture does not know fails instead of running the delivery scenario", () => {
-  expect(() => run("lost-conection")).toThrow();
+  let failure: unknown = null;
+  try {
+    run("lost-conection");
+  } catch (e) {
+    failure = e;
+  }
+  // The guard's own message, not any failure (a crash on start, the timeout).
+  const stderr = (failure as { stderr?: Buffer } | null)?.stderr?.toString() ?? "";
+  expect(stderr).toContain("unknown scenario lost-conection");
 });

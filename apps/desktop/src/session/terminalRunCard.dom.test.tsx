@@ -109,6 +109,34 @@ test("Show tab and Send output now go to the window's run tracker; Show tab goes
   expect(q("[data-run-show]")).toBeNull();
 });
 
+test("R4-RR-001: through the real run store, a not-sent card whose process ended keeps a working Show tab while its tab is open, and loses it when the tab closes", async () => {
+  const { initialState, reducer } = reducerMod;
+  const { createTerminalRuns } = await import("./terminalRuns");
+  let win = reducer({ ...initialState, phase: "ready" }, { t: "created", sessionId: "s1", show: true });
+  const shown: number[] = [];
+  const runs = createTerminalRuns({
+    acceptsResults: () => false,
+    send: () => null,
+    tail: async () => ({ text: "2 failed", truncated: false }),
+    showTab: (t) => void shown.push(t.id),
+    dispatch: (a) => void (win = reducer(win, a)),
+    now: () => 0,
+    newRunId: () => "run-1",
+    later: () => {},
+  });
+  bus.setTerminalRunApi({ showTab: (id) => runs.showTab(id), sendNow: (id) => void runs.sendNow(id) });
+  const runId = runs.requested("bun test", { sessionId: "s1" });
+  runs.opened(runId, { id: 5, title: "bun test", owner: "user", cwd: "/proj", running: true, exitCode: null });
+  await runs.exited(5, 1);
+  await render(win.convs.s1!.items);
+  expect(status()).toBe("not sent: this keryx does not take run results");
+  await click(q("[data-run-show]")!);
+  expect(shown).toEqual([5]);
+  runs.closed(5);
+  await render(win.convs.s1!.items);
+  expect(q("[data-run-show]")).toBeNull();
+});
+
 test("AC7: replayed terminalResult chunks draw run cards in a sent state with no actions; the continuation line draws nothing; no turn", async () => {
   const { applyUpdates, newConv } = reducerMod;
   const replayed = applyUpdates(newConv("s1", { replaying: true }), [

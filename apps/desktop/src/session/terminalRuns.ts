@@ -217,8 +217,10 @@ export function createTerminalRuns(deps: TerminalRunDeps): TerminalRuns {
     if (run.tab) byTab.delete(run.tab.id);
   };
   /**
-   * It cannot change (a final state, its tab closed: the reducer keeps its card across a reload by the same
-   * rule), its process's end (if it had a tab) was seen, and nothing is read or sent for it in flight.
+   * It cannot change (a final state, "not sent" included, and its tab closed: `runCanChange`), its process's
+   * end (if it had a tab) was seen, and nothing is read or sent for it in flight. A reload keeps cards by a
+   * stricter rule (reducer.ts `keptOnReload`: a "not sent" card goes whatever its tab does); the store keeps
+   * such a run while its tab is open all the same, so its Show tab works and the tab's close reaches its card.
    */
   const forgetIfDone = (run: Run): void => {
     const done = !runCanChange(run) && (run.tab === null || run.exit !== null) && run.reads === 0 && !run.sending;

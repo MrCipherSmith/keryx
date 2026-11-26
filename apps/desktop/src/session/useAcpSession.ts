@@ -970,15 +970,17 @@ export function useAcpSession(cwd: string) {
   );
 
   /**
-   * One arbiter for every session's free turn slot (spec 3.9.5b). Run results waiting for a session go
-   * first, once it can take a prompt (its turn ended, it is held again); a prompt the user queued meanwhile
-   * goes only where no results prompt took the slot, one per ended turn.
+   * One arbiter for every session's free turn slot (spec 3.9.5b), one prompt per session whose slot is free
+   * (its turn ended, it is held again), in this order:
+   * 1. the issue-question resume a load queued behind a running turn, when it is at the front of that
+   *    session's queue (a load's resume takes the session first, as it does when it can send at once);
+   * 2. the Run results waiting for the session (`terminalRuns.flush`);
+   * 3. the next prompt the user queued, where neither of those took the slot.
+   * Sending takes the slot at once (`runTurn` registers the turn), so a later step finds it taken.
    */
   useEffect(() => {
     const l = live.current;
     const turnRunning = (c: { sessionId: string }) => l.reg.turns.has(c.sessionId) || l.reg.telegramTurns.has(c.sessionId);
-    // Issue questions a load queued behind a running turn go before that session's Run results (a load's
-    // resume takes the session first, as it does when it can send at once).
     for (const c of Object.values(win.convs)) {
       const front = pendingQueueSend(c, turnRunning(c));
       if (front?.resumeIssueQuestions && sendPrompt(front.text, c.sessionId, undefined, false, undefined, { resumeIssueQuestions: true })) dispatch({ t: "queueShift", sessionId: c.sessionId });
@@ -987,7 +989,8 @@ export function useAcpSession(cwd: string) {
     for (const c of Object.values(win.convs)) {
       if (tookSlot.has(c.sessionId)) continue;
       const next = pendingQueueSend(c, turnRunning(c));
-      if (next && sendPrompt(next.text, c.sessionId, undefined, false, undefined, next.issueLaunchId ? { issueLaunchId: next.issueLaunchId } : next.resumeIssueQuestions ? { resumeIssueQuestions: true } : undefined)) dispatch({ t: "queueShift", sessionId: c.sessionId });
+      // A resume at the front was step 1's: sent there, or refused on the same checks it would meet here.
+      if (next && !next.resumeIssueQuestions && sendPrompt(next.text, c.sessionId, undefined, false, undefined, next.issueLaunchId ? { issueLaunchId: next.issueLaunchId } : undefined)) dispatch({ t: "queueShift", sessionId: c.sessionId });
     }
   }, [win.convs, sendPrompt, dispatch, terminalRuns]);
 
