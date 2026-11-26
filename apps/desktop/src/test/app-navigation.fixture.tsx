@@ -28,6 +28,8 @@ let boardRegistered = false;
 const boardStarts: unknown[] = [];
 /** The review turns (text naming `keryx review state open`) each session received, in order. */
 const reviewTurns: Array<{ sessionId: string; text: string }> = [];
+/** Every `session/set_mode` Desktop sent, in order. */
+const modeSets: Array<{ sessionId: string; modeId: string }> = [];
 /** While set, a `session/prompt` answers only once it resolves: that session's turn is in flight. */
 let holdPrompt: Promise<void> | undefined;
 const boardPrUrl = "https://github.com/org/project/pull/14";
@@ -106,6 +108,10 @@ mockIPC(async (cmd, args) => {
         result = account === "me" ? candidates.filter(candidate => candidate.sessionId === sessionId).map(candidate => ({
           ...candidate, key: { repo: "org/project", repositoryId: "RID", viewer: "me", number: candidate.number },
         })) : [];
+      } else if (method === "session/set_mode") {
+        const { sessionId, modeId } = params as { sessionId: string; modeId: string };
+        modeSets.push({ sessionId, modeId });
+        result = {};
       } else if (method === "session/prompt") {
         const { sessionId, prompt } = params as { sessionId: string; prompt: { text: string }[] };
         prompted.push(sessionId);
@@ -597,6 +603,10 @@ try {
   assert.equal(newSessions, openBeforeBoardLaunch + 1);
   assert.deepEqual(boardStarts, [], "Run review sends no review_run start");
   assert.deepEqual(reviewTurns.slice(2).map(turn => turn.sessionId), [boardOrigin]);
+  // The session Desktop opened for the review runs in Auto permission mode (Auto review mode) before the turn is sent;
+  // the session the user typed `/review` in keeps its own mode.
+  assert.deepEqual(modeSets.filter(set => set.sessionId === boardOrigin), [{ sessionId: boardOrigin, modeId: "auto" }]);
+  assert.ok(!modeSets.some(set => set.sessionId === bareSession), "A typed /review leaves its session's mode alone");
   for (const part of ["review-orchestrator", boardPrUrl, `--base ${boardRun.baseSha} --head ${boardRun.headSha}`, "keryx review state open", `--session ${boardOrigin}`]) {
     assert.ok(reviewTurns[2]!.text.includes(part), `#14's review turn names ${part}`); // three turns asserted above
   }

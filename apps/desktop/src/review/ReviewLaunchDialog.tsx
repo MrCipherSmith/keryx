@@ -312,6 +312,9 @@ export function ReviewLaunchDialog({ flows, defaultFlow, initialTarget, loadTarg
         {orchestrator && <small className="field-hint" id={id + "-approval"}>{mode === "auto"
           ? "Automatically approves plan expansions within the review budget and project policy."
           : "Asks for approval when the plan exceeds the project threshold."}</small>}
+        <small className="field-hint" id={id + "-session-mode"}>{mode === "auto"
+          ? "The review session runs in Auto permission mode: only calls that touch credentials ask."
+          : "The review session runs at least in Trust permission mode: destructive and escalated calls ask."}</small>
         <label className="review-launch-adaptive"><input type="checkbox" checked={orchestrator}
           aria-describedby={id + "-workflow"} onChange={e => setOrchestrator(e.currentTarget.checked)} /> Review orchestrator</label>
         <small className="field-hint" id={id + "-workflow"}>Turn off to run one reviewer without reviewer waves.</small>
