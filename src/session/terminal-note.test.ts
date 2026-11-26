@@ -3,7 +3,7 @@
 
 import { describe, expect, test } from "bun:test";
 import type { NormalizedMessage } from "../harness/provider/types";
-import { parseTerminalNoteHeadLine, storedTerminalNoteHead, TERMINAL_RUN_ID, terminalNoteHeadLine, type TerminalRunOutcome } from "./terminal-note";
+import { parseTerminalNoteHeadLine, readTerminalNoteHeadLine, storedTerminalNoteHead, TERMINAL_RUN_ID, terminalNoteHeadLine, type TerminalRunOutcome } from "./terminal-note";
 
 describe("the head line", () => {
   const outcomes: ReadonlyArray<readonly [TerminalRunOutcome, string]> = [
@@ -32,6 +32,28 @@ describe("the head line", () => {
     ]) {
       expect(parseTerminalNoteHeadLine(line)).toBeUndefined();
     }
+  });
+
+  test("R3-AR-003/R3-TP-005: every id at the edges of what TERMINAL_RUN_ID accepts is written and read back, for every outcome", () => {
+    // The validator's edges, found by asking it: the longest id it takes and every ASCII character it takes.
+    let longest = 0;
+    while (longest < 1_024 && TERMINAL_RUN_ID.test("r".repeat(longest + 1))) longest += 1;
+    expect(longest).toBeGreaterThan(0);
+    const characters = Array.from({ length: 128 }, (_, code) => String.fromCharCode(code)).filter((c) => TERMINAL_RUN_ID.test(c));
+    const ids = ["r".repeat(longest), characters.join("").repeat(2).slice(0, longest), ...characters];
+    for (const runId of ids) {
+      for (const [outcome] of outcomes) {
+        expect({ runId, read: parseTerminalNoteHeadLine(terminalNoteHeadLine(runId, outcome)) }).toEqual({ runId, read: { runId, outcome } });
+      }
+    }
+  });
+
+  test("a head line at the start of a longer text is read with its length; anything else is not", () => {
+    const head = terminalNoteHeadLine("run-1", { state: "exited", exitCode: 2 });
+    expect(readTerminalNoteHeadLine(`${head} command: "npm test ] x"`)).toEqual({ head: { runId: "run-1", outcome: { state: "exited", exitCode: 2 } }, length: head.length });
+    expect(readTerminalNoteHeadLine(head)).toEqual({ head: { runId: "run-1", outcome: { state: "exited", exitCode: 2 } }, length: head.length });
+    expect(readTerminalNoteHeadLine(` ${head}`)).toBeUndefined();
+    expect(readTerminalNoteHeadLine("[terminal run run-1 result: done] x")).toBeUndefined();
   });
 
   test("the run-id pattern is the contract's: 1 to 64 of A-Z, a-z, 0-9, _ and -", () => {

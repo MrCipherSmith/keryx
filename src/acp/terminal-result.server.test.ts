@@ -419,6 +419,151 @@ describe("R2-HL-002: a result is stored at most once per run id", () => {
   }, TIMEOUT_MS);
 });
 
+/** `entries` validated, as the server would accept them. */
+const typedResults = (entries: readonly unknown[]): TerminalResult[] => {
+  const parsed = parseTerminalResults(entries);
+  if (!parsed.ok) throw new Error(parsed.reason);
+  return [...parsed.results];
+};
+
+/** A note as keryx stores it: an injected harness user message written by `terminalResultNote`. */
+const storedNoteOf = (entry: unknown, nonce: string): NormalizedMessage => ({
+  role: "user",
+  content: terminalResultNote(typedResults([entry])[0] as TerminalResult, nonce),
+  provenance: "harness",
+  injected: true,
+});
+
+/** Stores `history` as a session on disk, as an earlier keryx left it, and loads it; returns its id. */
+async function loadedSession(d: Desktop, history: NormalizedMessage[]): Promise<string> {
+  const handle = persistHistory(createSession({ cwd: d.h.projectDir, provider: "test", model: "test-model", dataDir: dataDirOf(d.h) }), history, {
+    provider: "test",
+    model: "test-model",
+  });
+  await d.h.initialize();
+  const load = d.h.request(ACP_AGENT_METHODS.sessionLoad, { sessionId: handle.summary.id, cwd: d.h.projectDir, mcpServers: [] });
+  expect((await d.h.waitFor((f) => f.id === load)).error).toBeUndefined();
+  return handle.summary.id;
+}
+
+/** The answer a prompt gets when every result it carries is stored and no turn runs. */
+const noTurnAnswer = (duplicates: readonly string[]) => ({ stopReason: "end_turn", _meta: { keryx: { terminalResults: { stored: 0, duplicates } } } });
+
+describe("R3-LG-005: a resend whose notes never got their turn runs that turn", () => {
+  test("a session whose history ends with a stored note and no continuation line: the resend runs one turn on it and stores nothing again; a second resend gets the no-turn answer", async () => {
+    const d = desktop([textRound("one test fails"), textRound("must not be used")]);
+    // keryx stored the note, then stopped before the turn it started ended (and so was persisted).
+    const sessionId = await loadedSession(d, [
+      { role: "user", content: "run the tests", provenance: "project" },
+      { role: "assistant", content: "```sh\nbun test src/acp\n```", provenance: "model" },
+      storedNoteOf(RESULTS[0], "0123456789ab"),
+    ]);
+
+    const { reply } = await settle(d.h, promptWithResults(d.h, sessionId, [RESULTS[0]]));
+    expect(reply.error).toBeUndefined();
+    expect(reply.result).toEqual(noTurnAnswer(["run-1"]));
+    // One model call: the stored note, then keryx's line.
+    expect(d.sent).toHaveLength(1);
+    const tail = d.sent[0]?.messages.slice(-2) ?? [];
+    expect(tail[0]?.content).toStartWith("[terminal run run-1 result: exit 1]\nUNTRUSTED");
+    expect(tail[1]?.content).toBe(TERMINAL_CONTINUATION_LINE);
+    const stored = loadContext(d.h.projectDir, sessionId, dataDirOf(d.h));
+    expect(stored.filter((m) => m.content.startsWith("[terminal run run-1 "))).toHaveLength(1);
+    expect(stored.filter((m) => m.terminalContinuation === true)).toHaveLength(1);
+    expect(stored.at(-1)).toMatchObject({ role: "assistant", content: "one test fails" });
+
+    // That turn is recorded now: a second resend runs nothing.
+    const id = promptWithResults(d.h, sessionId, [RESULTS[0]]);
+    const again = await d.h.waitFor((f) => f.id === id && f.method === undefined);
+    expect(again.result).toEqual(noTurnAnswer(["run-1"]));
+    expect(d.sent).toHaveLength(1);
+  }, TIMEOUT_MS);
+
+  test("notes followed by keryx's continuation line — their turn was recorded — get the no-turn answer", async () => {
+    const d = desktop([textRound("must not be used")]);
+    const sessionId = await loadedSession(d, [
+      { role: "user", content: "run the tests", provenance: "project" },
+      storedNoteOf(RESULTS[0], "0123456789ab"),
+      { role: "user", content: TERMINAL_CONTINUATION_LINE, provenance: "harness", injected: true, terminalContinuation: true },
+    ]);
+    const id = promptWithResults(d.h, sessionId, [RESULTS[0]]);
+    expect((await d.h.waitFor((f) => f.id === id && f.method === undefined)).result).toEqual(noTurnAnswer(["run-1"]));
+    expect(d.sent).toHaveLength(0);
+  }, TIMEOUT_MS);
+
+  test("rewinding the resumed turn takes its notes out with it", async () => {
+    const d = desktop([toolRound("x1", "shell_exec", { command: "touch resumed" }), textRound("fixed")], { storedMode: "trust" });
+    const sessionId = await loadedSession(d, [
+      { role: "user", content: "first question", provenance: "project" },
+      { role: "assistant", content: "first answer", provenance: "model" },
+      storedNoteOf(RESULTS[0], "0123456789ab"),
+    ]);
+    // The floor asks for the mutating call; allowed, it runs and the turn gets a rewind snapshot.
+    await settle(d.h, promptWithResults(d.h, sessionId, [RESULTS[0]]));
+    expect(existsSync(path.join(d.h.projectDir, "resumed"))).toBe(true);
+    expect((await command(d.h, sessionId, "rewind", "1 history")).text).toContain("/rewind confirm");
+    expect((await command(d.h, sessionId, "rewind", "confirm")).effects).toEqual(["transcript"]);
+    expect(loadContext(d.h.projectDir, sessionId, dataDirOf(d.h)).map((m) => m.content)).toEqual(["first question", "first answer"]);
+  }, TIMEOUT_MS);
+});
+
+describe("R3-LG-006: a result is a duplicate by run id and kind", () => {
+  const SNAPSHOT = { runId: "run-5", command: "bun run build", state: "running", durationMs: 1_000, output: "building" } as const;
+  const EXITED = { ...SNAPSHOT, state: "exited", exitCode: 0, durationMs: 9_000, output: "built in 9 s" } as const;
+  const notesOf = (h: ShellHarness, sessionId: string, runId: string): string[] =>
+    storedNotes(h, sessionId).filter((m) => m.content.startsWith(`[terminal run ${runId} `)).map((m) => m.content.slice(0, m.content.indexOf("\n")));
+
+  test("a running snapshot stored, then the exit for the same run id: the exit is stored as its own note and its turn runs", async () => {
+    const { h, sent } = desktop([textRound("still building"), textRound("built")]);
+    await h.initialize();
+    const { sessionId } = await h.newSession();
+    await settle(h, promptWithResults(h, sessionId, [SNAPSHOT]));
+    const { reply } = await settle(h, promptWithResults(h, sessionId, [EXITED]));
+    expect(reply.error).toBeUndefined();
+    expect(reply.result).toEqual({ stopReason: "end_turn" });
+    expect(sent).toHaveLength(2);
+    const tail = sent[1]?.messages.slice(-2) ?? [];
+    expect(tail[0]?.content).toStartWith("[terminal run run-5 result: exit 0]\n");
+    expect(tail[1]?.content).toBe(TERMINAL_CONTINUATION_LINE);
+    expect(notesOf(h, sessionId, "run-5")).toEqual(["[terminal run run-5 result: still running]", "[terminal run run-5 result: exit 0]"]);
+  }, TIMEOUT_MS);
+
+  test("after a final result, a final or a snapshot for the same run id is a duplicate; after a snapshot, a second snapshot is", async () => {
+    const { h, sent } = desktop([textRound("built"), textRound("building"), textRound("must not be used")]);
+    await h.initialize();
+    const { sessionId } = await h.newSession();
+    await settle(h, promptWithResults(h, sessionId, [EXITED]));
+    await settle(h, promptWithResults(h, sessionId, [{ ...SNAPSHOT, runId: "run-6" }]));
+    expect(sent).toHaveLength(2);
+    for (const resend of [EXITED, { ...EXITED, exitCode: null }, SNAPSHOT, { ...SNAPSHOT, runId: "run-6" }]) {
+      const id = promptWithResults(h, sessionId, [resend]);
+      const answer = await h.waitFor((f) => f.id === id && f.method === undefined);
+      expect({ resend, answer: answer.result }).toEqual({ resend, answer: noTurnAnswer([resend.runId]) });
+    }
+    expect(sent).toHaveLength(2);
+    expect(notesOf(h, sessionId, "run-5")).toEqual(["[terminal run run-5 result: exit 0]"]);
+    expect(notesOf(h, sessionId, "run-6")).toEqual(["[terminal run run-6 result: still running]"]);
+  }, TIMEOUT_MS);
+
+  test("a mixed batch: the exit after a stored snapshot and a new result are stored and get one turn; a repeated final is skipped", async () => {
+    const { h, sent } = desktop([textRound("building"), textRound("one test fails"), textRound("built and linted")]);
+    await h.initialize();
+    const { sessionId } = await h.newSession();
+    await settle(h, promptWithResults(h, sessionId, [SNAPSHOT]));
+    await settle(h, promptWithResults(h, sessionId, [RESULTS[0]]));
+    const lint = { runId: "run-8", command: "bun run lint", state: "exited", exitCode: 0, durationMs: 900, output: "no problems" } as const;
+    const { reply } = await settle(h, promptWithResults(h, sessionId, [EXITED, RESULTS[0], lint]));
+    expect(reply.result).toEqual({ stopReason: "end_turn" });
+    expect(sent).toHaveLength(3);
+    expect((sent[2]?.messages.slice(-3) ?? []).map((m) => m.content.slice(0, m.content.indexOf("\n") < 0 ? undefined : m.content.indexOf("\n")))).toEqual([
+      "[terminal run run-5 result: exit 0]",
+      "[terminal run run-8 result: exit 0]",
+      TERMINAL_CONTINUATION_LINE,
+    ]);
+    expect(notesOf(h, sessionId, "run-1")).toHaveLength(1);
+  }, TIMEOUT_MS);
+});
+
 describe("R2-HL-003: a terminal-results prompt refused as shutting down stores nothing", () => {
   test("once the shutdown began, the prompt is invalid request with condition shutting-down and no note is stored", async () => {
     const stop = new AbortController();

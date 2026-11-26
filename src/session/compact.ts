@@ -18,7 +18,7 @@ import type { NormalizedMessage } from "../harness/provider/types";
 import { consolidateAnchors, isAnchorsContent, isFullAnchorsContent } from "./anchors-announce";
 import { parseCollapsedRecord, patchPaths } from "./prune";
 import { persistCompacted, type SessionHandle } from "./store";
-import { parseTerminalNoteHeadLine, storedTerminalNoteHead, terminalNoteHeadLine, type TerminalNoteHead } from "./terminal-note";
+import { readTerminalNoteHeadLine, storedTerminalNoteHead, terminalNoteHeadLine, type TerminalNoteHead } from "./terminal-note";
 
 export interface CompactOptions {
   /** How many trailing operator turns (with following assistant/tool/injected msgs) to keep. */
@@ -117,11 +117,8 @@ function runResultDigests(messages: readonly NormalizedMessage[]): string[] {
  */
 function carriedRunResult(line: string): string | undefined {
   if (!line.startsWith(RUN_RESULT_ITEM)) return undefined;
-  const item = line.slice(RUN_RESULT_ITEM.length);
-  // A run id and the outcome words hold no `]`, so the head line ends at the first one.
-  const close = item.indexOf("]");
-  const head = close < 0 ? undefined : parseTerminalNoteHeadLine(item.slice(0, close + 1));
-  return head === undefined ? undefined : runResultDigest(head);
+  const read = readTerminalNoteHeadLine(line.slice(RUN_RESULT_ITEM.length));
+  return read === undefined ? undefined : runResultDigest(read.head);
 }
 
 /**
@@ -581,10 +578,12 @@ export function compactWithFallback(
 }
 
 /**
- * Flow 523 review R2-HL3-001: the in-turn cut at `tailTokens`, or, when that does not fit, at half the
- * tail and half again down to {@link IN_TURN_MIN_TAIL_TOKENS}: the largest tail that fits wins, and
- * the smallest one tried when none does. A `fits` that no context can meet (`fits([])` is false: the
- * overflow retry when no limit is known) keeps the cut at `tailTokens`, as before. Pure.
+ * Flow 523 reviews R2-HL3-001, R3-LG-004: the in-turn cut at `tailTokens`, or, when that cut removes
+ * nothing or does not fit, at half the tail and half again down to {@link IN_TURN_MIN_TAIL_TOKENS}. A
+ * budget whose cut removes nothing (the turn fits that tail too) is skipped. The largest tail whose cut
+ * fits wins; when none fits, the smallest cut that removed anything; when none removed anything, the
+ * noop. A `fits` that no context can meet (`fits([])` is false: the overflow retry when no limit is
+ * known) keeps the cut at `tailTokens`, as before. Pure.
  */
 function inTurnCutThatFits(
   source: readonly NormalizedMessage[],
@@ -593,21 +592,21 @@ function inTurnCutThatFits(
   opts: { focus?: string; maxPromptChars?: number },
 ): CompactResult {
   const full = compactInTurn(source, { ...opts, tailTokens });
-  if (fits === undefined || full.noop || fits(full.context) || !fits([])) {
+  if (fits === undefined || !fits([]) || (!full.noop && fits(full.context))) {
     return full;
   }
-  let smallest = full;
+  let smallest = full.noop ? undefined : full;
   for (let budget = Math.floor(tailTokens / 2); budget >= IN_TURN_MIN_TAIL_TOKENS; budget = Math.floor(budget / 2)) {
     const cut = compactInTurn(source, { ...opts, tailTokens: budget });
     if (cut.noop) {
-      break;
+      continue;
     }
     if (fits(cut.context)) {
       return cut;
     }
     smallest = cut;
   }
-  return smallest;
+  return smallest ?? full;
 }
 
 /**

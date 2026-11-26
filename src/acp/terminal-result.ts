@@ -225,20 +225,53 @@ export function parseTerminalResultNote(content: string): TerminalResult | undef
   return { runId, command, state: "exited", exitCode: outcome.exitCode, durationMs, output };
 }
 
+/** What a session already stored for one run: its running snapshot only, or a final result (an exit or a signal). */
+export type StoredTerminalRun = "snapshot" | "final";
+
 /**
- * The run ids whose result one of `histories` already holds as a note keryx stored (review R2-HL-002:
- * a result is stored at most once per run id, so a client may re-send a result whose prompt was lost
- * with its connection). Pure.
+ * What `histories` already hold for each run, as notes keryx stored (reviews R2-HL-002, R3-LG-006): a
+ * client may re-send a result whose prompt was lost with its connection, and a result is stored at most
+ * once per run id and kind. Read from keryx's own head line, never from text a client wrote. Pure.
  */
-export function storedTerminalRunIds(...histories: ReadonlyArray<readonly NormalizedMessage[]>): Set<string> {
-  const runIds = new Set<string>();
+export function storedTerminalRuns(...histories: ReadonlyArray<readonly NormalizedMessage[]>): Map<string, StoredTerminalRun> {
+  const runs = new Map<string, StoredTerminalRun>();
   for (const history of histories) {
     for (const message of history) {
       const head = storedTerminalNoteHead(message);
-      if (head !== undefined) runIds.add(head.runId);
+      if (head === undefined) continue;
+      if (head.outcome.state !== "running") runs.set(head.runId, "final");
+      else if (!runs.has(head.runId)) runs.set(head.runId, "snapshot");
     }
   }
-  return runIds;
+  return runs;
+}
+
+/**
+ * True when `result` adds nothing to what the session stored for its run (review R3-LG-006): a second
+ * running snapshot, or anything after a final result. A final result after a stored snapshot is new:
+ * the agent got only the early output. Pure.
+ */
+export function isStoredTerminalResult(stored: ReadonlyMap<string, StoredTerminalRun>, result: TerminalResult): boolean {
+  const run = stored.get(result.runId);
+  return run === "final" || (run === "snapshot" && result.state === "running");
+}
+
+/**
+ * How many stored notes end `history` when every one of `runIds` has a note among them; `0` otherwise
+ * (review R3-LG-005). A message after them — keryx's continuation line, a reply, anything else — means
+ * the turn those notes started was recorded. With nothing after them it never was: keryx stopped
+ * between storing the notes and the end of their turn, which is when a turn is persisted. Pure.
+ */
+export function trailingNotesAwaitingTurn(history: readonly NormalizedMessage[], runIds: readonly string[]): number {
+  const trailing = new Set<string>();
+  let count = 0;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const head = storedTerminalNoteHead(history[i]);
+    if (head === undefined) break;
+    trailing.add(head.runId);
+    count += 1;
+  }
+  return runIds.length > 0 && runIds.every((runId) => trailing.has(runId)) ? count : 0;
 }
 
 /**

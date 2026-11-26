@@ -9,9 +9,11 @@ import type { NormalizedMessage } from "../harness/provider/types";
 import { delegateResultNote } from "./delegate-turn-hook";
 import {
   clientTakesTerminalResults,
+  isStoredTerminalResult,
   parseTerminalResultNote,
   parseTerminalResults,
-  storedTerminalRunIds,
+  storedTerminalRuns,
+  trailingNotesAwaitingTurn,
   TERMINAL_COMMAND_MAX_CHARS,
   TERMINAL_CONTINUATION_LINE,
   TERMINAL_OUTPUT_CUT_LINE,
@@ -329,21 +331,66 @@ describe("parseTerminalResultNote", () => {
   });
 });
 
-describe("storedTerminalRunIds (R2-HL-002): the runs a session already stored a note for", () => {
+describe("storedTerminalRuns (R2-HL-002, R3-LG-006): what a session already stored for each run", () => {
+  const storedOf = (entry: Record<string, unknown>): NormalizedMessage => ({ role: "user", content: terminalResultNote(accepted(entry), NONCE), provenance: "harness", injected: true });
+
   test("only notes keryx stored count: injected harness user messages whose first line is a head line, across every history given", () => {
     const note = (entry: Record<string, unknown>): string => terminalResultNote(accepted(entry), NONCE);
     const live: NormalizedMessage[] = [
-      { role: "user", content: note(exited({ runId: "run-1" })), provenance: "harness", injected: true },
-      { role: "user", content: note(running({ runId: "run-2" })), provenance: "harness", injected: true },
+      storedOf(exited({ runId: "run-1" })),
+      storedOf(running({ runId: "run-2" })),
       // The operator typed a note's shape: not stored by keryx.
       { role: "user", content: note(exited({ runId: "typed" })), provenance: "project" },
       // A harness line that only mentions a head line further down.
       { role: "user", content: `hint\n${note(exited({ runId: "inner" }))}`, provenance: "harness", injected: true },
       { role: "assistant", content: note(exited({ runId: "said" })), provenance: "model" },
     ];
-    const archived: NormalizedMessage[] = [{ role: "user", content: note(exited({ runId: "run-0", exitCode: null })), provenance: "harness", injected: true }];
-    expect([...storedTerminalRunIds(archived, live)].sort()).toEqual(["run-0", "run-1", "run-2"]);
-    expect(storedTerminalRunIds().size).toBe(0);
+    const archived: NormalizedMessage[] = [storedOf(exited({ runId: "run-0", exitCode: null }))];
+    expect([...storedTerminalRuns(archived, live)].sort()).toEqual([
+      ["run-0", "final"],
+      ["run-1", "final"],
+      ["run-2", "snapshot"],
+    ]);
+    expect(storedTerminalRuns().size).toBe(0);
+  });
+
+  test("a run is final once any of its stored notes is an exit or a signal, in whatever order they were stored", () => {
+    const snapshotThenExit = storedTerminalRuns([storedOf(running({ runId: "r" })), storedOf(exited({ runId: "r" }))]);
+    const signalThenSnapshot = storedTerminalRuns([storedOf(exited({ runId: "r", exitCode: null }))], [storedOf(running({ runId: "r" }))]);
+    expect(snapshotThenExit.get("r")).toBe("final");
+    expect(signalThenSnapshot.get("r")).toBe("final");
+  });
+
+  test("isStoredTerminalResult: a snapshot after a snapshot and anything after a final result are stored; a final result after a snapshot is new", () => {
+    const stored = storedTerminalRuns([storedOf(running({ runId: "snap" })), storedOf(exited({ runId: "done" }))]);
+    expect(isStoredTerminalResult(stored, accepted(running({ runId: "snap" })))).toBe(true);
+    expect(isStoredTerminalResult(stored, accepted(exited({ runId: "snap" })))).toBe(false);
+    expect(isStoredTerminalResult(stored, accepted(exited({ runId: "snap", exitCode: null })))).toBe(false);
+    expect(isStoredTerminalResult(stored, accepted(exited({ runId: "done" })))).toBe(true);
+    expect(isStoredTerminalResult(stored, accepted(exited({ runId: "done", exitCode: 3 })))).toBe(true);
+    expect(isStoredTerminalResult(stored, accepted(running({ runId: "done" })))).toBe(true);
+    expect(isStoredTerminalResult(stored, accepted(exited({ runId: "new" })))).toBe(false);
+    expect(isStoredTerminalResult(stored, accepted(running({ runId: "new" })))).toBe(false);
+  });
+});
+
+describe("trailingNotesAwaitingTurn (R3-LG-005): stored notes whose turn was never recorded", () => {
+  const storedOf = (entry: Record<string, unknown>): NormalizedMessage => ({ role: "user", content: terminalResultNote(accepted(entry), NONCE), provenance: "harness", injected: true });
+  const asked: NormalizedMessage = { role: "assistant", content: "```sh\nbun test\n```", provenance: "model" };
+
+  test("the count of the notes that end the history when every run id has one of them; 0 when anything follows them or a run id is not among them", () => {
+    const one = storedOf(exited({ runId: "run-1" }));
+    const two = storedOf(running({ runId: "run-2" }));
+    expect(trailingNotesAwaitingTurn([asked, one, two], ["run-1", "run-2"])).toBe(2);
+    expect(trailingNotesAwaitingTurn([asked, one, two], ["run-2"])).toBe(2);
+    expect(trailingNotesAwaitingTurn([one, asked, two], ["run-1", "run-2"])).toBe(0);
+    const line: NormalizedMessage = { role: "user", content: TERMINAL_CONTINUATION_LINE, provenance: "harness", injected: true, terminalContinuation: true };
+    expect(trailingNotesAwaitingTurn([asked, one, line], ["run-1"])).toBe(0);
+    expect(trailingNotesAwaitingTurn([asked, one, { role: "assistant", content: "ok", provenance: "model" }], ["run-1"])).toBe(0);
+    // A note's shape the operator typed is not a stored note.
+    expect(trailingNotesAwaitingTurn([asked, { ...one, provenance: "project" }], ["run-1"])).toBe(0);
+    expect(trailingNotesAwaitingTurn([asked, one], [])).toBe(0);
+    expect(trailingNotesAwaitingTurn([], ["run-1"])).toBe(0);
   });
 });
 

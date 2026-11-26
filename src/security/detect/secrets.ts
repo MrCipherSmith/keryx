@@ -34,66 +34,179 @@ function nextMatch(pattern: RegExp, content: string, from: number): RegExpExecAr
   return pattern.exec(content);
 }
 
-// What may come before a key line in a tool's listing: a line number (`cat -n`, `grep -n`/`rg -n`
-// with or without a path, keryx's own `ctx rg` summary item), then indentation (a YAML or JSON value).
-const LINE_PREFIX = String.raw`(?:\s*\d+\t|(?:[^\s:]*:)?\d+[:-]|\s*- \d+:\d+ )?\s*`;
-// A line of key body: base64, the PGP checksum line (`=abcd`) included.
-const PEM_BODY_LINE = new RegExp(String.raw`^${LINE_PREFIX}=?[A-Za-z0-9+/]+={0,2}\s*$`);
-// A header field between a key's BEGIN line and its body (RFC 1421 PEM, OpenPGP armor).
-const PEM_HEADER_FIELD = new RegExp(String.raw`^${LINE_PREFIX}(?:Proc-Type|DEK-Info|Content-Domain|Version|Comment|Hash|Charset|MessageID): `);
-// Nothing but a line prefix: the text an END line may have before its marker and still be a key line.
-const LINE_PREFIX_ONLY = new RegExp(String.raw`^${LINE_PREFIX}$`);
+// A line of key body once its prefix is cut off: base64, the PGP checksum line (`=abcd`) included.
+const PEM_BODY = /^=?[A-Za-z0-9+/]+={0,2}$/;
+// A header field between a key's BEGIN line and its body (RFC 1421 PEM, OpenPGP armor); the first one
+// on a line, after that line's prefix.
+const PEM_HEADER_FIELD = /(?:Proc-Type|DEK-Info|Content-Domain|Version|Comment|Hash|Charset|MessageID): /;
 
 const NEWLINE = 10;
 const BACKSLASH = 92;
+const LETTER_U = 117;
+// The letters after a backslash that make a JSON escape of one character a key body may hold:
+// `\n` `\r` `\t` `\b` `\f` `\/`. `\\` and `\uXXXX` are read on their own; `\"` ends the body.
+const BODY_ESCAPE_LETTERS: ReadonlySet<number> = new Set([110, 114, 116, 98, 102, 47]);
 
 function isBase64Code(code: number): boolean {
   return (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || (code >= 48 && code <= 57) || code === 43 || code === 47 || code === 61;
 }
 
-// True when the `n` or `r` at `index` ends a `\n` / `\r` escape: an odd number of backslashes before it.
-function endsEscape(content: string, index: number, from: number): boolean {
-  let slashes = 0;
-  for (let i = index - 1; i >= from && content.charCodeAt(i) === BACKSLASH; i--) slashes += 1;
-  return slashes % 2 === 1;
+function isDigitCode(code: number): boolean {
+  return code >= 48 && code <= 57;
 }
 
-// Where an END line with no header before it starts its mask (flow 523 review R2-SC-003): the start
-// of the key body directly above it, never further back than `from`. On the END's own line the body
-// is the run of base64 and `\n`/`\r` escapes before the marker (a key serialized into one line, as
-// JSON does); the run ends at any other character, a quote included, so a JSON string stays whole.
-// When that run fills the line (after a line prefix), the lines above that look like key body — base64
-// lines, PEM header fields, blank lines between them — are masked too, each from its start, up to the
-// first line that does not (the line a tail cut starts after, a frame keryx wrote, a record). Linear:
-// each character between `from` and the END line is read at most once.
-function orphanBodyStart(content: string, endIndex: number, from: number): number {
-  let run = endIndex;
+function isHexCode(code: number): boolean {
+  return isDigitCode(code) || (code >= 65 && code <= 70) || (code >= 97 && code <= 102);
+}
+
+function isSeparatorCode(code: number): boolean {
+  return code === 58 || code === 45; // `:` `-`
+}
+
+function isSpaceCode(code: number): boolean {
+  return code === 32 || code === 9 || code === 13 || code === 11 || code === 12;
+}
+
+// The number of backslashes directly before `index`, none before `from` counted.
+function backslashesBefore(content: string, index: number, from: number): number {
+  let count = 0;
+  for (let i = index - 1; i >= from && content.charCodeAt(i) === BACKSLASH; i--) count += 1;
+  return count;
+}
+
+// Where the run of key body that ends at `end` starts, on one line and never before `from`: base64
+// characters and whole JSON string escapes (`\n` `\r` `\t` `\b` `\f` `\/` `\\` `\uXXXX`, RFC 8259 §7), so
+// a key serialized into one string is body escapes and all, and the run never starts inside an escape.
+// It ends at a quote (`\"` included) or any other character. Linear: a run of backslashes is counted
+// once to decide the escape it ends and once more when it is taken.
+function bodyRunStart(content: string, end: number, from: number): number {
+  let run = end;
   while (run > from) {
-    const code = content.charCodeAt(run - 1);
-    if ((code === 110 || code === 114) && endsEscape(content, run - 1, from)) {
+    const last = run - 1;
+    const code = content.charCodeAt(last);
+    if (
+      isHexCode(code) &&
+      last - 5 >= from &&
+      content.charCodeAt(last - 5) === BACKSLASH &&
+      content.charCodeAt(last - 4) === LETTER_U &&
+      isHexCode(content.charCodeAt(last - 3)) &&
+      isHexCode(content.charCodeAt(last - 2)) &&
+      isHexCode(content.charCodeAt(last - 1)) &&
+      backslashesBefore(content, last - 5, from) % 2 === 0
+    ) {
+      run -= 6; // `\uXXXX`
+      continue;
+    }
+    if (code === BACKSLASH) {
+      // Whole `\\` pairs are body. An odd one escapes the character after it, which the run does not hold.
+      const count = backslashesBefore(content, run, from);
+      if (count % 2 === 1) break;
+      run -= count;
+      continue;
+    }
+    if (backslashesBefore(content, last, from) % 2 === 1) {
+      if (!BODY_ESCAPE_LETTERS.has(code)) break; // `\"` or no JSON escape: the body starts after it
       run -= 2;
-    } else if (isBase64Code(code)) {
-      run -= 1;
+      continue;
+    }
+    if (!isBase64Code(code)) break;
+    run -= 1;
+  }
+  return run;
+}
+
+// What a line prefix looks like, where only its digits and the separators beside them may change from
+// line to line of one listing. Each digit run becomes one token, with the spaces that pad it on the left
+// (`cat -n`'s right-aligned number). A digit run and the `:`/`-` after it are one field token, and so are
+// the fields that follow it directly, so a match line's `name:27:1:` (rg --column) reads like a context
+// line's `name-25-` (grep/rg print `:` after a match line's name and number, `-` after a context line's).
+// A `:`/`-` before a digit run or at the end of the prefix is one separator token (`a.pem:` and `a.pem-`,
+// grep without -n). Every other character stays itself. Tokens are NUL and a letter, a NUL is doubled.
+function prefixShape(text: string): string {
+  let shape = "";
+  let i = 0;
+  while (i < text.length) {
+    const code = text.charCodeAt(i);
+    if (isDigitCode(code)) {
+      let j = i;
+      while (j < text.length && isDigitCode(text.charCodeAt(j))) j += 1;
+      if (j < text.length && isSeparatorCode(text.charCodeAt(j))) {
+        j += 1;
+        for (;;) {
+          let k = j;
+          while (k < text.length && isDigitCode(text.charCodeAt(k))) k += 1;
+          if (k === j || k === text.length || !isSeparatorCode(text.charCodeAt(k))) break;
+          j = k + 1;
+        }
+        shape += "\u0000F";
+      } else {
+        shape += "\u0000N";
+      }
+      i = j;
+    } else if (isSpaceCode(code)) {
+      let j = i;
+      while (j < text.length && isSpaceCode(text.charCodeAt(j))) j += 1;
+      shape += j < text.length && isDigitCode(text.charCodeAt(j)) ? "\u0000W" : text.slice(i, j);
+      i = j;
+    } else if (isSeparatorCode(code) && (i + 1 === text.length || isDigitCode(text.charCodeAt(i + 1)))) {
+      shape += "\u0000S";
+      i += 1;
     } else {
-      break;
+      shape += code === 0 ? "\u0000\u0000" : text.charAt(i);
+      i += 1;
     }
   }
+  return shape;
+}
+
+type KeyLine = "body" | "header" | "blank";
+
+// What a line above an orphan END is to that END's key, given the shape of the END line's prefix (and
+// of that prefix with its trailing spaces cut, for a blank line): a body line (that prefix, then
+// base64), a header field after that prefix, a blank line (nothing, or that prefix alone), or none.
+function keyLineOf(line: string, shape: string, blankShape: string): KeyLine | undefined {
+  const text = line.trimEnd();
+  if (text.length === 0) return "blank";
+  let bodyStart = text.length;
+  while (bodyStart > 0 && isBase64Code(text.charCodeAt(bodyStart - 1))) bodyStart -= 1;
+  if (bodyStart < text.length && PEM_BODY.test(text.slice(bodyStart)) && prefixShape(text.slice(0, bodyStart)) === shape) return "body";
+  const header = PEM_HEADER_FIELD.exec(text);
+  if (header !== null && prefixShape(text.slice(0, header.index)) === shape) return "header";
+  return prefixShape(text) === blankShape ? "blank" : undefined;
+}
+
+// Where an END line with no header before it starts its mask (flow 523 reviews R2-SC-003, R3-SC-001,
+// R3-SC-003): the start of the key body directly above it, never further back than `from`, so never
+// into the block before it. On the END's own line the body is the run before the marker (`bodyRunStart`:
+// base64 and whole JSON escapes); the text before that run is the END line's prefix. A line above is
+// key body when it is that same prefix, digits and the separators beside them aside (`prefixShape`),
+// then base64: what `cat -n`, `grep`/`rg` with or without a file name and line number, `git show`
+// (`-`/`+`), `diff` (`< `), `docker compose logs`, timestamped logs, keryx's `ctx rg` items and an
+// indented value put before every line. A PEM header field or a blank line behind the same prefix
+// counts too (a blank one only under a key line above it). The lines are masked from the first such line
+// up to the first line that is none of these: the line a tail cut starts after, a frame keryx wrote, a
+// record, another file's lines. With none, only the run and the marker are masked. Linear: each
+// character between `from` and the END line is read a bounded number of times.
+function orphanBodyStart(content: string, endIndex: number, from: number): number {
+  const run = bodyRunStart(content, endIndex, from);
   let lineStart = run;
   while (lineStart > from && content.charCodeAt(lineStart - 1) !== NEWLINE) lineStart -= 1;
-  if (!LINE_PREFIX_ONLY.test(content.slice(lineStart, run))) return run;
-  let start = lineStart;
+  const prefix = content.slice(lineStart, run);
+  const shape = prefixShape(prefix);
+  const blankShape = prefixShape(prefix.trimEnd());
+  let start = run;
   let headerSeen = false;
   let below = lineStart;
   while (below > from) {
     const lineEnd = below - 1; // the newline that ends the line above
     let lineBegin = lineEnd;
     while (lineBegin > from && content.charCodeAt(lineBegin - 1) !== NEWLINE) lineBegin -= 1;
-    const line = content.slice(lineBegin, lineEnd);
+    const kind = keyLineOf(content.slice(lineBegin, lineEnd), shape, blankShape);
     below = lineBegin;
-    if (line.trim().length === 0) continue; // masked only under a key line above it
-    if (PEM_HEADER_FIELD.test(line)) {
+    if (kind === "blank") continue; // masked only under a key line above it
+    if (kind === "header") {
       headerSeen = true; // header fields sit above the body: only more of them can follow
-    } else if (headerSeen || !PEM_BODY_LINE.test(line)) {
+    } else if (kind !== "body" || headerSeen) {
       break;
     }
     start = lineBegin;

@@ -9,8 +9,11 @@
 
 import type { NormalizedMessage } from "../harness/provider/types";
 
+/** The characters and length of a run's id; the validator and the head line's reader are both built from it (review R3-AR-003). */
+const RUN_ID_BODY = "[A-Za-z0-9_-]{1,64}";
+
 /** A run's id: what a client may send, and what the head line carries. */
-export const TERMINAL_RUN_ID = /^[A-Za-z0-9_-]{1,64}$/;
+export const TERMINAL_RUN_ID = new RegExp(`^${RUN_ID_BODY}$`);
 
 /** What keryx says about a run in the head line, from validated fields only. */
 export type TerminalRunOutcome = { readonly state: "running" } | { readonly state: "exited"; readonly exitCode: number | null };
@@ -21,10 +24,22 @@ export interface TerminalNoteHead {
   readonly outcome: TerminalRunOutcome;
 }
 
+const HEAD_OPEN = "[terminal run ";
+const HEAD_RESULT = " result: ";
+const HEAD_CLOSE = "]";
 const OUTCOME_RUNNING = "still running";
 const OUTCOME_SIGNAL = "ended by a signal";
 const OUTCOME_EXIT = "exit ";
-const HEAD_LINE = /^\[terminal run ([A-Za-z0-9_-]{1,64}) result: (?:exit (-?\d+)|(ended by a signal)|(still running))\]$/;
+
+/** `text` as a pattern that matches only itself. */
+function literal(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** A head line at the start of a text, built from the writer's own parts. */
+const HEAD_LINE_START = new RegExp(
+  `^${literal(HEAD_OPEN)}(${RUN_ID_BODY})${literal(HEAD_RESULT)}(?:${literal(OUTCOME_EXIT)}(-?\\d+)|(${literal(OUTCOME_SIGNAL)})|(${literal(OUTCOME_RUNNING)}))${literal(HEAD_CLOSE)}`,
+);
 
 /** The command line of a note: this prefix, then the command as one JSON string. */
 export const TERMINAL_NOTE_COMMAND_PREFIX = "command: ";
@@ -44,18 +59,28 @@ function outcomeText(outcome: TerminalRunOutcome): string {
 
 /** The first line of a note: `[terminal run <runId> result: exit 1 | ended by a signal | still running]`. */
 export function terminalNoteHeadLine(runId: string, outcome: TerminalRunOutcome): string {
-  return `[terminal run ${runId} result: ${outcomeText(outcome)}]`;
+  return `${HEAD_OPEN}${runId}${HEAD_RESULT}${outcomeText(outcome)}${HEAD_CLOSE}`;
+}
+
+/**
+ * The head line `text` starts with, read into its fields, and how many characters it takes (an earlier
+ * summary's item carries text after it); `undefined` when `text` does not start with one. Pure.
+ */
+export function readTerminalNoteHeadLine(text: string): { readonly head: TerminalNoteHead; readonly length: number } | undefined {
+  const match = HEAD_LINE_START.exec(text);
+  const runId = match?.[1];
+  if (match === null || runId === undefined) return undefined;
+  const length = match[0].length;
+  if (match[4] !== undefined) return { head: { runId, outcome: { state: "running" } }, length };
+  if (match[3] !== undefined) return { head: { runId, outcome: { state: "exited", exitCode: null } }, length };
+  const exitCode = Number(match[2]);
+  return Number.isSafeInteger(exitCode) ? { head: { runId, outcome: { state: "exited", exitCode } }, length } : undefined;
 }
 
 /** A head line read back into its fields; `undefined` for any other line. Pure. */
 export function parseTerminalNoteHeadLine(line: string): TerminalNoteHead | undefined {
-  const match = HEAD_LINE.exec(line);
-  const runId = match?.[1];
-  if (match === null || runId === undefined) return undefined;
-  if (match[4] !== undefined) return { runId, outcome: { state: "running" } };
-  if (match[3] !== undefined) return { runId, outcome: { state: "exited", exitCode: null } };
-  const exitCode = Number(match[2]);
-  return Number.isSafeInteger(exitCode) ? { runId, outcome: { state: "exited", exitCode } } : undefined;
+  const read = readTerminalNoteHeadLine(line);
+  return read !== undefined && read.length === line.length ? read.head : undefined;
 }
 
 /**

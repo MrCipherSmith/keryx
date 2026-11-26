@@ -166,10 +166,12 @@ import { clientRunsTerminal, createSessionExternalRuns, type DelegateTerminalLau
 import { capResultText, delegateResultNote, parseDelegateNote } from "./delegate-turn-hook";
 import {
   clientTakesTerminalResults,
+  isStoredTerminalResult,
   parseTerminalResultNote,
   parseTerminalResults,
-  storedTerminalRunIds,
+  storedTerminalRuns,
   TERMINAL_RESULTS_PROMPT,
+  trailingNotesAwaitingTurn,
   terminalResultNote,
   terminalResultsMeta,
   terminalResultText,
@@ -2374,14 +2376,15 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
   }
 
   /**
-   * `results` split by whether the session already stored a note for the run (review R2-HL-002): its
-   * live history and its archive, which keeps the notes a compaction took out of the history.
+   * `results` split by whether the session already stored them (reviews R2-HL-002, R3-LG-006): by run id
+   * and kind, read from the notes in its live history and its archive, which keeps the notes a compaction
+   * took out of the history. A final result after a stored running snapshot is fresh.
    */
   function withoutStoredRuns(state: AcpSessionState, results: readonly TerminalResult[]): { fresh: readonly TerminalResult[]; duplicates: string[] } {
-    const stored = storedTerminalRunIds(state.archive.messages, state.history);
+    const stored = storedTerminalRuns(state.archive.messages, state.history);
     return {
-      fresh: results.filter((result) => !stored.has(result.runId)),
-      duplicates: results.filter((result) => stored.has(result.runId)).map((result) => result.runId),
+      fresh: results.filter((result) => !isStoredTerminalResult(stored, result)),
+      duplicates: results.filter((result) => isStoredTerminalResult(stored, result)).map((result) => result.runId),
     };
   }
 
@@ -2607,12 +2610,18 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     refuseIfStopping(ACP_AGENT_METHODS.sessionPrompt);
     requireProvider(ACP_AGENT_METHODS.sessionPrompt);
     touch(sessionId);
-    // Review R2-HL-002: a result is stored at most once per run id. The desktop re-sends results whose
-    // prompt was lost with its connection, so an entry whose run already has a stored note is skipped;
-    // a prompt holding nothing else stores nothing, starts no turn and is answered as delivered.
+    // Review R2-HL-002: a result is stored at most once per run id and kind (R3-LG-006: a final result
+    // after a stored running snapshot is new). The desktop re-sends results whose prompt was lost with its
+    // connection, so an entry the session already stored is skipped. A prompt holding nothing else stores
+    // nothing and is answered as delivered, with the duplicates named. It starts no turn, unless the
+    // notes for them end the history (R3-LG-005): keryx stopped before the turn they started was
+    // persisted, so that turn runs now, on the stored notes.
     const freshResults = terminalResults === undefined ? undefined : withoutStoredRuns(state, terminalResults);
-    if (freshResults !== undefined && freshResults.fresh.length === 0) {
-      return { stopReason: "end_turn", _meta: { keryx: { terminalResults: { stored: 0, duplicates: freshResults.duplicates } } } };
+    const allStored = freshResults !== undefined && freshResults.fresh.length === 0;
+    const resumedNotes = allStored ? trailingNotesAwaitingTurn(state.history, freshResults.duplicates) : 0;
+    const storedAnswer = allStored ? { _meta: { keryx: { terminalResults: { stored: 0, duplicates: freshResults.duplicates } } } } : {};
+    if (allStored && resumedNotes === 0) {
+      return { stopReason: "end_turn", ...storedAnswer };
     }
     // Read ONCE, here: this turn runs with this model to its end, whatever a
     // `session/set_config_option` arriving meanwhile does (flow 288, AC6).
@@ -2841,7 +2850,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         // `/rewind`: a snapshot of the files before each mutating call, and the turn's place in the archive.
         const rewind = rewindFor(sessionId);
         io.beforeMutation = () => rewind.recorder.beforeMutation();
-        rewind.recorder.beginTurn({ archiveIndex: archive.messages.length, prompt: userLine });
+        // A resumed turn (R3-LG-005) starts at the stored notes it runs on, so rewinding it takes them out too.
+        const resumedInArchive = resumedNotes > 0 && freshResults !== undefined ? Math.min(resumedNotes, trailingNotesAwaitingTurn(archive.messages, freshResults.duplicates)) : 0;
+        rewind.recorder.beginTurn({ archiveIndex: archive.messages.length - resumedInArchive, prompt: userLine });
       }
       // After a `/goal` the session keeps its slate, as the shells do; the goal's own turn skips the
       // close-phrase check once, since `/goal` has just opened the slate it would archive.
@@ -2852,6 +2863,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // turn `/rewind` recorded above, so rewinding this turn takes them out with it. The turn is
       // keryx's (`origin: "terminal-results"`, review AR2-001): its line is not the operator's, so no
       // `UserPromptSubmit` hook sees or refuses it, and nothing can leave these notes without their turn.
+      // A resumed turn (R3-LG-005) stores nothing: its notes are the stored ones before this line.
       if (freshResults !== undefined) appendTerminalResultNotes(sessionId, freshResults.fresh);
       const result = await runAgentTurn(io, deps, state.history, userLine, {
         signal: turn.controller.signal,
@@ -2892,7 +2904,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // `finishReasonToStopReason` alone would read as `end_turn`. (An abort
       // during a `submit_result` wrap-up returns `"interrupted"`, which already
       // maps to `cancelled`.)
-      return { stopReason: turn.cancelled ? "cancelled" : finishReasonToStopReason(result.finishReason) };
+      return { stopReason: turn.cancelled ? "cancelled" : finishReasonToStopReason(result.finishReason), ...storedAnswer };
     } finally {
       if (registry.canPersist(sessionId)) finishIssueActivity?.();
       // Released on EVERY exit path — a normal finish, a thrown error, and a
