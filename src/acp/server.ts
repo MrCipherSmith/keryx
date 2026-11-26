@@ -1,3 +1,4 @@
+import { loadLinkedProjectsPromptBlock } from "../lib/linked-projects";
 import { readProcessIdentity } from "../lib/hub-machine/process-identity";
 // The ACP agent server loop (flow 285, T7/T8): wires the framer + dispatcher
 // + keryx session/turn handlers over one stdio connection.
@@ -2592,6 +2593,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         providerId,
         modelId,
         toolNames,
+        linkedProjects: await loadLinkedProjectsPromptBlock(state.resolvedRoot),
       }),
       controlNonce: controlNonceFor(sessionId),
       idSeq,
@@ -2938,13 +2940,14 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       updatedAt: summary.updatedAt,
       // Shell profile: how the person organised it (archived, pinned, flow) and how many messages it
       // holds, so a client can tell an empty session from a used one. The editor profile's wire stays as it was.
-      ...(shellProfile ? listMeta(readSessionFlags(sessionDir(summary.projectPath, summary.id, options.dataDir)), summary.messageCount) : {}),
+      ...(shellProfile ? listMeta(readSessionFlags(sessionDir(summary.projectPath, summary.id, options.dataDir)), summary.messageCount, summary.parentSessionId) : {}),
     }));
     return { sessions };
   }
 
-  function listMeta(flags: SessionFlags, messageCount: number): { _meta: { keryx: SessionFlags & { messageCount: number } } } {
-    return { _meta: { keryx: { ...flags, messageCount } } };
+  /** `parentSessionId`: the session this one was forked from, so a client can show the sessions as a tree. */
+  function listMeta(flags: SessionFlags, messageCount: number, parentSessionId?: string): { _meta: { keryx: SessionFlags & { messageCount: number; parentSessionId?: string } } } {
+    return { _meta: { keryx: { ...flags, messageCount, ...(parentSessionId === undefined ? {} : { parentSessionId }) } } };
   }
 
   /** The `sessionId` and optional `cwd` of an organise request; `cwd` defaults like `session/list`'s. */

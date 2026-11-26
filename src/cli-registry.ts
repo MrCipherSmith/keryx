@@ -64,6 +64,7 @@ import { busCommand } from "./commands/bus";
 import { reportCommand } from "./commands/report";
 import { modulesCommand } from "./commands/modules";
 import { projectsCommand } from "./commands/projects";
+import { refCommand } from "./commands/ref";
 import { serveCommand } from "./commands/serve";
 import { approvalsCommand } from "./commands/approvals";
 import { permissionsCommand } from "./commands/permissions-command";
@@ -144,6 +145,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   status: statusCommand,
   modules: modulesCommand,
   projects: projectsCommand,
+  ref: refCommand,
   providers: providersCommand,
   routing: routingCommand,
   external: externalCommand,
@@ -299,6 +301,8 @@ export const USAGE_BODY = `Usage:
   keryx status
   keryx modules [status | enable <name> | disable <name>]
   keryx projects [list [--json] | register <path> | forget <id>]
+  keryx ref [list | add <folder> [--name <n>] [--note <text>] | remove <name|folder>] [--json]
+                                               Linked projects: other folders this project organises
   keryx serve [--bind <addr>] [--port <n>] [--profile <name>] [--acknowledge-non-loopback]
   keryx serve status [--json]
   keryx serve token issue | rotate | revoke

@@ -1,3 +1,4 @@
+import { loadLinkedProjectsPromptBlock } from "../lib/linked-projects";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { JobOwner } from "../harness/tool/builtin/background-job-registry";
 import { createNativeSessionServices, NativeServicesSetupError, type NativeSessionServicesOptions } from "./native-services-production";
@@ -397,7 +398,7 @@ export function createNativeSessionRuntime(options: NativeRuntimeOptions) {
         ...(onContextCompaction === undefined ? {} : { onContextCompaction }),
         tools: liveTools, reasoningEffort: snapshot.config.reasoningEffort === "none" ? "off" : snapshot.config.reasoningEffort, idSeq: randomUUID, jobRegistry: jobs,
         sweepBackgroundJobs: async () => { const owner = jobOwners.getStore(); if (owner !== undefined) await Promise.all(jobs.list().filter(job => job.status === "running" && job.owner?.kind === owner.kind && job.owner.identity === owner.identity).map(job => jobs.kill(job.jobId))); },
-        systemInstruction: buildAgentSystemInstruction(`Project root: ${options.cwd}${inspectionMode === "hub-remote" ? "\nCanonical project context and Flows are read only through hub_context, hub_flows and hub_flow. Local legacy Flow tools are unavailable in this session." : ""}`, { ...selected, toolNames: interactiveAgentToolNames(liveTools) }),
+        systemInstruction: buildAgentSystemInstruction(`Project root: ${options.cwd}${inspectionMode === "hub-remote" ? "\nCanonical project context and Flows are read only through hub_context, hub_flows and hub_flow. Local legacy Flow tools are unavailable in this session." : ""}`, { ...selected, toolNames: interactiveAgentToolNames(liveTools), linkedProjects: await loadLinkedProjectsPromptBlock(options.cwd) }),
       };
       let result: RunAgentTurnResult = {};
       const readOnly = restrictionForVersion(snapshot.config.configVersion) || (io.readOnly?.() ?? false);

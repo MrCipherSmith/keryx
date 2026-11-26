@@ -300,6 +300,9 @@ describe("command registry coverage", () => {
       "projects forget",
       "projects list",
       "projects register",
+      "ref add",
+      "ref list",
+      "ref remove",
       "status",
       "version check",
     ]);

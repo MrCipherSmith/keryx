@@ -285,6 +285,40 @@ pub async fn github_accounts(
     invoke_review(app, view, cwd, args, action == "project").await
 }
 
+/// `keryx ref <action> ... --json`: the project's linked projects. The folder and the name are
+/// operator input, so neither may read as a flag or carry a control character.
+fn linked_projects_args(action: &str, target: Option<&str>, name: Option<&str>) -> Result<Vec<String>, String> {
+    let plain = |value: &str, max: usize| {
+        !value.is_empty() && value.len() <= max && !value.starts_with('-') && !value.chars().any(char::is_control)
+    };
+    let mut args: Vec<String> = vec!["ref".into(), action.into()];
+    match (action, target, name) {
+        ("list", None, None) => {}
+        ("add", Some(target), name) if plain(target, 4096) => {
+            args.push(target.into());
+            if let Some(name) = name {
+                if !(name.len() <= 64
+                    && name.as_bytes().first().is_some_and(u8::is_ascii_alphanumeric)
+                    && name.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-')))
+                {
+                    return Err("configuration: Invalid linked project name.".into());
+                }
+                args.extend(["--name".into(), name.into()]);
+            }
+        }
+        ("remove", Some(target), None) if plain(target, 4096) => args.push(target.into()),
+        _ => return Err("configuration: Invalid linked project request.".into()),
+    }
+    args.push("--json".into());
+    Ok(args)
+}
+#[tauri::command]
+pub async fn linked_projects(
+    app: AppHandle, view: Webview, cwd: String, action: String, target: Option<String>, name: Option<String>,
+) -> Result<Value, String> {
+    let args = linked_projects_args(&action, target.as_deref(), name.as_deref())?;
+    invoke_review(app, view, cwd, args, action == "list").await
+}
 // Use a system-installed executable, a neutral cwd and a fixed URL. Both the
 // logged-in gh account and clipboard live outside the invoking project.
 static GITHUB_LOGIN: Mutex<()> = Mutex::new(());
@@ -712,6 +746,25 @@ mod tests {
         assert!(github_accounts_args("login", None, false).is_err());
     }
 
+    #[test]
+    fn linked_project_commands_only_accept_scoped_argv() {
+        assert_eq!(linked_projects_args("list", None, None).unwrap(), ["ref", "list", "--json"]);
+        assert_eq!(linked_projects_args("add", Some("../vantage-backend"), None).unwrap(),
+            ["ref", "add", "../vantage-backend", "--json"]);
+        assert_eq!(linked_projects_args("add", Some("/work/be"), Some("be")).unwrap(),
+            ["ref", "add", "/work/be", "--name", "be", "--json"]);
+        assert_eq!(linked_projects_args("remove", Some("be"), None).unwrap(), ["ref", "remove", "be", "--json"]);
+        for target in ["", "--name", "a\nb"] {
+            assert!(linked_projects_args("add", Some(target), None).is_err());
+            assert!(linked_projects_args("remove", Some(target), None).is_err());
+        }
+        for name in ["", "-x", "two words", ".hidden"] {
+            assert!(linked_projects_args("add", Some("../be"), Some(name)).is_err());
+        }
+        assert!(linked_projects_args("list", Some("be"), None).is_err());
+        assert!(linked_projects_args("remove", Some("be"), Some("be")).is_err());
+        assert!(linked_projects_args("purge", None, None).is_err());
+    }
     #[test]
     fn review_commands_resolve_only_the_registered_project() {
         let project = tempfile::tempdir().unwrap();

@@ -1,5 +1,6 @@
 // `keryx sessions` — list / export per-project interactive shell sessions.
 
+import { sessionTree } from "../session/session-tree";
 import {
   TranscriptUnreadableError,
   UnknownSessionError,
@@ -44,7 +45,8 @@ export async function sessionsCommand(args: string[]): Promise<void> {
     console.log(
       pad("ID", 10) + pad("UPDATED", 22) + pad("MSGS", 6) + pad("LIVE", 7) + pad("MODEL", 24) + "TITLE",
     );
-    for (const { summary: s, lease } of listed) {
+    // Forks under the session they came from, one level deeper per generation.
+    for (const { item: { summary: s, lease }, depth, parentMissing } of sessionTree(listed, (row) => row.summary.id, (row) => row.summary.parentSessionId)) {
       const model =
         s.provider !== undefined && s.model !== undefined
           ? `${s.provider}/${s.model}`
@@ -58,7 +60,7 @@ export async function sessionsCommand(args: string[]): Promise<void> {
           // A fork is marked in the listing rather than only in `--json`: the
           // ancestry is the whole point of the verb, and a row that looks
           // identical to an unrelated session hides it.
-          (s.parentSessionId !== undefined ? `↳ ${terminalSafe(s.title).text}` : terminalSafe(s.title).text),
+          `${depth > 0 ? `${"  ".repeat(depth - 1)}↳ ` : parentMissing ? "↳ " : ""}${terminalSafe(s.title).text}`,
       );
       // Flow 376 (AC4): a session driven from Telegram shows the topic and every interval.
       if (s.remote !== undefined) {

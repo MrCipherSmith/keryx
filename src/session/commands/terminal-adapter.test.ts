@@ -4,7 +4,7 @@ import type { SessionHostOperation, SessionHostReceipt } from "../host-types";
 import { createCommandCatalogue } from "./catalogue";
 import { rewindCommands } from "./rewind";
 import type { NativeCommandContribution } from "./handlers";
-import { createTerminalSessionAdapter, type TerminalAuthority, type TerminalSessionReads } from "./terminal-adapter";
+import { createTerminalSessionAdapter, parseTerminalCommand, type TerminalAuthority, type TerminalSessionReads } from "./terminal-adapter";
 import { lifecycleCommands } from "../host-lifecycle";
 
 const digest = "a".repeat(64);
@@ -60,6 +60,7 @@ test("TUI subcommands map to the dotted handler the catalogue advertises", async
     ["/projectctx refs", "projectctx.refs", {}], ["/remote-control off", "remote-control.off", {}], ["/remote-control fixture-topic", "remote-control.name", { name: "fixture-topic" }], ["/remote-control on", "remote-control.name", {}],
     ["/bus send @peer hello there", "bus.send", { to: "@peer", text: "hello there" }], ["/bus pause @peer --ttl 30m hold on", "bus.pause", { to: "@peer", scope: "turns", ttlMinutes: 30, reason: "hold on" }],
     ["/review parity", "reviews", { section: "parity" }], ["/decisions arms", "decisions", { section: "arms" }],
+    ["/ref-list", "ref-list", {}],
   ] as const) {
     const sent = await sends(line);
     expect(sent.request).toMatchObject({ commandName, arguments: args });
@@ -230,4 +231,15 @@ test("each owner-decided boundary is refused with its own reason, sending nothin
     expect({ line, reason: String((refused.receipt as Control["CommandOutcome"]).result).includes(reason) }).toEqual({ line, reason: true });
   }
   for (const [line, commandName] of [["/guard", "guard"], ["/ci", "ci"], ["/conform", "conform"], ["/triggers nightly", "triggers"]] as const) expect((await sends(line)).request).toMatchObject({ commandName, arguments: commandName === "triggers" ? { name: "nightly" } : {} });
+});
+
+test("linked-project lines parse to the typed ref requests; the writes carry the shell's own arguments", () => {
+  for (const [line, commandName, args] of [
+    ["/ref", "ref", {}], ["/ref list", "ref", {}],
+    ["/ref add ../be --name be --note The API", "ref", { action: "add", target: "../be", name: "be", note: "The API" }],
+    ["/ref rm be", "ref", { action: "remove", target: "be" }], ["/add-ref ../fe", "add-ref", { target: "../fe" }], ["/ref-remove fe", "ref-remove", { target: "fe" }],
+  ] as const) expect(parseTerminalCommand(line)).toEqual({ ok: true, commandName, arguments: args });
+  expect(parseTerminalCommand("/ref add")).toMatchObject({ ok: false });
+  expect(parseTerminalCommand("/ref frob x")).toMatchObject({ ok: false });
+  expect(parseTerminalCommand("/ref-list extra")).toMatchObject({ ok: false });
 });

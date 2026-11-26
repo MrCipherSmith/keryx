@@ -229,6 +229,7 @@ import {
   runExternalAgentsCommand,
 } from "./external-command";
 import { isRenderingCommand, runRenderingCommand } from "./rendering-command";
+import { isRefSlashCommand, runRefSlashLine } from "../commands/ref";
 import { isNotesCommand, isTrailCommand, runNotesCommand, runTrailCommand } from "./working-memory-command";
 import { isDiagCommand, maybeDumpOnInterrupt, runDiagCommand } from "./diag-command";
 import { resolveExternalSetting, writeUserExternalSetting, type ResolvedExternalSetting } from "../lib/external-switch";
@@ -10562,6 +10563,12 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           showEditGuard();
+          return;
+        }
+        if (isRefSlashCommand(command.name)) {
+          // Linked projects (`.metaproject/linked-projects.json`): list, add, remove.
+          const root = opts.session?.cwd ?? process.cwd();
+          trackCommandWork(async () => io.onSystem?.(`${await runRefSlashLine(root, line)}\n`));
           return;
         }
         if (isProjectContextCommand(command.name)) {

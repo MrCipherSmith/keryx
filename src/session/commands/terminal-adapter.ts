@@ -61,6 +61,27 @@ function parseBus(line: string): TerminalCommandParse {
       return typed("bus.pause", { to: parsed.toLabel, scope: parsed.scope, ...(parsed.ttlMs === undefined ? {} : { ttlMinutes: parsed.ttlMs / 60_000 }), reason: parsed.reason });
   }
 }
+function parseRefText(commandName: "ref" | "add-ref", rest: string): TerminalCommandParse {
+  const words = rest.split(/\s+/).filter((word) => word.length > 0);
+  const action = commandName === "add-ref" ? "add" : (words.shift() ?? "list");
+  if (action === "list" || action === "ls") return words.length === 0 ? typed(commandName === "ref" ? "ref" : "ref-list") : refuse("ref", "Usage: /ref list");
+  if (action !== "add" && action !== "remove" && action !== "rm") return refuse(commandName, `Unknown ref command: ${action}. Usage: /ref [list|add <folder>|remove <name>]`);
+  const args: Args = {};
+  const target: string[] = [];
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index]!;
+    if ((word === "--name" || word === "--note") && action === "add") {
+      const value = word === "--note" ? words.slice(index + 1).join(" ") : words[index + 1];
+      if (value === undefined || value.length === 0) return refuse(commandName, `${word} needs a value.`);
+      args[word.slice(2)] = value;
+      if (word === "--note") break;
+      index += 1;
+    } else target.push(word);
+  }
+  if (target.length === 0) return refuse(commandName, action === "add" ? "Usage: /ref add <folder> [--name n] [--note text]" : "Usage: /ref remove <name|folder>");
+  args["target"] = target.join(" ");
+  return commandName === "ref" ? typed("ref", { action: action === "rm" ? "remove" : action, ...args }) : typed("add-ref", args);
+}
 /** Each entry reuses the shipped TUI/readline grammar of its command, then names the catalogue handler that serves that parsed action. */
 const parsers: Readonly<Record<string, (rest: string, line: string) => TerminalCommandParse>> = {
   reasoning: (rest) => {
@@ -112,6 +133,11 @@ const parsers: Readonly<Record<string, (rest: string, line: string) => TerminalC
   editguard: (rest) => parseInspectorDetail("editguard", rest) ?? noArguments("editguard", rest, "/editguard on|off writes project configuration; it has no typed native request. Usage: /editguard [status]"),
   jevprofile: (rest) => parseInspectorDetail("jevprofile", rest) ?? noArguments("jevprofile", rest, "Toggling a review.jev key writes project configuration; it has no typed native request. Usage: /jevprofile [entries]"),
   // The dotted native name takes only the preview form of the same grammar.
+  // Linked projects: the shell grammar (`keryx ref`), typed for the native catalogue.
+  ref: (rest) => parseRefText("ref", rest),
+  "ref-list": (rest) => noArguments("ref-list", rest, "Usage: /ref-list"),
+  "add-ref": (rest) => parseRefText("add-ref", rest),
+  "ref-remove": (rest) => rest.length === 0 ? refuse("ref-remove", "Usage: /ref-remove <name|folder>") : typed("ref-remove", { target: rest }),
   "rewind.preview": (rest) => { const parsed = parseRewindText(rest); return parsed.ok && parsed.commandName === "rewind.preview" ? parsed : refuse("rewind.preview", "Usage: /rewind.preview N [files|history|both]"); },
   setup: (rest) => {
     const request = parseSetupArgs([rest]);

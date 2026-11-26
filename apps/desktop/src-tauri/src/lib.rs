@@ -138,6 +138,7 @@ pub fn run() {
             gitinfo::git_file_diff,
             pullrequest::pr_info,
             review::github_accounts,
+            review::linked_projects,
             review::github_login,
             metaproject::metaproject_request,
             issues::issues_request,

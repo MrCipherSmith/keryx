@@ -160,6 +160,8 @@ export const PARITY_CASES: Readonly<Record<string, ParityCase>> = {
   "editguard.inspection": { line: "/editguard", arguments: {} },
   "editguard.threshold-and-recent-flags": { line: "/editguard status", arguments: {} },
   "projectctx.status": { line: "/projectctx", arguments: {} },
+  "ref.list": { line: "/ref", arguments: {} },
+  "ref-list.default": { line: "/ref-list", arguments: {} },
   "projectctx.refs": { line: "/projectctx refs", arguments: {} },
   "projectctx.warn": { line: "/projectctx warn", arguments: { mode: "warn" } },
   "projectctx.block": { line: "/projectctx block", arguments: { mode: "block" } },

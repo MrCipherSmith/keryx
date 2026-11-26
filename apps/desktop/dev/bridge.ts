@@ -725,6 +725,22 @@ async function handle(ws: ServerWebSocket<Conn>, cmd: string, args: Json): Promi
       }
       throw new Error("configuration: Invalid GitHub account request.");
     }
+    case "linked_projects": {
+      // The same scoped argv as the Rust command (`linked_projects_args`).
+      const { action, target, name } = args;
+      const plain = (value: unknown): value is string => typeof value === "string" && value.length > 0 && value.length <= 4096 && !value.startsWith("-") && !/[\u0000-\u001f\u007f]/.test(value);
+      if (!cwd) throw new Error("configuration: Open a project to change its linked projects.");
+      const argv = ["ref", String(action)];
+      if (action === "list" && target === undefined && name === undefined) {
+        // nothing to add
+      } else if (action === "add" && plain(target) && (name === undefined || (typeof name === "string" && /^[a-z0-9][a-z0-9._-]{0,63}$/i.test(name)))) {
+        argv.push(target, ...(typeof name === "string" ? ["--name", name] : []));
+      } else if (action === "remove" && plain(target) && name === undefined) {
+        argv.push(target);
+      } else throw new Error("configuration: Invalid linked project request.");
+      argv.push("--json");
+      return runReviewCli(await projectCwd(ws.data, cwd), argv, action === "list");
+    }
     case "github_login":
       throw new Error("In browser dev mode, run `gh auth login --hostname github.com --web` in a terminal, then refresh accounts.");
     case "metaproject_request": {

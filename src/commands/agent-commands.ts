@@ -431,6 +431,29 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Linked projects: the other folders (sibling repositories) this project
+    // organises. Stored in `.metaproject/linked-projects.json`, named in the
+    // system prompt, and the roots `spawn_subagent { project }` can start in.
+    name: "/ref",
+    description: "Linked projects this project organises — /ref [list|add <folder> [--name n] [--note text]|remove <name>]",
+    modes: AGENT_ONLY,
+  },
+  {
+    name: "/ref-list",
+    description: "List the linked projects, with a summary of each (same as /ref list)",
+    modes: AGENT_ONLY,
+  },
+  {
+    name: "/add-ref",
+    description: "Link a folder to this project — /add-ref <folder> [--name n] [--note text]",
+    modes: AGENT_ONLY,
+  },
+  {
+    name: "/ref-remove",
+    description: "Unlink a linked project; the folder is not touched — /ref-remove <name|folder>",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 346: the EXTERNAL switch — blocks/allows sending private work
     // (code, diffs, CI logs, prompts) to Jev/TypeSafe and other listed
     // providers/models. Bare `/external` prints state/source/effective-list

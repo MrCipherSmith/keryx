@@ -1925,6 +1925,13 @@ export interface AgentInstructionContext {
    * and does not disturb the cached prompt prefix.
    */
   herdrCore?: string | undefined;
+  /**
+   * The linked-projects section (`renderLinkedProjectsPromptBlock`): the other
+   * folders this project organises, each with a short summary. Read once when the
+   * session starts, so it is stable for the session. It quotes other
+   * repositories' READMEs, so it sits after the trusted orientation, on its own.
+   */
+  linkedProjects?: string | undefined;
 }
 
 /**
@@ -2167,10 +2174,9 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
   // index.md already embeds it verbatim in the orientation, so it is not sent
   // twice; an older index.md without it still gets it from here.
   const conducted = containsAgentConduct(trimmed) ? base : `${base}\n\n${AGENT_CONDUCT_PROMPT_BLOCK}`;
-  if (trimmed.length === 0) {
-    return conducted;
-  }
-  return `${conducted}\n\nProject orientation (trusted context):\n${trimmed}`;
+  const linked = ctx.linkedProjects?.trim() ?? "";
+  const withOrient = trimmed.length === 0 ? conducted : `${conducted}\n\nProject orientation (trusted context):\n${trimmed}`;
+  return linked.length === 0 ? withOrient : `${withOrient}\n\n${linked}`;
 }
 
 interface PendingCall {
@@ -6396,6 +6402,10 @@ async function executeCallUnbounded(
     ...(confirmationToken !== undefined && confirmationVia === "remote" && confirmationPressedBy !== undefined ? { confirmationPressedBy } : {}),
     ...(confirmationToken !== undefined && confirmationVia === "remote" && confirmationPressedAt !== undefined ? { confirmationPressedAt } : {}),
     ...(untrustedContentSeen ? { untrustedContentSeen: true } : {}),
+    // A `general` subagent answers its own mutating calls through this turn's gate (spawn-subagent-tool.ts).
+    ...(call.name === "spawn_subagent" && requestApproval !== undefined
+      ? { parentGate: { requestApproval, ...(permissionMode === undefined ? {} : { permissionMode }), ...(readOnly === undefined ? {} : { readOnly }), ...(onAutoApproved === undefined ? {} : { onAutoApproved }) } }
+      : {}),
   });
   if (review !== undefined && call.name === "shell_exec" && typeof input.command === "string") {
     review.observe(input.command, result);

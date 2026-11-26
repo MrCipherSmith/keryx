@@ -9,7 +9,7 @@ import { partitionSubagents, runningSubagents, statusLabel, type Subagent } from
 import { lostText, type SessionMark } from "./reducer";
 
 const NO_KIDS: readonly Subagent[] = [];
-import { countViews, groupSessions, type SidebarView } from "./sessionGroups";
+import { countViews, depthOf, groupSessions, type SidebarView } from "./sessionGroups";
 
 interface Props {
   sessions: SessionInfo[];
@@ -318,8 +318,12 @@ export const SessionSidebar = memo(function SessionSidebar({
                     const menuOpen = menu?.id === s.sessionId;
                     const kids = mark?.held && mark.subagents.length ? partitionSubagents(mark.subagents).current : NO_KIDS;
                     const open = subagentsOpen(s.sessionId, kids);
+                    // A child session (a fork, or one started from another) sits under its parent.
+                    const depth = depthOf(g, s.sessionId);
                     return (
-                      <li key={s.sessionId} className="session-node">
+                      <li key={s.sessionId} className={`session-node${depth > 0 ? " is-child-session" : ""}`}
+                        style={depth > 0 ? { paddingLeft: `${Math.min(depth, 4) * 14}px` } : undefined}
+                        data-depth={depth > 0 ? depth : undefined}>
                       <div
                         className={`session-row${menuOpen ? " is-menu" : ""}${kids.length > 0 ? " has-children" : ""}`}
                       >
@@ -329,6 +333,7 @@ export const SessionSidebar = memo(function SessionSidebar({
                           onClick={() => onLoad(s.sessionId)}
                           title={markTitle(mark, absoluteTime(s.updatedAt))}
                         >
+                          {depth > 0 ? <span className="session-item-fork" aria-label="child of the session above" title="Started from the session above">↳</span> : null}
                           <span className="session-item-title truncate">
                             {titleOf(s, mark)}
                           </span>

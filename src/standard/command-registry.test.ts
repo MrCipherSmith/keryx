@@ -148,5 +148,8 @@ const CORE_COMMANDS: readonly string[] = [
   "projects list",
   "projects register",
   "projects forget",
+  "ref list",
+  "ref add",
+  "ref remove",
   "version check",
 ];

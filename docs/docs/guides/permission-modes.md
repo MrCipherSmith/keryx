@@ -31,6 +31,17 @@ credential/permission files (`auth.json`, `permissions.json`,
 a compromised or confused turn cannot use `auto` mode to grant itself new
 authority.
 
+## Subagents run under your mode
+
+A `read_only` subagent (the default) has no shell and no writes, so starting
+one never asks. A `general` subagent has `shell_exec` and `apply_patch`, and
+each of its calls goes through **your** session's gate: the same mode, the same
+approval prompt, the same plan posture. It can do nothing you could not do
+yourself in this session, and starting it asks in `ask` mode. The subagent may
+run in another folder: one of the project's [linked projects](../cli-reference.md#ref)
+(`spawn_subagent` with `project: "<name>"`). Its prompt then points it at that
+folder's own `CLAUDE.md`, `AGENTS.md` and keryx index.
+
 ## Round limit per turn
 
 The mode also decides how many model rounds one turn may run before it stops.

@@ -182,7 +182,7 @@ export interface SessionInfo {
   title?: string | null;
   updatedAt?: string | null;
   /** keryx's shell profile reports the flags here, and (0.4.38+) how many messages the session holds. */
-  _meta?: { keryx?: SessionFlags & { messageCount?: number } } | null;
+  _meta?: { keryx?: SessionFlags & { messageCount?: number; parentSessionId?: string } } | null;
 }
 
 export function sessionFlags(s: SessionInfo): SessionFlags {
