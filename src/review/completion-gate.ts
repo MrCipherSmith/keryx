@@ -252,6 +252,19 @@ type HistoryMessage = {
   toolCallId?: string | undefined;
 };
 
+/**
+ * `keryx review` subcommands that only look something up (a PR's linked Flow and review history, the board, the local
+ * Reviews list, GitHub accounts, the help text) and never open, name or continue a managed review package. Running one
+ * is not a review: a flow-preparation session that asks `pr-context` whether a Flow has a PR must not be held by the
+ * completion gate.
+ */
+const LOOKUP_SUBCOMMANDS: ReadonlySet<string> = new Set(["", "pr-context", "board", "reviews", "accounts", "help", "--help", "-h"]);
+
+/** Whether an executed `keryx review` command starts or continues a review: anything but a lookup or a help request. */
+function continuesReview(invocation: ReviewInvocation): boolean {
+  return !LOOKUP_SUBCOMMANDS.has(invocation.subcommand) && !invocation.args.some((arg) => arg === "--help" || arg === "-h");
+}
+
 /** The subcommands that print the package they opened (`# managed review: <id>` and `path: <dir>`). */
 const OPENING_SUBCOMMANDS: ReadonlySet<string> = new Set(["start", "attach", "ingest"]);
 /** The subcommands whose first positional argument is a review id or package path. */
@@ -659,7 +672,7 @@ export class SessionReviewTracker {
       if (command === undefined || !command.includes("review")) continue;
       const cwd = path.resolve(this.cwd);
       for (const invocation of keryxReviewInvocations(command, cwd)) {
-        this.runSeen = true;
+        if (continuesReview(invocation)) this.runSeen = true;
         // A `keryx review` command run in another directory (`cd sub && …`) works on that directory's project, whether or
         // not its output was read: it is a root to scan.
         if (invocation.cwd !== cwd && inside(cwd, invocation.cwd)) remember(this.roots, invocation.cwd, MAX_SESSION_REVIEW_ROOTS);
@@ -858,7 +871,8 @@ export async function findReviewGateState(
 /**
  * True when the transcript shows the review skill was loaded or a `keryx review` command was executed in this session:
  * the same definition the session tracker keeps (`SessionReviewNames.runSeen`), any subcommand — `status` and `attach`
- * continue a review as much as `start` does.
+ * continue a review as much as `start` does — except a lookup (`pr-context`, `board`, `reviews`, `accounts`) or a help
+ * request, which reads without reviewing.
  */
 export function reviewRunSeenInHistory(history: ReadonlyArray<HistoryMessage>): boolean {
   return new SessionReviewTracker(process.cwd()).update(history).runSeen === true;

@@ -5,6 +5,35 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.60] - 2026-11-26
+
+**Keryx Desktop 0.2.23** bundles Keryx 0.4.60. Desktop itself is unchanged.
+
+### Fixed
+
+- `/decisions` in `keryx shell`, and a click on the decisions row of the sidebar, no longer fail with `TextBuffer is destroyed` when the sidebar is closed while the journal is still being read. Of two opens started back to back, only the later one draws its window. (#1327)
+
+## [0.4.59] - 2026-11-26
+
+**Keryx Desktop 0.2.22** bundles Keryx 0.4.59. Use the bundled Keryx, or 0.4.59 or newer, to answer operator cards in Desktop: an older Keryx does not offer them to a Desktop session.
+
+### Added
+
+- Decisions only you can take are now cards in a Desktop session, as they already were in `keryx shell`. That covers the review decisions (`review_complete`, `review_decide_premise`, `review_confirm_plan`, the waivers, publish and replies) and also `flow_confirm`, a flow completion with exceptions, `external_apply`, the `learn_*` decisions and the `schedule_*` tools. Desktop shows the question and the decision lines Keryx built from the state on disk, with **No** as the default: Esc declines and Enter does not approve by itself. A yes from Desktop is recorded as `desktop-card`, and a flow completion token minted there is signed `desktop-card-token`. Keryx does not verify that the client is Keryx Desktop; decision record TM-04 §6c says what a `desktop-card` proves. (#1325)
+- The Files tab of the side panel has its own tabs, like the terminal. The first tab is the project tree with the search box; each file you open gets a closable read-only tab with syntax highlighting and line numbers. The tree keeps its open folders, search and scroll while a file is shown. (#1323)
+
+### Changed
+
+- The next-step suggestion in the `keryx shell` message box is now a message to the agent that you can send as it is, in the language of your last request, instead of advice addressed to you. Typing only hides it: clear the box and it is back, also after you accepted it with Tab. A new turn replaces it. (#1323)
+- When a step is yours to run, the agent gives the reason in one sentence and the command alone in a `bash` block. Desktop shows a **Run** button on that block. (#1325)
+
+### Fixed
+
+- A finished review card whose round the agent started mid-turn no longer trails the conversation above the working status. It stays in the session history where the round started, and that place survives a restart. (#1323)
+- A review round the agent started from a linked git worktree of the project now shows in the session and on the Reviews board. It was registered under the worktree's path, where neither looked. A round recorded that way before this release is not moved. (#1325)
+- The Files tab drew its tree as a row of wrapped buttons and file text without styling: the panel had no styles. (#1323)
+- In the Desktop message box the add button is round, like the send and stop button, and the stop square is large enough to see. (#1323)
+
 ## [0.4.58] - 2026-11-25
 
 **Keryx Desktop 0.2.21** bundles Keryx 0.4.58.

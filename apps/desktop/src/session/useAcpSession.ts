@@ -147,6 +147,17 @@ interface Live {
  * a held session is local; only a session the window does not hold (history, or released by keryx's
  * idle cap) is loaded.
  */
+/** The permission modes a review session may be raised to. */
+export type ReviewSessionMode = "trust" | "auto";
+const MODE_RANK: Readonly<Record<string, number>> = { ask: 0, trust: 1, auto: 2 };
+/** An unknown mode ranks lowest, so a review session is raised out of it. */
+const modeRank = (modeId: string): number => MODE_RANK[modeId] ?? -1;
+
+/** The session mode a Desktop review runs in: Auto review mode → `auto`, Manual → at least `trust`. */
+export function reviewSessionMode(reviewMode: "auto" | "manual" | undefined): ReviewSessionMode {
+  return reviewMode === "manual" ? "trust" : "auto";
+}
+
 export function useAcpSession(cwd: string) {
   const [win, rawDispatch] = useReducer(reducer, initialState);
   const archiveWriter = useMemo(() => subagentHistoryWriter(cwd), [cwd]);
@@ -953,6 +964,35 @@ export function useAcpSession(cwd: string) {
     [dispatch],
   );
 
+  /**
+   * Raise a held session's permission mode to at least `modeId` (ask < trust < auto). A session already in an equal or
+   * more permissive mode keeps it. Used for the session Desktop opens for a review turn, before the turn is sent.
+   * Resolves false when the mode could not be set; the session then keeps its mode and a notice says why.
+   */
+  const raiseMode = useCallback(
+    async (sessionId: string, modeId: ReviewSessionMode): Promise<boolean> => {
+      const l = live.current;
+      const client = l.client;
+      if (!client || !l.reg.held.has(sessionId)) return false;
+      // A session running a turn gets no review turn (the send is refused as busy), so its mode is left alone and the
+      // caller is not held behind a mode change while that turn runs.
+      if (l.reg.turns.has(sessionId) || l.reg.telegramTurns.has(sessionId)) return false;
+      const current = winRef.current.convs[sessionId]?.modes?.currentModeId;
+      if (current !== undefined && modeRank(current) >= modeRank(modeId)) return true;
+      try {
+        await client.request("session/set_mode", { sessionId, modeId });
+        if (l.client === client) {
+          dispatch({ t: "updates", updates: [{ sessionId, at: Date.now(), update: { sessionUpdate: "current_mode_update", currentModeId: modeId } }] });
+        }
+        return true;
+      } catch (e) {
+        if (l.client === client) dispatch({ t: "notice", sessionId, level: "error", text: `Could not change mode: ${errMessage(e)}` });
+        return false;
+      }
+    },
+    [dispatch],
+  );
+
   const setModel = useCallback(
     async (configId: string, value: string) => {
       const l = live.current;
@@ -1240,6 +1280,7 @@ export function useAcpSession(cwd: string) {
     /** Bindings keryx has not stored yet, by session id. */
     pendingSubjects,
     setMode,
+    raiseMode,
     setModel,
     restart,
     continueAnyway,

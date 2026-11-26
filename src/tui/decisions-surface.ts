@@ -443,6 +443,12 @@ export type OpenDecisionsOptions = Omit<PresentDecisionsOptions, "text"> & {
   cwd: string;
   /** Flow 464 (AC6): the operator cards waiting in the Telegram topic and the recent answers, appended under the report. */
   confirmationLines?: () => readonly string[];
+  /**
+   * Asked after the journal is read, before anything is drawn: false means the host is gone (disposed, its renderer
+   * destroyed) or a later open superseded this one, so no modal is opened. The read is asynchronous, and a modal drawn
+   * into a destroyed renderer throws.
+   */
+  alive?: () => boolean;
 };
 
 /** Read the journal and open the modal over what `keryx decisions report` would print. */
@@ -451,8 +457,9 @@ export async function openDecisions(
   chrome: Parameters<typeof openModal>[1],
   options: OpenDecisionsOptions,
 ): Promise<HostModalHandle | undefined> {
-  const { cwd, confirmationLines, ...rest } = options;
+  const { cwd, confirmationLines, alive, ...rest } = options;
   const report = await reportText(cwd).catch(() => UNREADABLE);
+  if (alive?.() === false) return undefined;
   const text = withConfirmationLines(report, confirmationLines?.() ?? []);
   return presentDecisions((hostOtui, hostChrome, input) => openModal(hostOtui as typeof otui, hostChrome as typeof chrome, input), otui, chrome, { ...rest, text }) as
     | HostModalHandle
@@ -470,8 +477,9 @@ export async function openDecisionsArms(
   chrome: Parameters<typeof openModal>[1],
   options: OpenDecisionsOptions,
 ): Promise<HostModalHandle | undefined> {
-  const { cwd, confirmationLines: _cards, ...rest } = options;
+  const { cwd, confirmationLines: _cards, alive, ...rest } = options;
   const text = await armsText(cwd);
+  if (alive?.() === false) return undefined;
   return presentDecisions((hostOtui, hostChrome, input) => openModal(hostOtui as typeof otui, hostChrome as typeof chrome, input), otui, chrome, { ...rest, text, tabLabel: "Arms" }) as
     | HostModalHandle
     | undefined;
@@ -624,14 +632,22 @@ export function mountDecisionsSidebar(options: DecisionsSidebarOptions): Decisio
     );
   };
 
+  // An open reads the journal first. By the time it returns, the sidebar may be disposed or its renderer destroyed, or a
+  // later `/decisions` may have asked again: only the latest open of a live sidebar draws its modal.
+  let openGeneration = 0;
+  const gone = (): boolean => disposed || isRenderableGone(box);
   const openWith = async (open: typeof openDecisions): Promise<HostModalHandle | undefined> => {
+    if (gone()) return undefined;
+    const generation = ++openGeneration;
     modal?.close({ restoreFocus: false });
-    modal = await open(core, chrome, {
+    const opened = await open(core, chrome, {
       cwd: options.cwd,
+      alive: () => !gone() && generation === openGeneration,
       ...(options.confirmationLines !== undefined ? { confirmationLines: options.confirmationLines } : {}),
       ...(options.onKeypress !== undefined ? { onKeypress: options.onKeypress } : {}),
     });
-    return modal;
+    if (generation === openGeneration) modal = opened;
+    return opened;
   };
   const show = (): Promise<HostModalHandle | undefined> => openWith(openDecisions);
   const showArms = (): Promise<HostModalHandle | undefined> => openWith(openDecisionsArms);

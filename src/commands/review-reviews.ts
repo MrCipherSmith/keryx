@@ -6,6 +6,8 @@ import { boardGh, boardGraphql, projectGithubConnection, reviewRepositories, sel
 import type { ReviewCard } from "../review/board-types";
 import { deskRunRoot, readReviewRows } from "../review/desk-run-store";
 import { headComparison, summarizeReview, type ReviewCompare, type ReviewRow, type ReviewsSnapshot } from "../review/review-entity";
+import { listReviewStates, type ReviewRecord } from "../review/review-state";
+import { mergeReviewStateRows, recordMatches } from "../review/review-state-rows";
 
 export const REVIEWS_USAGE = "keryx review reviews --json [--repo owner/name] [--include-closed]";
 /** Head comparisons per call, for the Reviews listed first; the rest are reported behind with an unknown commit count. */
@@ -32,13 +34,15 @@ export interface ReviewsSource {
   compareBudgetMs?: number;
   /** Also read the PR cards of Reviews closed locally (Desktop asks while "Show closed" is on). */
   includeClosed?: boolean;
+  /** The project whose review.json records (live-session reviews) join the stored attempts; none when omitted. */
+  projectRoot?: string;
 }
 
 const identityQuery = `query ReviewIdentity($owner:String!, $name:String!) { viewer { login } repository(owner:$owner,name:$name) { id } }`;
 const cannotRetainData = (error: unknown) => error instanceof Error && /^(access|configuration):/.test(error.message);
 const latestActivity = (row: ReviewRow) => row.attempts.reduce((max, a) => a.createdAt > max ? a.createdAt : max, "");
 
-export async function readReviews({ repo, repositories, query, compare, root = deskRunRoot(), compareBudgetMs = REVIEW_COMPARE_BUDGET_MS, includeClosed = false }: ReviewsSource): Promise<ReviewsSnapshot> {
+export async function readReviews({ repo, repositories, query, compare, root = deskRunRoot(), compareBudgetMs = REVIEW_COMPARE_BUDGET_MS, includeClosed = false, projectRoot }: ReviewsSource): Promise<ReviewsSnapshot> {
   const [owner, name] = repo.split("/") as [string, string];
   const identity = await query<{ viewer: { login: string } | null; repository: { id: string } | null }>(identityQuery, { owner, name });
   const viewer = identity.viewer?.login;
@@ -46,7 +50,8 @@ export async function readReviews({ repo, repositories, query, compare, root = d
   if (!viewer || !repositoryId) throw new Error("access: GitHub repository or account is unavailable.");
   const snapshot: ReviewsSnapshot = { version: 1, repo, repositories, repositoryId, viewer, fetchedAt: new Date().toISOString(), reviews: [], warnings: [] };
   // Newest activity first: the list order, and the order the comparison cap follows.
-  const rows = readReviewRows(repositoryId, viewer, root)
+  const records = projectRoot ? await sessionReviewRecords(projectRoot, repo, repositoryId, viewer, snapshot.warnings) : [];
+  const rows = mergeReviewStateRows(readReviewRows(repositoryId, viewer, root), records, repositoryId, viewer)
     .map(row => ({ row, at: latestActivity(row) }))
     .sort((a, b) => b.at.localeCompare(a.at) || b.row.number - a.row.number)
     .map(({ row }) => row);
@@ -61,6 +66,19 @@ export async function readReviews({ repo, repositories, query, compare, root = d
   const comparisons = await compareHeads(behind.slice(0, MAX_REVIEW_COMPARES), compare, compareBudgetMs, snapshot.warnings);
   snapshot.reviews = rows.map(row => summarizeReview(row, cards.get(row.number) ?? null, comparisons.get(row.id)));
   return snapshot;
+}
+
+/** The project's review.json records for this repository and viewer. An unreadable store or record adds one warning
+ * and is left out; the stored attempts are still listed. */
+async function sessionReviewRecords(projectRoot: string, repo: string, repositoryId: string, viewer: string, warnings: string[]): Promise<ReviewRecord[]> {
+  try {
+    const listing = await listReviewStates(projectRoot);
+    if (listing.unreadable.length) warnings.push(`${listing.unreadable.length} session review record(s) could not be read.`);
+    return listing.reviews.filter(record => recordMatches(record, repo, repositoryId, viewer));
+  } catch {
+    warnings.push("Session reviews could not be read.");
+    return [];
+  }
 }
 
 /** PR cards of the given Reviews, in batches read a few at a time. A batch that fails leaves its
@@ -127,7 +145,7 @@ export async function runReviewReviews(args: string[], cwd = process.cwd()): Pro
   const repo = selectRepository(repositories, values.repo);
   const auth = await projectGithubConnection(cwd);
   const result = await readReviews({
-    repo, repositories, includeClosed: values["include-closed"] === true,
+    repo, repositories, includeClosed: values["include-closed"] === true, projectRoot: cwd,
     query: (text, params) => boardGraphql(cwd, text, params, auth),
     // Only the status and count leave gh; the commit and file lists of the comparison are dropped.
     compare: async (base, head) => parseCompare(await boardGh(cwd,
