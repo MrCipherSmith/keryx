@@ -91,7 +91,7 @@ describe("verdicts", () => {
 
   test("owner-decision holds the finding with its options", () => {
     const options = ["uphold - mirror the timeline", "dismiss - keep LTR, as platforms do"];
-    const result = mergePremises([finding()], parsed([claim({ verdict: "owner-decision", question: "Which?", options })]));
+    const result = mergePremises([finding()], parsed([claim({ verdict: "owner-decision", question: "Which?", options, intent_signals: [SIGNAL] })]));
     expect(first(result).premise).toMatchObject({ verdict: "owner-decision", options });
     expect(result.counts).toMatchObject({ ownerDecision: 1, held: 1 });
   });
@@ -219,14 +219,17 @@ describe("rejections, each of which leaves the finding as it was", () => {
 
   test("held-without-question: both held verdicts need a question for the operator", () => {
     expect(reasons(rejectedAlone([claim({ verdict: "challenged", practice_sources: [SOURCE] })]))).toEqual(["held-without-question"]);
-    expect(reasons(rejectedAlone([claim({ verdict: "owner-decision", options: ["a", "b"] })]))).toEqual(["held-without-question"]);
-    expect(reasons(rejectedAlone([claim({ verdict: "owner-decision", question: "  ", options: ["a", "b"] })]))).toEqual(["held-without-question"]);
+    expect(reasons(rejectedAlone([claim({ verdict: "owner-decision", options: ["a", "b"], intent_signals: [SIGNAL] })]))).toEqual(["held-without-question"]);
+    expect(reasons(rejectedAlone([claim({ verdict: "owner-decision", question: "  ", options: ["a", "b"], intent_signals: [SIGNAL] })]))).toEqual(["held-without-question"]);
   });
 
   test("owner-decision-without-options: fewer than two options is a guess, not a choice", () => {
-    expect(reasons(rejectedAlone([claim({ verdict: "owner-decision", question: "q" })]))).toEqual(["owner-decision-without-options"]);
-    expect(reasons(rejectedAlone([claim({ verdict: "owner-decision", question: "q", options: ["only one"] })]))).toEqual(["owner-decision-without-options"]);
-    expect(reasons(rejectedAlone([claim({ verdict: "owner-decision", question: "q", options: ["a", ""] })]))).toEqual(["owner-decision-without-options"]);
+    expect(reasons(rejectedAlone([claim({ verdict: "owner-decision", question: "q", intent_signals: [SIGNAL] })]))).toEqual(["owner-decision-without-options"]);
+    expect(reasons(rejectedAlone([claim({ verdict: "owner-decision", question: "q", options: ["only one"], intent_signals: [SIGNAL] })]))).toEqual(["owner-decision-without-options"]);
+    expect(reasons(rejectedAlone([claim({ verdict: "owner-decision", question: "q", options: ["a", ""], intent_signals: [SIGNAL] })]))).toEqual(["owner-decision-without-options"]);
+    // A hold asks the operator, so it is grounded like a challenge: no cited signal or source, no question asked.
+    expect(reasons(rejectedAlone([claim({ verdict: "owner-decision", question: "q", options: ["a", "b"] })]))).toEqual(["owner-decision-without-evidence"]);
+    expect(first(mergePremises([finding()], parsed([claim({ verdict: "owner-decision", question: "q", options: ["a", "b"], practice_sources: [SOURCE] })]))).premise).toMatchObject({ verdict: "owner-decision" });
   });
 
   test("duplicate-claim: two claims for one finding apply neither, so claim order cannot decide whether it is held", () => {

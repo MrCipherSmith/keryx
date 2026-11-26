@@ -82,6 +82,7 @@ export const PREMISE_REJECTION_REASONS = [
   "raise-severity",
   "malformed-field",
   "challenged-without-evidence",
+  "owner-decision-without-evidence",
   "downgrade-without-evidence",
   "held-without-question",
   "owner-decision-without-options",
@@ -474,6 +475,12 @@ export function mergePremises<T extends StructuredReviewFinding>(
     if (isHeldVerdict(verdict)) {
       if (verdict === "challenged" && (signals.value?.length ?? 0) + (sources.value?.length ?? 0) === 0) {
         reject("challenged-without-evidence", "`challenged` needs at least one intent signal (a cited ref) or practice source (a named guideline). A challenge with neither is the reviewer's argument turned around.");
+        continue;
+      }
+      // A hold is the one point where the operator is asked. Ask only when the judge grounded it: an owner decision
+      // names what in the PR, the code or a rule makes it a product choice, as a challenge names its evidence.
+      if (verdict === "owner-decision" && (signals.value?.length ?? 0) + (sources.value?.length ?? 0) === 0) {
+        reject("owner-decision-without-evidence", "`owner-decision` needs at least one intent signal (a cited ref: the PR body, a code line, a commit) or practice source (a named rule) showing the choice is the owner's. Without one the finding goes on as reported: use `upheld`.");
         continue;
       }
       if (!present(claim.question)) {

@@ -6,6 +6,32 @@ import { describeUnusableResult, lenientReviewResult, mergeResults } from "./res
 
 const one = (extra: Record<string, unknown> = {}) => ({ status: "DONE", reviewer: "review-logic", slices: ["s1"], findings: [], ...extra });
 
+describe("a status on the STATUS: line instead of in the object", () => {
+  const bare = { reviewer: "review-logic", findings: [{ id: "F-1", severity: "minor" }] };
+
+  test("a ```REVIEW_RESULT block without status takes the reply's STATUS: line", () => {
+    const result = parseReviewResult(`STATUS: DONE_WITH_CONCERNS\n\n\`\`\`REVIEW_RESULT\n${JSON.stringify(bare)}\n\`\`\`\nSummary.`);
+    expect(result?.status).toBe("DONE_WITH_CONCERNS");
+    expect(result?.findings?.map((f) => f.id)).toEqual(["F-1"]);
+  });
+
+  test("so does a ```json block, a bare marker, and a bold **STATUS:** line", () => {
+    expect(parseReviewResult(`STATUS: DONE\n\`\`\`json\n${JSON.stringify(bare)}\n\`\`\``)?.status).toBe("DONE");
+    expect(parseReviewResult(`STATUS: BLOCKED\nREVIEW_RESULT ${JSON.stringify(bare)}`)?.status).toBe("BLOCKED");
+    expect(parseReviewResult(`**STATUS:** DONE\n\`\`\`json\n${JSON.stringify(bare)}\n\`\`\``)?.status).toBe("DONE");
+  });
+
+  test("the object's own status wins over the line", () => {
+    expect(parseReviewResult(`STATUS: DONE_WITH_CONCERNS\n\`\`\`REVIEW_RESULT\n${JSON.stringify({ ...bare, status: "DONE" })}\n\`\`\``)?.status).toBe("DONE");
+  });
+
+  test("no result for an unknown status, two different STATUS: lines, or an object that is not reviewer-shaped", () => {
+    expect(parseReviewResult(`STATUS: FINE\n\`\`\`REVIEW_RESULT\n${JSON.stringify(bare)}\n\`\`\``)).toBeUndefined();
+    expect(parseReviewResult(`STATUS: DONE\nSTATUS: BLOCKED\n\`\`\`REVIEW_RESULT\n${JSON.stringify(bare)}\n\`\`\``)).toBeUndefined();
+    expect(parseReviewResult(`STATUS: DONE\n\`\`\`REVIEW_RESULT\n${JSON.stringify({ summary: "x" })}\n\`\`\``)).toBeUndefined();
+  });
+});
+
 describe("lenient reviewer results", () => {
   test("a fenced ```json block holding a wrapped result is read", () => {
     const reply = `Here is my review.\n\`\`\`json\n${JSON.stringify({ result: one() })}\n\`\`\`\nDone.`;

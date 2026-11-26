@@ -113,7 +113,7 @@ type Verdict = "approve" | "comment" | "request-changes";
 `keryx review state open` с `--base`, `--head` и необязательным `--settings`:
 
 1. Раундов нет — раунд 1 (`created`).
-2. Последний раунд с тем же base, head и ключом настроек (неизвестный ключ, `null` с любой стороны, совпадает с любым) — тот же раунд (`reused`). Если `--session` отличается от текущей сессии раунда, она добавляется с `reason: "restart"` и становится текущей. Состояние раунда не меняется: скилл продолжит с того шага, на котором остановился пакет.
+2. Последний раунд с тем же base, head и ключом настроек (неизвестный ключ, `null` с любой стороны, совпадает с любым), ещё не опубликованный, — тот же раунд (`reused`). Опубликованный раунд закончен: новое открытие той же ревизии идёт по правилу 3. Если `--session` отличается от текущей сессии раунда, она добавляется с `reason: "restart"` и становится текущей. Состояние раунда не меняется: скилл продолжит с того шага, на котором остановился пакет.
 3. Иначе — раунд N+1 с `previousRound: N` (`advanced`); Review переходит в `reviewing`.
 
 ## CLI
@@ -154,7 +154,7 @@ Desktop отправляет текст, а не `/review` (B8). Начало р
 
 ```text
 Review pull request <url> with the review-orchestrator skill (.metaproject/skills/gdskills/review/review-orchestrator/SKILL.md).
-This is a Desktop review: keep its state with `keryx review state` as the skill's "Desktop review state" section says.
+This is a Desktop review: keep its state with `keryx review state` as the skill's "Desktop review state" section says (a copy of the skill without that section is older than this keryx: follow `keryx review state --help` instead).
 Review this revision: base <base>, head <head>.
 First run: keryx review state open --pr <url> --base <base> --head <head> --viewer <login> --session <session> --settings <key> --source desktop
 Launch settings: <режим, адаптивность, параллельность, лимиты, модели, Flow>.

@@ -92,7 +92,7 @@ judgement on it; the claim and the code read first let you see what the reviewer
 | `upheld` | The premise stands; the finding goes on unchanged. | — |
 | `downgraded` | A defect, but intent or practice shows it is smaller than reported. Never for a `minor`, an external or a `review-security-code` finding: hold those with `challenged` or `owner-decision` instead. | `severity`, strictly lower and never below `minor`, and ≥1 `intent_signals` or `practice_sources` |
 | `challenged` | Evidence says it is not a defect. | ≥1 `intent_signals` or `practice_sources`, and a `question` |
-| `owner-decision` | A product choice the code cannot settle either way. | a `question` and ≥2 `options` |
+| `owner-decision` | A product choice the code cannot settle either way. | ≥1 `intent_signals` or `practice_sources` showing the choice is the owner's, a `question` and ≥2 `options` |
 
 `challenged` and `owner-decision` **hold** the finding: it does not count as an open
 blocker or major, it is not sent to a fixer, and the verdict lists it as awaiting the
@@ -107,7 +107,7 @@ signal and no practice source against it is upheld.
 | **You can only lower or hold.** No new finding, no raised severity, no edit to a finding's text. | The merge builds the record from the original finding and takes only your verdict; a claim carrying more is rejected (`unknown-property`), an entry that is no object too (`malformed-claim`). |
 | **Never judge your own finding.** | The merge rejects a judge equal to the reporter (`self-judgement`). |
 | **Claim first, argument second.** | The case passed two reviews that read the fix's argument and never the premise. |
-| **`challenged` cites.** Each intent signal names its `ref` (`file:line` or a SHA) and what it says; each practice source names the guideline and section precisely enough to look up. | An uncited challenge is rejected and the finding stays as reported. Never invent a quote. |
+| **A hold cites, and only you write it.** A `challenged` or `owner-decision` claim carries ≥1 intent signal (its `ref`, `file:line` or a SHA, and what it says) or practice source (the guideline and section, precise enough to look up); its `question`, `options` and signals are yours, and the caller saves your block as it is. | The operator is asked only on your grounded reason: an uncited hold is rejected (`challenged-without-evidence`, `owner-decision-without-evidence`) and the finding stays as reported. Never invent a quote. |
 | **Never re-grade by the rubric.** Severity is the reviewer's and the verifier's call; a test gap or a surviving mutant stays as reported unless intent or practice shrinks it, and a minor is upheld or challenged, never downgraded. | An uncited downgrade is rejected (`downgrade-without-evidence`). Minors matter: a finding you weaken is one nobody fixes. |
 | **Read-only.** Read files; run nothing but `git log`, `git blame` and `git show` (only where your host gives a read-only child git). On keryx shell you have no shell and no git tool: read the history excerpts in `context_files`, or say the history was not read. | Executing is the verifier's job; this judgement is about meaning. |
 | **An external finding, and a `review-security-code` finding, is held or upheld, never dismissed or downgraded.** | A human asked; the operator answers them. Severity of a security finding measures exposure, which intent does not lower. The merge rejects the downgrade (`external-downgrade`, `security-downgrade`). |

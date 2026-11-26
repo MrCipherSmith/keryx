@@ -69,7 +69,7 @@ export function reviewStartTurn(input: ReviewStartTurnInput): string {
   const request = input.request?.trim();
   return [
     `Review pull request ${url} with the review-orchestrator skill (${REVIEW_SKILL_PATH}).`,
-    "This is a Desktop review: keep its state with `keryx review state` as the skill's \"Desktop review state\" section says.",
+    "This is a Desktop review: keep its state with `keryx review state` as the skill's \"Desktop review state\" section says (a copy of the skill without that section is older than this keryx: follow `keryx review state --help` instead).",
     `Review this revision: base ${revision.baseSha}, head ${revision.headSha}.`,
     `First run: ${reviewStateOpenCommand(input)}`,
     `Launch settings: ${describeLaunchSettings(input.options)}.`,
