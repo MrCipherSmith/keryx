@@ -5,6 +5,27 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.62] - 2026-11-26
+
+**Keryx Desktop 0.2.25** bundles Keryx 0.4.62.
+
+### Added
+
+- Linked projects: a project can organise several repositories, such as an organiser folder beside the frontend and backend repositories. The list lives in `.metaproject/linked-projects.json`, with paths relative to the project root. Manage it with `keryx ref list|add|remove`, with `/ref` in the shell (aliases `/ref-list`, `/add-ref`, `/ref-remove`), or in Desktop under Project Settings → **Linked projects**. (#1336)
+- The agent's system prompt names each linked project with its path, the first paragraph of its README, its stack, and where its `.metaproject/index.md`, `CLAUDE.md` and `AGENTS.md` are. (#1336)
+- `spawn_subagent` takes `project: "<name>"` and starts the subagent in that linked project, under that folder's own rules. Starting one there always asks, even a `read_only` one. (#1336)
+- Sessions show as a tree: `keryx sessions list` and the Desktop sidebar list a forked or started session under its parent, and ACP `session/list` reports `parentSessionId`. (#1336)
+- In Desktop, the **Run** button on a shell block the agent proposed opens the command in its own terminal tab, and its result (exit code, duration and the last lines of output) goes back to the session, so the agent continues on its own. The run card in the transcript shows its state and has **Show tab** and **Send output now**. (#1316)
+
+### Changed
+
+- A `general` subagent now gets `shell_exec` and `apply_patch` when its parent session has an approver. Every mutating call it makes is asked through the parent's own gate: the same permission mode, plan posture, publish leases and `/rewind` checkpoint, and a parent that read untrusted content passes that on. A `read_only` subagent is unchanged. (#1336)
+- A subagent's command in a linked project names the folder it runs in. No saved shell rule answers it, and "always allow" is not offered for it. (#1336)
+
+### Fixed
+
+- The secret detector masks the PEM key lines above an `-----END … PRIVATE KEY-----` line that has no header before it, including in numbered, indented and unified-diff output. (#1316)
+
 ## [0.4.61] - 2026-11-26
 
 **Keryx Desktop 0.2.24** bundles Keryx 0.4.61. The review projects use the reviewer, premise and orchestrator skills they have installed: run `keryx skills install` (or update) in a project to get this release's review instructions there.
