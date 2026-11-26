@@ -280,6 +280,9 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx worktree remove <name> [--keep-branch] [--force]\n",
     "                                               Free the ports and remove the worktree; refuses unpromoted or dirty without --force\n",
     "  worktree  Ready a linked git worktree (env files, dependencies, ports, memory index) and carry its findings out before removal\n",
+    // Linked projects: `keryx ref`, a brand-new verb, so a USAGE_BODY block (wrapped over two lines).
+    "  keryx ref [list | add <folder> [--name <n>] [--note <text>] | remove <name|folder>] [--json]\n",
+    "                                               Linked projects: other folders this project organises\n",
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed

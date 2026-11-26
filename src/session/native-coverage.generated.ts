@@ -3,16 +3,16 @@
 export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
   "schema": 1,
   "generator": "scripts/verify-native-coverage.ts",
-  "registryDigest": "96f6ac176ce1847bcc637495a22b7e217d5f472d7a97651ea1614cfe26bfc27e",
-  "contractDigest": "95fd86252f56e1ddca9e5acc8f3817e1dba30c7a576e7a7130ded3424d23b018",
-  "subjectCatalogueDigest": "0aaa0f567b5b26de53e54af7b8441fd4f475d2e044c127543db635eb47569430",
-  "inventoryDigest": "c1349c9c1db960093bd995a61945ae23313a2e2c827bd22ab974cb2ed66de5f6",
+  "registryDigest": "c271009e132fff00cb20740d960263fa90b42319989924be53932afb06158dbb",
+  "contractDigest": "958028e49191223adf99d5511dbd2295e999146bd8e0e9e8e1abd5e9f8f22dc3",
+  "subjectCatalogueDigest": "a5fdb3fe8e83ed0b5a3945f204a09462d70777e8f579ff660c1e8c2fcf6d08b5",
+  "inventoryDigest": "fe2eb61483f677a5a33b276f20d4bfc5bfcad5dcde39496e1926d07f8ea67137",
   "releaseReady": true,
   "counts": {
-    "registeredCommands": 76,
-    "variants": 263,
-    "required": 147,
-    "earned": 147,
+    "registeredCommands": 80,
+    "variants": 269,
+    "required": 153,
+    "earned": 153,
     "requiredGaps": 0,
     "boundaries": 116,
     "otherBlockers": 0
@@ -20,6 +20,7 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
   "earned": [
     "ac.cached",
     "ac.check",
+    "add-ref.folder",
     "approvals.allow-once",
     "approvals.deny",
     "approvals.list",
@@ -115,6 +116,11 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "reasoning.off",
     "reasoning.show",
     "reasoning.xhigh",
+    "ref-list.default",
+    "ref-remove.name",
+    "ref.add",
+    "ref.list",
+    "ref.remove",
     "resume.picker",
     "review.catch-up",
     "review.layers",
@@ -286,5 +292,5 @@ export const NATIVE_COVERAGE_DESCRIPTOR: unknown = {
     "workspace.navigate"
   ],
   "otherBlockers": [],
-  "descriptorDigest": "2d26ab2a2343691b0f5eba412bc324f7d6edaf395d3795093b71f54746780539"
+  "descriptorDigest": "40ed1fd4c75feeded388aa25fcd2479dec0d4e3bddd4a2d549cc4464b9dcd5db"
 };

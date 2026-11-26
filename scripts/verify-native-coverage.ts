@@ -162,6 +162,10 @@ export const PARITY_CASES: Readonly<Record<string, ParityCase>> = {
   "projectctx.status": { line: "/projectctx", arguments: {} },
   "ref.list": { line: "/ref", arguments: {} },
   "ref-list.default": { line: "/ref-list", arguments: {} },
+  "ref.add": { line: "/ref add .metaproject --name fixture-meta", arguments: { action: "add", target: ".metaproject", name: "fixture-meta" } },
+  "add-ref.folder": { line: "/add-ref .metaproject --name fixture-meta", arguments: { target: ".metaproject", name: "fixture-meta" } },
+  "ref.remove": { line: "/ref remove fixture-link", arguments: { action: "remove", target: "fixture-link" } },
+  "ref-remove.name": { line: "/ref-remove fixture-link", arguments: { target: "fixture-link" } },
   "projectctx.refs": { line: "/projectctx refs", arguments: {} },
   "projectctx.warn": { line: "/projectctx warn", arguments: { mode: "warn" } },
   "projectctx.block": { line: "/projectctx block", arguments: { mode: "block" } },
@@ -348,6 +352,8 @@ async function runHarness(input: { cases: { variantId: string; handlerName: stri
       await mkdir(join(cwd, ".metaproject"));
       // The routing index `keryx init` writes: the production machine profile serves only a Keryx-initialized checkout.
       await writeFile(join(cwd, ".metaproject", "index.md"), "# Metaproject Index\n");
+      // One committed linked project, so `/ref remove` has a link to remove on both paths.
+      await writeFile(join(cwd, ".metaproject", "linked-projects.json"), JSON.stringify({ version: 1, projects: [{ name: "fixture-link", path: "../fixture-sibling" }] }));
       await writeFile(join(cwd, ".metaproject", "triggers.json"), JSON.stringify({ schemaVersion: 1, triggers: [{ name: "nightly", on: { kind: "schedule", cron: "0 2 * * *" }, action: { kind: "rebuild" } }] }));
       await new WorkspaceService({ workspaceRoot: cwd, authorizationServer: localWorkspaceAuthorizationServer(), now: () => new Date("2026-01-01T00:00:00Z"),
         strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" } }).create({ request: undefined, requestCorrelationId: "native-parity-correlation-0001", id: WORKSPACE, title: "Native parity workspace" });
