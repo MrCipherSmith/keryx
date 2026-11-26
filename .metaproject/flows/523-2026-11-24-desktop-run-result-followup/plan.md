@@ -73,7 +73,7 @@ Status: ready for freeze (2026-11-25)
 |---|---|---|---|---|---|---|---|
 | starting (tab opening) | — | — | — | — | no change | no change | run lost, nothing sent |
 | start failed | — | — | — | — | — | — | — |
-| running | read tail; session idle → deliver + turn (AC3); busy → `waiting` | process killed; card "closed before it finished"; nothing sent, no turn (AC8) — except while a "Send output now" tail read is in flight: the card stays "running…" and that snapshot is still delivered once (AC8's exception, R2-FE-004) | snapshot (`state: running`) delivered + turn; card "sent while running"; the later exit is shown, not sent (AC9) — unless the process ends with its tab open before keryx took the snapshot (during its tail read, while it waits, or when its prompt comes back busy or "wait"): then the exit's result goes instead, once | no change | no change: the run belongs to its own session (AC3) | no change | reload: the run store (web view memory) is lost, the PTY keeps running and its tab stays in the panel, untracked, no card; app quit: the PTY closes (SIGHUP, SIGKILL after 500 ms); nothing sent either way (PC3-002) |
+| running | read tail; session idle → deliver + turn (AC3); busy → `waiting` | process killed; card "closed before it finished"; nothing sent, no turn (AC8) — except while a "Send output now" tail read is in flight: the card stays "running…" and that snapshot is still delivered once (AC8's exception, R2-FE-004) | snapshot (`state: running`) delivered + turn; card "sent while running"; the later exit is shown, not sent (AC9) — unless the process ends with its tab open before keryx accepted the snapshot's prompt (during its tail read, while it waits, or when its prompt comes back busy or "wait"): then the exit's result goes instead, once | no change | no change: the run belongs to its own session (AC3) | no change | reload: the run store (web view memory) is lost, the PTY keeps running and its tab stays in the panel, untracked, no card; app quit: the PTY closes (SIGHUP, SIGKILL after 500 ms); nothing sent either way (PC3-002) |
 | waiting (finished, or a "Send output now" snapshot asked for; session busy) | a waiting snapshot (tab open) is replaced by the exit's result, one entry per run (AC9); a finished result: — | card stays; result still sent (a waiting snapshot of a still-running command too: delivered once, the exit the close causes is shown, not sent; owner 2026-11-25, F-002) | — | turn ends → waiting results of that session in ONE prompt, up to 8; the rest after that turn (AC4) | no change | kept, also when the release crosses a prompt already sent (unknown-session refusal) or keryx is shutting down; delivered once the session is held again (owner 2026-11-25, HL2-001) | lost, nothing sent (on a reload its tab stays in the panel) |
 | delivered | — | no change | — | — | — | — | after `session/load` the card comes from the stored note; no new turn (AC7) |
 
@@ -85,15 +85,18 @@ A results prompt on its way that gets no answer (the connection closed or broke 
 restart replaced the connection) goes back to `waiting` and is sent again once the session is held
 again; keryx stores a result at most once per run id and kind (a running snapshot, a final result:
 a final result after a stored snapshot is stored and gets its turn, so one session can hold two
-notes for one run) and answers an all-duplicate prompt with `stored: 0`, which the desktop counts
-as delivered (review R2-HL-002, R3-LG-006). The all-duplicate prompt starts no turn, except when
-its stored notes are the last messages of the history (their turn was never recorded: keryx
-stopped before it ended, and it may have run in part, R4-HL-001): then it runs the follow-up turn
-on them, a full turn under the floor, storing nothing again, and answers `resumed: true` beside
-`stored: 0` (R3-LG-005, R4-AR-002; the no-turn answer has no `resumed` key, and the desktop reads
-neither). A resend that mixes such duplicates with new results runs one turn on all those notes,
-and `/rewind` of it takes them all out (R4-LG-003). A turn keryx's own stop cancelled after it
-was persisted with keryx's continuation line is not re-run. A snapshot prompt that got no answer
+notes for one run; nothing after a stored final result is stored) and answers an all-duplicate
+prompt with `stored: 0`, which the desktop counts as delivered (review R2-HL-002, R3-LG-006). The all-duplicate prompt starts no turn, except when
+one of its runs or more has a note among the stored notes that end the history (their turn was
+never recorded: keryx stopped before it ended, and it may have run in part, R4-HL-001): then it
+runs the follow-up turn on the notes that end the history, a full turn under the floor, storing
+nothing again, and answers `resumed: true` beside `stored: 0` (R3-LG-005, R4-AR-002; the no-turn
+answer has no `resumed` key, and the desktop reads neither). A duplicate whose note sits further
+up had its turn recorded and does not stop that turn (R5-LG-002). A resend that carries new
+results beside a duplicate whose run has a note among those that end the history runs one turn on
+those notes and the new ones, and `/rewind` of it takes them all out (R4-LG-003, R5-LG-002). A
+turn keryx's own stop cancelled after it was persisted with keryx's continuation line is not
+re-run. A snapshot prompt that got no answer
 may have been stored: the exit's result that replaces it is then stored as a second note. A
 session reload inside the window (`/compact`, `/rewind`, a released session, a keryx restart)
 keeps a live card only where its note is replayed (the newest note's place when keryx replays

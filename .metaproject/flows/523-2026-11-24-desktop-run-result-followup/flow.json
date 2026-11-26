@@ -11,12 +11,12 @@
   "title": "Desktop Run button: the agent follows the command it asked the user to run",
   "status": "in-progress",
   "createdAt": "2026-11-24T20:53:10.991Z",
-  "updatedAt": "2026-11-26T09:54:41.222Z",
+  "updatedAt": "2026-11-26T12:13:12.272Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:56d5123206b011382d58c1ec8d2b9940c2f503aa2c639f313a1f799e6f39b5d4",
+  "acChecksum": "sha256:b4e746f1d8259c3fd3000314ff626303d04e9ca231479c58807be0aa5a3a3541",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -457,6 +457,72 @@
       "budget": {},
       "disposition": "completed",
       "dispositionReason": "8 docs findings answered (R4-PC-001..004, R4-HL-001, R4-DG-003, R4-AR-005, R4-DG-005); spec 0.3.2 §3.9.5b and §4.4, plan.md and PR body follow T19/T20; AC9 and AC5 updated via flow ac update; AC12 check exit 0"
+    },
+    {
+      "id": "T22",
+      "title": "Fix round 5: keryx server findings (R5-LG-002 resend counts trailing notes when any duplicate is among them, R5-TP-002 diff-rule fixtures)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-26T11:17:14.153Z",
+            "outcome": "started",
+            "detail": "523-T22 fix round 5 server (brief dispatch/T22-brief.md)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "R5-LG-002 fixed (trailingNotesAwaitingTurn counts when any duplicate is among the trailing notes: [D,A] runs the waiting turn, [D,A,C] /rewind takes A and C), R5-TP-002 three diff-rule fixtures red under their named breaks, two test-comment nits; focused 162/0, shell-profile 20/0, typecheck 0, eslint 0; result results/T22.json"
+    },
+    {
+      "id": "T23",
+      "title": "Fix round 5: desktop findings (R5-DG-001 explicit slot hold for a load whose caller starts a turn, R5-TP-001 kind-rule test)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-26T11:26:47.790Z",
+            "outcome": "started",
+            "detail": "523-T23 fix round 5 desktop (brief dispatch/T23-brief.md)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "R5-DG-001 fixed (loadSession holdForCaller / releaseHold: a review started after a load keeps waiting Run results and queued prompts off its slot until it is sent or its start fails; release on turn, finally, later load, release, new connection), R5-TP-001 kind-rule test red under its named breaks; focused 117/0, tsc clean; result results/T23.json"
+    },
+    {
+      "id": "T24",
+      "title": "Fix round 5: spec, PR body, AC and flow docs (R5-LG-001 owner dismiss limits, R5-DG-002, R5-PC-001/004/007, R5-AR-001, R5-SC-002)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-26T11:46:04.057Z",
+            "outcome": "started",
+            "detail": "523-T24 fix round 5 docs (brief dispatch/T24-brief.md)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "docs findings answered (R5-LG-001 owner-dismiss limits, R5-DG-002, R5-PC-001/004/007, R5-AR-001, R5-SC-002; R5-PC-005 confirmed); spec 0.3.2 §3.9.5b/§4.4, plan.md and PR body follow T22/T23; AC5 updated via flow ac update; AC12 check exit 0"
     }
   ],
   "history": [
@@ -812,6 +878,56 @@
       "at": "2026-11-26T09:54:41.222Z",
       "event": "task-done",
       "detail": "T21: Fix round 4: spec 0.3.2, PR body, AC and flow docs for T19/T20 (R4-PC-001..004, R4-HL-001, R4-DG-003, R4-AR-005, R4-DG-005, Known limits)"
+    },
+    {
+      "at": "2026-11-26T11:17:01.737Z",
+      "event": "task-added",
+      "detail": "T22: Fix round 5: keryx server findings (R5-LG-002 resend counts trailing notes when any duplicate is among them, R5-TP-002 diff-rule fixtures)"
+    },
+    {
+      "at": "2026-11-26T11:17:02.320Z",
+      "event": "task-added",
+      "detail": "T23: Fix round 5: desktop findings (R5-DG-001 explicit slot hold for a load whose caller starts a turn, R5-TP-001 kind-rule test)"
+    },
+    {
+      "at": "2026-11-26T11:17:02.909Z",
+      "event": "task-added",
+      "detail": "T24: Fix round 5: spec, PR body, AC and flow docs (R5-LG-001 owner dismiss limits, R5-DG-002, R5-PC-001/004/007, R5-AR-001, R5-SC-002)"
+    },
+    {
+      "at": "2026-11-26T11:17:14.154Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 1) — 523-T22 fix round 5 server (brief dispatch/T22-brief.md)"
+    },
+    {
+      "at": "2026-11-26T11:26:47.209Z",
+      "event": "task-done",
+      "detail": "T22: Fix round 5: keryx server findings (R5-LG-002 resend counts trailing notes when any duplicate is among them, R5-TP-002 diff-rule fixtures)"
+    },
+    {
+      "at": "2026-11-26T11:26:47.790Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 1) — 523-T23 fix round 5 desktop (brief dispatch/T23-brief.md)"
+    },
+    {
+      "at": "2026-11-26T11:46:03.486Z",
+      "event": "task-done",
+      "detail": "T23: Fix round 5: desktop findings (R5-DG-001 explicit slot hold for a load whose caller starts a turn, R5-TP-001 kind-rule test)"
+    },
+    {
+      "at": "2026-11-26T11:46:04.058Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 1) — 523-T24 fix round 5 docs (brief dispatch/T24-brief.md)"
+    },
+    {
+      "at": "2026-11-26T12:13:11.651Z",
+      "event": "ac-updated",
+      "detail": "AC5: \"keryx (shell profile) stores each new `terminalResults` entry (one whose run already has a stored note of the same kind, a running snapshot or a final result, is skipped) as a labelled untrusted user-role note with `provenance: \"harness\"` — nonce envelope, `redactSensitiveText`, `capResultText` — and stores its own continuation sentence as the turn's user line instead of the client's text; an output that contains a forged closing tag cannot end the envelope, and malformed meta (wrong types, more than 8 entries, `exitCode` missing on `exited`) is refused as JSON-RPC invalid params with nothing stored and no turn run. [verify: exec `bun test src/acp/terminal-result` · sensitive: failure-scenario]\" -> \"keryx (shell profile) stores each new `terminalResults` entry (an entry is skipped when its run already has a stored final result, history or archive, or when it is a running snapshot and its run already has a stored snapshot; a final result after a stored snapshot is new) as a labelled untrusted user-role note with `provenance: \"harness\"` — nonce envelope, `redactSensitiveText`, `capResultText` — and stores its own continuation sentence as the turn's user line instead of the client's text; an output that contains a forged closing tag cannot end the envelope, and malformed meta (wrong types, more than 8 entries, `exitCode` missing on `exited`) is refused as JSON-RPC invalid params with nothing stored and no turn run. [verify: exec `bun test src/acp/terminal-result` · sensitive: failure-scenario]\" (review round 5 finding R5-DG-002 (+R5-PC-003, upheld): fix round 4's wording (\"a stored note of the same kind is skipped\") was narrower than the code (isStoredTerminalResult also skips a snapshot after a stored final result, pinned by the server test AC5's own command runs); the criterion now states the code's rule; the verify command and sensitivity are unchanged)"
+    },
+    {
+      "at": "2026-11-26T12:13:12.272Z",
+      "event": "task-done",
+      "detail": "T24: Fix round 5: spec, PR body, AC and flow docs (R5-LG-001 owner dismiss limits, R5-DG-002, R5-PC-001/004/007, R5-AR-001, R5-SC-002)"
     }
   ],
   "origin": {

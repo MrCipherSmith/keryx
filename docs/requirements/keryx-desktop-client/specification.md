@@ -618,38 +618,48 @@ compaction and the run-id check below all use.
   no provider), leaves nothing stored and starts no turn.
 - At most once per run id and kind (reviews R2-HL-002, R3-LG-006): once those
   checks pass, an entry is a duplicate when the session's history or its
-  archive (a note compaction removed still counts) already holds a note of
-  the same run and the same kind, the kind being read from keryx's own head
-  line: a running snapshot, or a final result (exit or signal). A final
+  archive (a note compaction removed still counts) already holds a final
+  result of the same run, or when the entry is a running snapshot and a
+  snapshot of the same run is stored (`isStoredTerminalResult`); the kind,
+  a running snapshot or a final result (exit or signal), is read from
+  keryx's own head line. A final
   result after a stored "still running" snapshot of the same run is not a
   duplicate: it is stored as its own note and gets its turn, so one session
   can hold two notes for one run id. A second snapshot, or anything after a
-  stored final result, is a duplicate. Duplicates are skipped and only the
+  stored final result (a snapshot included), is a duplicate (review
+  R5-DG-002). Duplicates are skipped and only the
   other entries are stored. A prompt with some new entries is answered like
   any prompt, with no extra meta. A prompt whose every entry is a duplicate
   stores nothing. It starts no turn, makes no model call and is answered
   `{ stopReason: "end_turn", _meta: { keryx: { terminalResults: { stored: 0,
   duplicates: [<runId>, …] } } } }` (`duplicates` stays a list of run ids;
-  no `resumed` key), unless the stored notes it names are the last messages
-  of the session's history (no keryx line, reply or other message after
-  them). Then the turn those notes started was never recorded: keryx saves
-  the notes as it stores them and a turn only when it ends, so keryx
-  stopped before that turn ended, and the turn may have run in part (review
-  R4-HL-001). keryx runs the follow-up turn on those notes, a full turn
-  under the untrusted-content floor as for a new result (model rounds, tool
-  calls and permission requests included), stores nothing again, and
-  answers `{ stopReason, _meta: { keryx: { terminalResults: { stored: 0,
-  duplicates: [<runId>, …], resumed: true } } } }` with that turn's own stop
-  reason; `/rewind` of that turn takes the notes out with it (reviews
-  R3-LG-005, R4-PC-003, R4-AR-002). The resumed turn has no record of what
+  no `resumed` key), unless one of the runs it names or more has a note
+  among the stored notes that end the session's history (no keryx line,
+  reply or other message after them). Then the turn those notes started was
+  never recorded: keryx saves the notes as it stores them and a turn only
+  when it ends, so keryx stopped before that turn ended, and the turn may
+  have run in part (review R4-HL-001). keryx runs the follow-up turn on the
+  notes that end the history (all of them, whichever runs the prompt
+  names), a full turn under the untrusted-content floor as for a new result
+  (model rounds, tool calls and permission requests included), stores
+  nothing again, and answers `{ stopReason, _meta: { keryx: {
+  terminalResults: { stored: 0, duplicates: [<runId>, …], resumed: true }
+  } } }` with that turn's own stop reason; `/rewind` of that turn takes
+  those notes out with it (reviews R3-LG-005, R4-PC-003, R4-AR-002). A
+  duplicate whose note sits further up had its turn recorded (its answer
+  may have been lost with the connection) and does not stop that turn: a
+  resend of it beside a run whose note ends the history runs the waiting
+  turn once, and a resend that names only such recorded runs gets the
+  no-turn answer (review R5-LG-002). The resumed turn has no record of what
   an earlier, unfinished attempt did (Run-result limits, §4.4). A prompt
-  that mixes such duplicates (every one of them among the notes that end
-  the history) with new results runs one turn on all of those notes, stores
-  only the new ones and is answered like any prompt; `/rewind` of that turn
-  takes the older notes out with the new ones (review R4-LG-003). So a
-  client may send a result again when its prompt got no answer. Not re-run:
-  a follow-up turn that keryx's own stop cancelled after it was persisted
-  with keryx's continuation line.
+  that carries new results beside a duplicate whose run has a note among
+  the notes that end the history (one such duplicate is enough) runs one
+  turn on those notes and the new ones, stores only the new ones and is answered like
+  any prompt; `/rewind` of that turn takes the older notes out with the new
+  ones and keeps the recorded turns above them (reviews R4-LG-003,
+  R5-LG-002). So a client may send a result again when its prompt got no
+  answer. Not re-run: a follow-up turn that keryx's own stop cancelled
+  after it was persisted with keryx's continuation line.
 - The prompt's own text blocks are the client's display text; keryx never
   reads them, not even as a slash command.
 - Notes: for each entry keryx appends one user-role note to the session's
@@ -680,11 +690,13 @@ compaction and the run-id check below all use.
     `\/`, `\\`, `\uXXXX`), and the run stops at a quote (`\"` included) or any
     other character, so redacted JSON still parses (review R3-SC-001). The
     END line decides how the lines above are read:
-    - A unified diff's line (`git diff`, `git show`, `git log -p`,
-      `diff -u`): the END line's first character is ` `, `+` or `-` and the
+    - A unified diff's line in raw diff output with one marker column and
+      nothing before it (`git diff`, `git show` and `git log -p` of a
+      change that is not a merge, `diff -u`, as they print): the END line's
+      first character is ` `, `+` or `-` and the
       END marker follows it directly (an END line indented by exactly one space
       reads the same way). Each line above is read with its first
-      character, any of the three, as its whole prefix, so a cut diff of a
+      character, any of the three, as its whole prefix, so a cut raw diff of a
       replaced key masks the old (`-`) and the new (`+`) key lines above a
       context END, and an added PGP key masks its `+=…` checksum line. The
       mask stops at the first line that starts with anything else or holds
@@ -698,15 +710,22 @@ compaction and the run-id check below all use.
       and line number (`rg --column` included), `cat -n` and `nl` at any
       digit width (also across line 100000, where their padding ends, review
       R4-PC-005), `diff` (`< `/`> `), `docker compose logs`, timestamped
-      lines, `> `-quoted lines, `keryx ctx rg` items and indentation.
+      lines, `> `-quoted lines, `keryx ctx rg` items and indentation. A diff
+      printed behind one of these prefixes, and a combined diff (a marker
+      column per parent), are read by this rule too, not by the diff rule
+      above: the marker columns count as part of the prefix, so above a
+      context END line the mask stops at the first `+` or `-` line
+      (Run-result limits, §4.4; review R5-LG-001).
 
     Either way blank lines and PEM header fields between key lines are
     masked too, up to the first line that is none of these (the desktop's
     cut line, a frame, another file's lines, a different indentation, any
-    other record). The mask is narrower than in fix round 2
-    in two cases: an END line without a prefix no longer masks numbered or
-    indented lines above it, and a prefixed END line no longer masks lines
-    with a different prefix; when no line above is masked, the END line's own
+    other record). Outside a raw diff's END line, which masks the lines of
+    all three marker columns above it (the diff rule above, review
+    R5-PC-001), the mask is narrower than in fix round 2 in two cases: an
+    END line without a prefix no longer masks numbered or indented lines
+    above it, and a prefixed END line no longer masks lines with a
+    different prefix; when no line above is masked, the END line's own
     prefix (its line number) stays visible and only the run and the marker
     are masked (review R3-SC-003). A header with no END line masks to
     the end of the input when no END line follows it; a header that has an
@@ -781,7 +800,8 @@ compaction and the run-id check below all use.
   budget. The continuation line is always kept, then the newest notes that
   fit the share; the older notes are removed and named in the summary, and
   then nothing older than the head is kept verbatim. `compactWithFallback`
-  checks that the in-turn cut fits: when it does not, it halves the tail
+  checks that the in-turn cut removes something and fits: when it removes
+  nothing (even though its context fits) or does not fit, it halves the tail
   budget, down to 1,000 tokens, skips a budget whose cut removes nothing,
   and takes the largest tail that fits, else the smallest cut that removed
   anything, else the noop; when no context can fit (`fits([])` is false: the
@@ -841,8 +861,31 @@ compaction and the run-id check below all use.
   - After a `session/load` holds the session again (`terminalRuns.resume`),
     the waiting results do not go at once: the arbiter sends them after the
     load's render, so the issue-question resume the load starts
-    (`resumeIssueQuestions`) and a turn the load's caller starts as soon as
-    it resolves (a session review) take the slot first. An issue-question
+    (`resumeIssueQuestions`, sent inside the load) and a turn sent as soon
+    as the load resolves take the slot first (review R2-RR-001). A load
+    whose caller starts a turn in the session itself does not rely on that
+    timing: it holds the session's free turn slot for that turn from the
+    load's start (`loadSession(id, { holdForCaller: true })`,
+    `SessionRegistry.heldForCaller`; review R5-DG-001). The one such caller
+    is a review started from the board or the Reviews tab (`sendReviewTurn`
+    in `review/prWork.ts`): it loads the PR's newest bound session with the
+    hold, awaits the session's mode switch (`raiseMode`, PR #1329), then
+    sends; a review sent in the `/review` dialog's own session, or into a
+    new session it opens, loads nothing and holds nothing. While the hold is
+    on, the session gets no Run results (`sendTerminalResults` answers null,
+    so `terminalRuns.flush` skips it) and no queued prompt (the arbiter
+    passes it over). The hold ends when a turn takes the slot, when the
+    caller gives up without sending (`releaseHold` in `sendReviewTurn`'s
+    `finally`: the open failed, the mode switch threw, the send was
+    refused), on a later load of the session, on its release and on a new
+    connection. When the caller or a later load ends the hold without a
+    turn, the arbiter runs for that session at once. So the review's turn
+    goes before the Run results and queued prompts that waited, and they go
+    when that turn ends, in the arbiter's order below. Any turn that takes
+    the slot ends the hold, not only the caller's: an issue-question resume
+    the load sends, or a prompt the user sends in that session meanwhile,
+    takes the slot, and a review sent while that turn runs is refused as
+    busy. An issue-question
     resume refused because a turn or a Telegram turn holds the slot is
     queued at the end of the session's queue (review R3-LG-001); opening an
     issue session fails when the resume was neither sent nor queued. When a
@@ -1176,8 +1219,13 @@ Web view:
   with keryx's `TERMINAL_OUTPUT_CUT_LINE` (review R3-AR-001); the run-id
   pattern (`newRunId`: the test checks it only through the ids it makes,
   in batches that must pass keryx's validator), the replayed note's shape
-  (`reducer.ts`) and keryx's refusal conditions (`useAcpSession.ts`) are
-  copies no test compares (review R4-AR-005).
+  (`reducer.ts`), keryx's refusal conditions (`useAcpSession.ts`) and the
+  desktop's prediction of keryx's dedupe-by-kind answer (`terminalSent`
+  with `noteKindOf` in `reducer.ts`, the copy of `isStoredTerminalResult`
+  in `src/acp/terminal-result.ts` that decides at send time whether a card
+  stays in a replayed note's place; `terminalRuns.test.ts` pins the
+  desktop's side, R5-TP-001, not against keryx's) are copies no test
+  compares (reviews R4-AR-005, R5-AR-001).
 - Session reload (`reducer.ts`, `keepLiveRuns`): a `session/load` of a
   session the window already has a transcript for (after `/compact` or
   `/rewind`, a return to a released session, a keryx restart) keeps the live
@@ -1251,11 +1299,27 @@ Web view:
   continuation line is not run again (§3.9.5b). A private-key tail
   serialized into one JSON string with line prefixes inside it (`\n     4\t…`)
   masks only the run on the END line, and a space-joined key body masks
-  only its last chunk; neither is masked as a body. A key indented inside a
+  only its last chunk; neither is masked as a body. A key written as source
+  string literals (`"L2\n" +` in JavaScript or Java, `"L2\n"` in Python),
+  cut below its BEGIN, masks only its END marker: a line above counts as
+  key body only when the base64 ends it (review R5-SC-002). A key indented inside a
   diff (`+    MIIE…` lines above a `     -----END` context line) is not read
   as a diff line, since its END marker does not follow the first column
   directly: its END line's prefix is compared by shape, so the mask stops
   at the first `+` or `-` line above it (open: flow 523 question T19-Q1).
+  The same holds for a diff behind a listing prefix (`grep -n` or `rg -n
+  -B` over `git log -p` output or a `.patch` file, `cat -n` or `nl` of a
+  patch, `git log -p --graph`, keryx's `ctx rg` items, a `> `-quoted patch,
+  a timestamped log) and for a combined diff (`git show <merge>`, `git log
+  -p --cc`, a conflicted `git diff`): the diff rule reads the marker column
+  only as the END line's first character, so these END lines are compared
+  by shape with the marker column inside the prefix. Cut below the key's
+  BEGIN, a context END line's mask stops at the first `+` or `-` line above
+  it, so a replaced key's old and new key lines reach the model (when its
+  last line changed, only the END marker is masked); a `+` or `-` END line
+  masks only the lines above it that carry its own markers. Extending the
+  diff rule to these layouts is a follow-up (owner on review R5-LG-001:
+  the first-column rule stays in this PR).
   One base64-looking word on a diff line directly above a diff key's lines
   (`+foo`) is masked with them, as an unprefixed one is. With number
   padding ignored, a space
@@ -1265,10 +1329,13 @@ Web view:
   and the client's resend, with no record of those calls (§3.9.5b): a
   mutating call the model makes again asks for approval again under the
   floor, and `/rewind` of the resumed turn cannot undo what the earlier
-  attempt changed (review R4-HL-001). The `/rewind` fix for a mixed resend
-  needs at least one duplicate in it: after keryx stopped with notes at the
-  end of the history, a resend of only new results, or an operator prompt,
-  still leaves those older notes behind on `/rewind`. A turn under the
+  attempt changed (review R4-HL-001). The resend rules need a run named in
+  the resend to have one of the notes that end the history: after keryx
+  stopped with notes at the end of the history, a resend that names none
+  of them runs no turn for them when every entry is a duplicate (only runs
+  whose turn was recorded), and when it carries a new result, or for an
+  operator prompt, `/rewind` of the turn that runs leaves those notes
+  behind (reviews R4-LG-003, R5-LG-002). A turn under the
   20K-token tail whose request misses the guard even with the smallest
   in-turn tail keeps only that 1,250-token tail of itself (and the in-turn
   summary) on every round, where before fix round 3 it was sent whole; that
@@ -1277,7 +1344,15 @@ Web view:
   compaction replay replaces the window's conversation and drops its copy of a running
   Telegram turn, so when that turn ends no window state changes and a prompt
   queued behind it can wait until the next window change (pre-existing; the
-  arbiter does not depend on the turn registry).
+  arbiter does not depend on the turn registry). The review's slot hold
+  (§3.9.5b, review R5-DG-001) is one flag per session, not per caller: when
+  two review starts on the same session overlap, the first one's failure
+  ends the second one's hold, and the second can then meet waiting Run
+  results as busy. A Telegram turn that starts during the review's mode
+  switch still fails the review start as busy, with the session's mode
+  already raised (unchanged from PR #1329). Opening that same session
+  yourself during the mode switch ends the hold: the waiting Run results go
+  first and the review start reports the busy session.
 - `/delegate` runs (D-14): `pty_open_run(cwd, argv, title, cols, rows)` opens a
   tab whose process is `argv` itself (no shell), with the same login-shell
   environment and the same SIGHUP-then-SIGKILL close as a shell tab; a program
