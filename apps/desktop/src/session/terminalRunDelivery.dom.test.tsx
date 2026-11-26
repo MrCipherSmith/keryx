@@ -26,3 +26,7 @@ test("R2-RR-001: once a load holds a session again, resumed issue questions and 
 test("R2-HL-002: a results prompt with no answer when keryx exits or is restarted waits and goes to the next keryx; its duplicate answer is delivered", () => {
   expect(typeof run("lost-connection")).toBe("string");
 });
+
+test("R3-FE-002: a scenario name the fixture does not know fails instead of running the delivery scenario", () => {
+  expect(() => run("lost-conection")).toThrow();
+});

@@ -89,6 +89,11 @@ export interface TerminalRunItem {
   tabOpen: boolean;
   /** Drawn from the session's history on load. */
   replayed?: boolean;
+  /**
+   * A reload put this live card in the place of its replayed note: it stays there when its result is sent
+   * again (`terminalSent` moves only cards that have no note in the transcript).
+   */
+  inHistory?: boolean;
 }
 
 /** A run card's fields; the reducer keeps its id. */
@@ -102,8 +107,13 @@ export function isUndeliveredRun(item: Item | undefined): boolean {
 /** States a run leaves only through its tab or its process (flow 523): the run store and the reducer read them alike. */
 export const FINAL_RUN_STATES: ReadonlySet<TerminalRunState> = new Set<TerminalRunState>(["sent", "sent-while-running", "closed", "start-failed", "not-sent"]);
 
-/** A live run that can still change: its state is not final, or its tab is still open (its exit, Show tab). */
+/**
+ * A live run that can still change: its state is not final, or its tab is still open (its exit, Show tab).
+ * A "not sent" run is final whatever its tab does: its result will never go, so nothing the tab does changes
+ * what the card is for, and a reload drops the card as it drops a closed or could-not-start one.
+ */
 export function runCanChange(run: Pick<TerminalRunItem, "state" | "tabOpen">): boolean {
+  if (run.state === "not-sent") return false;
   return !FINAL_RUN_STATES.has(run.state) || run.tabOpen;
 }
 
@@ -712,11 +722,17 @@ function keepLiveRuns(loaded: ConvState, previous: readonly Item[]): ConvState {
   const live = new Map<string, TerminalRunItem>();
   for (const i of previous) if (i.kind === "terminalRun" && i.replayed !== true) live.set(i.runId, i);
   if (live.size === 0) return loaded;
-  const items = loaded.items.map((i): Item => {
-    const run = i.kind === "terminalRun" ? live.get(i.runId) : undefined;
-    if (!run) return i;
-    live.delete(run.runId);
-    return { ...run, id: i.id };
+  // keryx can hold two notes for one run (a "still running" snapshot, then its exit): the live card takes the
+  // place of the newest one, and the older stays a replayed note.
+  const newestNote = new Map<string, number>();
+  loaded.items.forEach((i, n) => {
+    if (i.kind === "terminalRun" && live.has(i.runId)) newestNote.set(i.runId, n);
+  });
+  const items = loaded.items.map((i, n): Item => {
+    if (i.kind !== "terminalRun" || newestNote.get(i.runId) !== n) return i;
+    const run = live.get(i.runId)!;
+    live.delete(i.runId);
+    return { ...run, id: i.id, inHistory: true };
   });
   let nextId = loaded.nextId;
   for (const run of live.values()) {
@@ -786,14 +802,20 @@ export function reducer(state: WindowState, a: Action): WindowState {
       }));
     case "terminalRun":
       return withConv(state, a.sessionId, (c) => {
-        const at = c.items.findIndex((i) => i.kind === "terminalRun" && i.runId === a.run.runId);
+        // The live card, never a replayed note of the same run (keryx can hold a snapshot and its exit).
+        const at = c.items.findIndex((i) => i.kind === "terminalRun" && i.runId === a.run.runId && i.replayed !== true);
+        // A "not sent" card a reload dropped is not drawn again by a late update of the store (the process's exit).
+        if (at < 0 && a.run.state === "not-sent") return c;
         if (at < 0) return { ...c, nextId: c.nextId + 1, items: [...c.items, { ...a.run, kind: "terminalRun", id: c.nextId }] };
-        return { ...c, items: c.items.map((i, n) => (n === at ? { ...a.run, kind: "terminalRun" as const, id: i.id } : i)) };
+        return { ...c, items: c.items.map((i, n) => (n === at ? { ...a.run, kind: "terminalRun" as const, id: i.id, ...(i.kind === "terminalRun" && i.inHistory ? { inHistory: true } : {}) } : i)) };
       });
     case "terminalSent":
       return withConv(state, a.sessionId, (c) => {
         const sent = new Set(a.runIds);
-        const isSent = (i: Item): i is TerminalRunItem => i.kind === "terminalRun" && sent.has(i.runId);
+        // A card a replay put in its note's place stays there: the agent's reply to the note follows it. A
+        // replayed note is history and never moves.
+        const isSent = (i: Item): i is TerminalRunItem =>
+          i.kind === "terminalRun" && sent.has(i.runId) && i.inHistory !== true && i.replayed !== true;
         const cards = a.runIds.flatMap((id) => c.items.filter((i): i is TerminalRunItem => isSent(i) && i.runId === id));
         return { ...c, parentTurn: c.parentTurn + 1, items: [...c.items.filter((i) => !isSent(i)), ...cards] };
       });

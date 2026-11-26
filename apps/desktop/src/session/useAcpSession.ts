@@ -976,10 +976,17 @@ export function useAcpSession(cwd: string) {
    */
   useEffect(() => {
     const l = live.current;
+    const turnRunning = (c: { sessionId: string }) => l.reg.turns.has(c.sessionId) || l.reg.telegramTurns.has(c.sessionId);
+    // Issue questions a load queued behind a running turn go before that session's Run results (a load's
+    // resume takes the session first, as it does when it can send at once).
+    for (const c of Object.values(win.convs)) {
+      const front = pendingQueueSend(c, turnRunning(c));
+      if (front?.resumeIssueQuestions && sendPrompt(front.text, c.sessionId, undefined, false, undefined, { resumeIssueQuestions: true })) dispatch({ t: "queueShift", sessionId: c.sessionId });
+    }
     const tookSlot = terminalRuns.flush();
     for (const c of Object.values(win.convs)) {
       if (tookSlot.has(c.sessionId)) continue;
-      const next = pendingQueueSend(c, l.reg.turns.has(c.sessionId) || l.reg.telegramTurns.has(c.sessionId));
+      const next = pendingQueueSend(c, turnRunning(c));
       if (next && sendPrompt(next.text, c.sessionId, undefined, false, undefined, next.issueLaunchId ? { issueLaunchId: next.issueLaunchId } : next.resumeIssueQuestions ? { resumeIssueQuestions: true } : undefined)) dispatch({ t: "queueShift", sessionId: c.sessionId });
     }
   }, [win.convs, sendPrompt, dispatch, terminalRuns]);

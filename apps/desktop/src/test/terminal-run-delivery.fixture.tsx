@@ -7,10 +7,12 @@
 //                   "unknown session" for a held session, a tab closed before the end, a Telegram turn, a
 //                   command in flight (with and without a replay after it), a queued prompt, a released
 //                   session, a keryx shutting down, and a reconnect to a keryx without terminalResults;
-//   load-order      who takes the turn slot once a load holds a session again: resumed issue questions and a
-//                   review sent as the load resolves go before the results that waited for it;
+//   load-order      who takes the turn slot once a load holds a session again: resumed issue questions (sent at
+//                   once, or queued behind a Telegram turn) and a review sent as the load resolves go before the
+//                   results that waited for it;
 //   lost-connection a results prompt with no answer when keryx exits or is restarted: sent again to the next
-//                   keryx, which answers success for runs it had already stored.
+//                   keryx, which answers success for runs it had already stored, and whose replay of the stored
+//                   note leaves the card before the reply that followed it.
 // Nothing waits on the wall clock: `settle` yields to the event loop with no delay and every wait is for a
 // state; the store's busy retry runs on the test's own clock (`useTestClock`).
 import assert from "node:assert/strict";
@@ -25,7 +27,9 @@ const { mockIPC, mockWindows, clearMocks } = await import("@tauri-apps/api/mocks
 type Json = Record<string, unknown>;
 const SCENARIOS = ["delivery", "no-results", "refusals", "load-order", "lost-connection"] as const;
 type Scenario = (typeof SCENARIOS)[number];
-const scenario: Scenario = SCENARIOS.find((s) => s === process.argv[2]) ?? "delivery";
+// No argument is `delivery`; a name this fixture does not know fails instead of running `delivery` in its place.
+const requested = process.argv[2];
+const scenario: Scenario = requested === undefined ? "delivery" : (SCENARIOS.find((s) => s === requested) ?? assert.fail(`unknown scenario ${requested}`));
 const cwd = "/fixture/runs";
 const prompts: Array<{ id: number; params: Json }> = [];
 const initializes: Json[] = [];
@@ -53,7 +57,7 @@ const initializeResult = () => ({
       profile: "shell",
       liveSessions: true,
       ...(takesResultsNow ? { terminalResults: true } : {}),
-      ...(scenario === "refusals" ? { extensions: ["_keryx/command"] } : {}),
+      ...(scenario === "refusals" || scenario === "load-order" ? { extensions: ["_keryx/command"] } : {}),
     },
   },
 });
@@ -488,6 +492,51 @@ async function loadOrder(): Promise<void> {
   await reply(rAgain.id, { stopReason: "end_turn" });
   await idle("idle after r");
   none();
+
+  // R3-LG-001: the questions are queued behind a Telegram turn that holds the slot when the load ends (a
+  // compaction replays the session while the turn runs): when the turn finishes, the queued resume goes before
+  // the result that waited for the load, as it does when it is sent at once.
+  loadAnswer = {};
+  const ui = { focusSessions() {}, mode() {}, model() {}, openProviders() {}, fillComposer() {} };
+  await inbound({ method: "session/update", params: { sessionId: "s1", update: {
+    sessionUpdate: "available_commands_update",
+    availableCommands: [{ name: "compact", description: "Compact the history", _meta: { keryx: { surface: "text" } } }],
+  } } });
+  await waitFor(() => session.state.commands.some((c) => c.name === "compact"), "the compact command");
+  const telegram = (phase: "started" | "finished") => React.act(async () => {
+    await inbound({ method: "session/update", params: { sessionId: "s1", update: { sessionUpdate: "_keryx/telegram/turn", source: "telegram", phase, generation: "g2", updateId: 8 } } });
+  });
+  await telegram("started");
+  await waitFor(() => session.state.busy, "the Telegram turn");
+  let compacting: Promise<boolean> = Promise.resolve(false);
+  await React.act(async () => { compacting = session.runCommand("/compact", ui); });
+  await waitFor(() => commandsHeld.length === 1, "the /compact request");
+  await exit(await run("echo q"), 0);
+  await waitFor(() => card("echo q")?.state === "waiting", "q waiting");
+  loadAnswer = { _meta: { keryx: { pendingIssueQuestions: true } } };
+  await React.act(async () => {
+    await reply(commandsHeld[0]!.id, { text: "Compacted −2 context msgs.", _meta: { keryx: { effects: ["transcript"] } } });
+    await compacting;
+  });
+  await waitFor(() => session.state.held && loads.length > 0, "the replay done");
+  await settle();
+  none();
+  assert.equal(card("echo q")?.state, "waiting");
+  await telegram("finished");
+  // The replay dropped the window's copy of the turn, so its end changes no state of the window: any change
+  // of the window runs the arbiter (the notice is that change).
+  await React.act(async () => session.notify("info", "the window changed"));
+  const resumeQueued = await next("the queued issue questions");
+  assert.deepEqual(resumeQueued.params._meta, { keryx: { resumeIssueQuestions: true } });
+  await settle();
+  none();
+  assert.equal(card("echo q")?.state, "waiting");
+  await reply(resumeQueued.id, { stopReason: "end_turn" });
+  const qAgain = await next("q after the resumed turn");
+  assert.deepEqual(commandsOf(qAgain), ["echo q"]);
+  await reply(qAgain.id, { stopReason: "end_turn" });
+  await idle("idle after q");
+  none();
 }
 
 async function lostConnection(): Promise<void> {
@@ -516,6 +565,38 @@ async function lostConnection(): Promise<void> {
   await reply(yAgain.id, { stopReason: "end_turn" });
   await waitFor(() => card("echo y")?.state === "sent" && !session.state.busy, "y delivered");
   await settle();
+  none();
+
+  // R3-FE-001: keryx had stored z's note and started the follow-up turn when it exited. The restarted keryx
+  // replays the note and the reply that followed it; the card takes the note's place, and sending the result
+  // again (keryx answers every run a duplicate) leaves it there, before that reply.
+  await exit(await run("echo z"), 0);
+  const z = await next("z's prompt");
+  await React.act(async () => { await emit("acp://exit", { code: 1, stderrTail: "killed" }); });
+  await waitFor(() => card("echo z")?.state === "waiting" && session.state.phase === "exited", "z waiting after keryx exited");
+  holdLoads = true;
+  const loadsBefore = loads.length;
+  await React.act(async () => session.restart());
+  await waitFor(() => loads.length === loadsBefore + 1, "the restarted keryx's load of s1");
+  const [zResult] = resultsOf(z);
+  await inbound({ method: "session/update", params: { sessionId: "s1", update: {
+    sessionUpdate: "user_message_chunk", content: { type: "text", text: "$ echo z" },
+    _meta: { keryx: { terminalResult: zResult } },
+  } } });
+  await inbound({ method: "session/update", params: { sessionId: "s1", update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "z printed nothing." } } } });
+  holdLoads = false;
+  await reply(loads.at(-1)!.id, {});
+  const zAgain = await next("z sent again to the restarted keryx");
+  assert.deepEqual(resultsOf(zAgain), resultsOf(z));
+  await reply(zAgain.id, { stopReason: "end_turn", _meta: { keryx: { terminalResults: { stored: 0, duplicates: [zResult!.runId] } } } });
+  await waitFor(() => card("echo z")?.state === "sent" && !session.state.busy, "z delivered");
+  const order = () => session.state.items.map((i) => (i.kind === "terminalRun" ? (i as unknown as Card).command : i.kind));
+  // x and y (their tabs still open) are kept at the end; z's card is in its note's place, before the reply.
+  assert.deepEqual(order().slice(0, 2), ["echo z", "agent"]);
+  // The follow-up turn's own reply streams after the note and the card.
+  await inbound({ method: "session/update", params: { sessionId: "s1", update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: " Done." } } } });
+  await waitFor(() => session.state.items.some((i) => i.kind === "agent" && JSON.stringify(i).includes("Done.")), "the follow-up reply");
+  assert.deepEqual(order().slice(0, 2), ["echo z", "agent"]);
   none();
 }
 

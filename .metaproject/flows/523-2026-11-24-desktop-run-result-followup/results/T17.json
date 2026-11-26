@@ -1,0 +1,60 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "523",
+  "dispatch_id": "523-T17",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Fix round 3 in apps/desktop: all 8 findings fixed, each with a test that was shown red before green (R3-FE-002 by construction). New rules the owner may see: (1) a byte cut that keeps no whole line sends the cut line plus '[the last line is longer than 16 KiB and was not sent]'; (2) a 'not sent' card is final whatever its tab does: a reload drops it and a late exit never draws it again; (3) a card a replay put in its note's place stays there when its result is sent again, before the agent's reply; (4) issue questions queued behind a running turn go before that session's waiting Run results; (5) the desktop's cut-line text is compared with keryx's in the drift test. Concern: after a reload during a Telegram turn the window's copy of that turn is lost, so its end changes no window state and the arbiter does not wake on it (see concerns).",
+  "summary_markdown": "- R3-UX-001: `capRunOutput` returns `RUN_OUTPUT_CUT` + `RUN_OUTPUT_NOTHING_WHOLE` (new export) when no whole line is kept; tests at the two pinned sites assert both lines.\n- R2-UX-001: `runCanChange` is false for `not-sent`; the `terminalRun` reducer action ignores an update for a not-sent run whose card is gone. The store forgets a not-sent run once its process's end was seen.\n- R3-FE-001 (+R3-DG-005): `TerminalRunItem.inHistory`, set by `keepLiveRuns` on a card it swaps into a note's place, kept across `terminalRun` upserts; `terminalSent` leaves marked cards where they are.\n- R3-LG-001: the arbiter effect sends a front-of-queue `resumeIssueQuestions` entry before `terminalRuns.flush()`.\n- R3-AR-001 (+R3-DG-002, R3-TP-004), R2-AR-001 remainder: drift test compares `RUN_OUTPUT_CUT` with keryx's `TERMINAL_OUTPUT_CUT_LINE`; the contract-copy comment lists what is and is not compared.\n- R3-DG-001: `PtyManager::with_ring_cap` (cfg(test)) and a manager-level tail test.\n- R3-FE-002: the delivery fixture fails on an unknown scenario name.",
+  "acceptance": [
+    {
+      "criterion": "Every finding in fix3-desktop.json is fixed with a test that fails without the fix, and the desktop does not regress.",
+      "status": "met",
+      "evidence": "Red then green shown for R3-UX-001 (old two assertions pinned the single line), R2-UX-001 (old test expectation inverted, then the exit re-append failed until the reducer guard), R3-FE-001 (unit test and lost-connection fixture both red with the inHistory exception removed), R3-LG-001 (load-order fixture red with the arbiter loop removed), R3-DG-001 (cargo test red with Pty::tail passing false), R3-AR-001 (expect added; green because T16's keryx constant exists). R3-FE-002: the fixture's new throw cannot be reached before the change, so the test is red by construction. Focused tests: 157 passed, 0 failed across 6 files; cargo pty::tests 20 passed; tsc --noEmit clean; cargo clippy --all-targets -D warnings clean."
+    }
+  ],
+  "artifacts": [],
+  "changed_files": [
+    { "path": "apps/desktop/src/session/terminalRuns.ts", "change": "modified: RUN_OUTPUT_NOTHING_WHOLE and the two-line result when no whole line is kept; contract-copy comment rewritten" },
+    { "path": "apps/desktop/src/session/terminalRuns.test.ts", "change": "modified: both-lines assertions, TERMINAL_OUTPUT_CUT_LINE in the drift test, R3-FE-001 and R2-UX-001 tests, old kept-not-sent expectation replaced" },
+    { "path": "apps/desktop/src/session/reducer.ts", "change": "modified: runCanChange false for not-sent; inHistory marker (keepLiveRuns, terminalRun upsert, terminalSent); terminalRun ignores an update for a dropped not-sent card" },
+    { "path": "apps/desktop/src/session/useAcpSession.ts", "change": "modified: the arbiter sends a queued issue-questions resume before terminalRuns.flush()" },
+    { "path": "apps/desktop/src/test/terminal-run-delivery.fixture.tsx", "change": "modified: unknown scenario fails; load-order queued-resume case behind a Telegram turn; lost-connection replayed-note case; header comment" },
+    { "path": "apps/desktop/src/session/terminalRunDelivery.dom.test.tsx", "change": "modified: unknown scenario name fails" },
+    { "path": "apps/desktop/src-tauri/src/pty.rs", "change": "modified: PtyManager.ring_cap and cfg(test) with_ring_cap; manager-level tail test with a dropping ring" },
+    { "path": ".metaproject/flows/523-2026-11-24-desktop-run-result-followup/results/T17.json", "change": "created: this result" }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 6,
+    "tests_passing": 177,
+    "tests_failing": 0,
+    "coverage_notes": "bun test: terminalRuns.test.ts, reducer.test.ts, terminalRunCard.dom.test.tsx, Transcript.dom.test.tsx, terminalRunDelivery.dom.test.tsx (all 5 fixture scenarios plus the unknown-scenario case), commandRunner.test.ts = 157 passed. cargo test pty::tests = 20 passed. Not run: the whole desktop suite, the rest of the Rust suite, vite build, a live app.",
+    "commands_run": [
+      { "command": "cd apps/desktop && bun test <6 focused files>", "result": "exit 0; 157 passed, 0 failed" },
+      { "command": "cd apps/desktop && bun src/test/terminal-run-delivery.fixture.tsx lost-connection | load-order", "result": "exit 0 both; red with the inHistory exception removed (lost-connection) and with the arbiter loop removed (load-order)" },
+      { "command": "cargo test pty::tests (src-tauri)", "result": "20 passed, 0 failed; the new test red with Pty::tail passing false" },
+      { "command": "cargo clippy --all-targets -- -D warnings (src-tauri)", "result": "clean" },
+      { "command": "bunx tsc --noEmit (apps/desktop)", "result": "clean" }
+    ],
+    "not_verified": [
+      "The whole desktop suite and the rest of the Rust suite (owner instruction: CI is the suite evidence).",
+      "Interaction with T16's keryx changes beyond the existing TERMINAL_OUTPUT_CUT_LINE export (the drift test passed against the checkout as it was).",
+      "A live app: nothing was clicked through."
+    ],
+    "concerns": [
+      "Behaviour changes for the docs lane, one rule each: (a) user_visible: when the last line alone is over 16 KiB (or the host ring kept only part of one line) the result's output is the cut line then '[the last line is longer than 16 KiB and was not sent]', no fragment of that line is sent. (b) user_visible: a 'not sent' card is final whatever its tab does; a reload drops it and it never moves below the newest message. (c) user_visible: a card a replay put in its note's place stays there when its result is sent again, so the agent's reply follows it. (d) needs_operator (spec 3.9.5b wording): issue questions a load queued behind a running turn go before that session's waiting Run results (the PR body's R2-RR-001 bullet is now true for the queued case). (e) The cut-line text is held equal to keryx's by the drift test; the Known-limits line for it can go.",
+      "R3-LG-001 fixture note: the compaction replay replaced the conversation, which dropped the window's copy of the Telegram turn (conv.telegramTurn) while reg.telegramTurns kept it. When that turn then finishes, the reducer sees no turn to end, so window state does not change and the arbiter effect (keyed on win.convs) does not run until something else changes. The fixture triggers a notice to wake it. Not changed here: it needs a decision outside the brief's scope (arbiter dependency on the registry) and exists for any queued prompt in that situation, not only the resume.",
+      "Decision 6 (at-most-once, T16): no desktop change; the card sequence for an unanswered snapshot replaced by its exit was not re-examined here.",
+      "R2-UX-001 keeps the store tracking a not-sent run whose process is still running until its exit is seen (Show tab and the exit stay wired); only the reducer treats it as final."
+    ],
+    "routing_audit": "graph_used: no (not-relevant: the brief named the files); wiki_used: no (not-relevant); ctx_used: yes (keryx ctx rg/read/run); raw_rg_used: no",
+    "workspace_notes": "Nothing was staged, committed or stashed. Scratch backups for mutation checks are in the session scratchpad outside the repository; every mutated file was restored and re-tested green."
+  },
+  "timestamp_utc": "2026-11-26T05:40:00Z"
+}

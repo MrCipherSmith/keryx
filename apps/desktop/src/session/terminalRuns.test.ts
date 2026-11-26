@@ -10,6 +10,7 @@ import {
   RESULTS_PER_PROMPT,
   RUN_COMMAND_MAX_CHARS,
   RUN_OUTPUT_CUT,
+  RUN_OUTPUT_NOTHING_WHOLE,
   RUN_OUTPUT_LINES,
   RUN_OUTPUT_MAX_BYTES,
   type DeliveryOutcome,
@@ -594,6 +595,72 @@ describe("FE-W1-001: a reload of the session keeps the cards of the runs the win
     expect(items.some((i) => i.kind === "terminalRun" && i.runId === done)).toBe(false);
   });
 
+  test("R3-FE-001: a card a replay put in its note's place stays there when its result is sent again, before the agent's reply to the note", async () => {
+    const r = rig();
+    const runId = r.start("make", 5);
+    await r.runs.exited(5, 0);
+    // keryx stored the note, then the connection was lost with no answer: the prompt waits.
+    r.sent[0]!.settle({ kind: "wait" });
+    await r.settled();
+    expect(r.card(runId).state).toBe("waiting");
+    r.dispatch({ t: "loadStart", sessionId: "s1" });
+    r.dispatch({ t: "updates", updates: [
+      { sessionId: "s1", at: 1, update: {
+        sessionUpdate: "user_message_chunk", content: { type: "text", text: "$ make" },
+        _meta: { keryx: { terminalResult: { runId, command: "make", state: "exited", exitCode: 0, durationMs: 0, output: "" } } },
+      } },
+      { sessionId: "s1", at: 2, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "The build passed." } } },
+    ] });
+    r.dispatch({ t: "loadDone", sessionId: "s1", show: false });
+    r.runs.resume("s1");
+    r.runs.flush("s1");
+    expect(r.sent).toHaveLength(2);
+    expect(r.card(runId).state).toBe("sent");
+    expect(r.items().map((i) => i.kind)).toEqual(["terminalRun", "agent"]);
+    // A card with no note in the transcript still goes to the end, after what the turn before it wrote.
+    r.sent[1]!.settle({ kind: "done" });
+    await r.settled();
+    const other = r.start("ls", 6);
+    await r.runs.exited(6, 0);
+    expect(r.items().map((i) => (i.kind === "terminalRun" ? i.runId : i.kind))).toEqual([runId, "agent", other]);
+  });
+
+  test("T16-Q1: keryx replays a snapshot and the exit for one run: the live card takes the exit note's place, the snapshot stays a replayed note, and updates and a re-send touch only the live card", async () => {
+    const r = rig();
+    const dev = r.start("bun run dev", 5);
+    await r.runs.sendNow(dev);
+    // keryx stored the snapshot, then the connection was lost with no answer; the process exits meanwhile.
+    r.sent[0]!.settle({ kind: "wait" });
+    await r.settled();
+    await r.runs.exited(5, 0);
+    r.dispatch({ t: "loadStart", sessionId: "s1" });
+    r.dispatch({ t: "updates", updates: [
+      { sessionId: "s1", at: 1, update: {
+        sessionUpdate: "user_message_chunk", content: { type: "text", text: "$ bun run dev" },
+        _meta: { keryx: { terminalResult: { runId: dev, command: "bun run dev", state: "running", durationMs: 0, output: "" } } },
+      } },
+      { sessionId: "s1", at: 2, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Still starting." } } },
+      { sessionId: "s1", at: 3, update: {
+        sessionUpdate: "user_message_chunk", content: { type: "text", text: "$ bun run dev" },
+        _meta: { keryx: { terminalResult: { runId: dev, command: "bun run dev", state: "exited", exitCode: 0, durationMs: 0, output: "" } } },
+      } },
+    ] });
+    r.dispatch({ t: "loadDone", sessionId: "s1", show: false });
+    const cards = () => r.items().filter((i): i is TerminalRunItem => i.kind === "terminalRun");
+    expect(r.items().map((i) => i.kind)).toEqual(["terminalRun", "agent", "terminalRun"]);
+    expect(cards()[0]).toMatchObject({ runId: dev, replayed: true, state: "sent-while-running" });
+    expect(cards()[1]!.replayed).toBeUndefined();
+    expect(cards()[1]!.inHistory).toBe(true);
+    const snapshot = cards()[0]!;
+    r.runs.resume("s1");
+    r.runs.flush("s1");
+    r.sent.at(-1)!.settle({ kind: "done" });
+    await r.settled();
+    expect(r.items().map((i) => i.kind)).toEqual(["terminalRun", "agent", "terminalRun"]);
+    expect(cards()[0]).toEqual(snapshot);
+    expect(cards()[1]!.state).toBe("sent");
+  });
+
   test("R2-UX-001: a run that can no longer change (closed, could not start, not sent, its tab closed) is not drawn again after a reload; one that can is kept at the end", async () => {
     const r = rig();
     const closed = r.start("sleep 60", 5);
@@ -614,13 +681,29 @@ describe("FE-W1-001: a reload of the session keeps the cards of the runs the win
     };
     const runIds = () => r.items().filter((i): i is TerminalRunItem => i.kind === "terminalRun").map((i) => i.runId);
     reload();
-    // The not-sent run's tab is still open (Show tab, its exit): it can change, and stays with the waiting one.
-    expect(r.items().map((i) => i.kind)).toEqual(["agent", "terminalRun", "terminalRun"]);
-    expect(runIds()).toEqual([long, waits]);
-    // Its tab closed, it can no longer change: a later reload (a /rewind that removed its turn) does not bring it back.
+    // The not-sent run's process had ended, its tab is still open: not sent is final whatever its tab does, so it is not kept.
+    expect(r.items().map((i) => i.kind)).toEqual(["agent", "terminalRun"]);
+    expect(runIds()).toEqual([waits]);
+    expect(r.runs.tracked()).toBe(1);
+    // A later reload (a /rewind that removed its turn) does not bring a closed run back either.
     r.runs.closed(6);
     reload();
     expect(runIds()).toEqual([waits]);
+  });
+
+  test("R2-UX-001: a not-sent run whose process still runs (its tab stays open) is not re-appended on a reload, nor by its exit", async () => {
+    const r = rig();
+    const long = r.start(`echo ${"a".repeat(RUN_COMMAND_MAX_CHARS)}`, 6);
+    await r.runs.sendNow(long);
+    expect(r.card(long)).toMatchObject({ state: "not-sent", tabOpen: true });
+    r.dispatch({ t: "loadStart", sessionId: "s1" });
+    r.dispatch({ t: "updates", updates: [{ sessionId: "s1", at: 1, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Newest reply." } } }] });
+    r.dispatch({ t: "loadDone", sessionId: "s1", show: false });
+    expect(r.items().map((i) => i.kind)).toEqual(["agent"]);
+    // The process ends after the card went: nothing draws it again.
+    await r.runs.exited(6, 0);
+    expect(r.items().map((i) => i.kind)).toEqual(["agent"]);
+    expect(r.runs.tracked()).toBe(0);
   });
 });
 
@@ -785,6 +868,7 @@ interface KeryxTerminalResultContract {
   TERMINAL_RESULTS_MAX: number;
   TERMINAL_COMMAND_MAX_CHARS: number;
   TERMINAL_RESULT_MAX_BYTES: number;
+  TERMINAL_OUTPUT_CUT_LINE: string;
   parseTerminalResults(raw: unknown): { ok: true; results: readonly unknown[] } | { ok: false; reason: string };
 }
 
@@ -798,6 +882,8 @@ describe("AR-001: the desktop's copies of keryx's terminal-results contract are 
     expect(RESULTS_PER_PROMPT).toBe(keryx.TERMINAL_RESULTS_MAX);
     expect(RUN_COMMAND_MAX_CHARS).toBe(keryx.TERMINAL_COMMAND_MAX_CHARS);
     expect(RUN_OUTPUT_MAX_BYTES).toBe(keryx.TERMINAL_RESULT_MAX_BYTES);
+    // keryx's second cut keeps the desktop's cut line first only when it matches this text exactly.
+    expect(RUN_OUTPUT_CUT).toBe(keryx.TERMINAL_OUTPUT_CUT_LINE);
   });
 
   test("a full batch the store builds passes keryx's own validator", async () => {
@@ -872,8 +958,9 @@ describe("capRunOutput", () => {
     expect(euros[0]).toBe(RUN_OUTPUT_CUT);
     expect(euros.slice(1).every((l) => l === "€".repeat(40))).toBe(true);
     expect(encoder.encode(euros.join("\n")).length).toBeLessThanOrEqual(RUN_OUTPUT_MAX_BYTES);
-    // One line longer than the caps: no whole line fits, so only the cut line goes.
-    expect(capRunOutput(`x${"ж".repeat(RUN_OUTPUT_MAX_BYTES)}`)).toBe(RUN_OUTPUT_CUT);
+    // One line longer than the caps: no whole line fits, so no fragment of it goes; the cut line says why nothing follows.
+    expect(capRunOutput(`x${"ж".repeat(RUN_OUTPUT_MAX_BYTES)}`)).toBe(`${RUN_OUTPUT_CUT}\n${RUN_OUTPUT_NOTHING_WHOLE}`);
+    expect(RUN_OUTPUT_NOTHING_WHOLE).toBe("[the last line is longer than 16 KiB and was not sent]");
   });
 
   /** A text whose byte cut lands `at` bytes into `line`, and the text after that line. */
@@ -906,7 +993,7 @@ describe("capRunOutput", () => {
 
   test("LG2-002: output the host already cut starts with the cut line, also under the caps, and within the 200 lines", () => {
     expect(capRunOutput("a\nb", true)).toBe(`${RUN_OUTPUT_CUT}\na\nb`);
-    expect(capRunOutput("", true)).toBe(RUN_OUTPUT_CUT);
+    expect(capRunOutput("", true)).toBe(`${RUN_OUTPUT_CUT}\n${RUN_OUTPUT_NOTHING_WHOLE}`);
     const full = capRunOutput(lines(RUN_OUTPUT_LINES), true).split("\n");
     expect(full).toHaveLength(RUN_OUTPUT_LINES);
     expect(full[0]).toBe(RUN_OUTPUT_CUT);

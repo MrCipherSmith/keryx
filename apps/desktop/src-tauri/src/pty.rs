@@ -423,6 +423,8 @@ pub struct PtyManager {
     next: AtomicU64,
     /// Agent tabs opened so far per window, for their titles.
     agent_counts: Mutex<HashMap<String, u64>>,
+    /// Bytes each new tab keeps; `RING_BYTES` unless a test sets a smaller ring.
+    ring_cap: Option<usize>,
 }
 
 /// The user's shell from the login environment, `/bin/zsh` otherwise.
@@ -434,6 +436,12 @@ pub fn user_shell(env: &HashMap<String, String>) -> String {
 }
 
 impl PtyManager {
+    /// A manager whose tabs keep only `cap` bytes, so a test can make a ring drop output.
+    #[cfg(test)]
+    fn with_ring_cap(cap: usize) -> Self {
+        PtyManager { ring_cap: Some(cap), ..Default::default() }
+    }
+
     pub fn open(&self, spec: OpenSpec<'_>) -> Result<Arc<Pty>, String> {
         let size = PtySize { rows: spec.rows.max(1), cols: spec.cols.max(1), pixel_width: 0, pixel_height: 0 };
         let pair = native_pty_system().openpty(size).map_err(|e| format!("Could not open a terminal: {e}"))?;
@@ -491,7 +499,7 @@ impl PtyManager {
             master: Mutex::new(pair.master),
             writer: Mutex::new(writer),
             killer: Mutex::new(child.clone_killer()),
-            ring: Mutex::new(Ring::new(RING_BYTES)),
+            ring: Mutex::new(Ring::new(self.ring_cap.unwrap_or(RING_BYTES))),
             activity: Condvar::new(),
             sink: Mutex::new(None),
             exit: Mutex::new(None),
@@ -988,6 +996,34 @@ mod tests {
         assert!(mgr.tail("other", id, 2).is_err(), "another window's tab");
         mgr.close("w", id);
         assert!(mgr.tail("w", id, 2).is_err(), "a closed tab");
+    }
+
+    #[test]
+    fn run_command_tail_through_the_manager_says_the_ring_dropped_output_and_starts_on_a_whole_line() {
+        let dir = tempfile::tempdir().unwrap();
+        let env = command_env(dir.path(), "/bin/sh");
+        // 40 lines of 9 bytes each (`line NN` and the terminal's CR LF) through a ring of 60 bytes.
+        let mgr = PtyManager::with_ring_cap(60);
+        let (pty, rx) = open_command(&mgr, dir.path(), &env, r#"i=10; while [ $i -le 49 ]; do echo "line $i"; i=$((i+1)); done"#);
+        let pty = pty.unwrap();
+        let id = pty.id;
+        assert_eq!(exit_code(&rx), Some(0));
+        // The ring really starts inside a line, so a tail that kept it whole would start with a fragment.
+        assert!(!pty.output_since(0).starts_with(b"line "), "the cap must cut a line for this test to mean anything");
+        let tail = mgr.tail("w", id, 100).unwrap();
+        assert!(tail.truncated, "the manager's tail must carry the ring's dropped flag");
+        let lines: Vec<&str> = tail.text.split('\n').collect();
+        assert!(!lines.is_empty() && lines.len() < 40, "{lines:?}");
+        assert!(lines.iter().all(|l| l.starts_with("line ") && l.len() == 7), "{lines:?}");
+        assert_eq!(lines[lines.len() - 1], "line 49");
+        // A tab that kept everything says so.
+        let whole_mgr = PtyManager::default();
+        let (whole, rx) = open_command(&whole_mgr, dir.path(), &env, "echo hi");
+        let whole = whole.unwrap();
+        assert_eq!(exit_code(&rx), Some(0));
+        assert_eq!(whole.tail(5), PtyTail { text: "hi".into(), truncated: false });
+        mgr.close_all();
+        whole_mgr.close_all();
     }
 
     #[test]

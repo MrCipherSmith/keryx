@@ -10,12 +10,14 @@ import type { RunOrigin } from "../panels/panelBus";
 import { runCanChange, type Action, type TerminalRunState, type TerminalRunView } from "./reducer";
 
 // The wire limits below are copies of keryx's own (`src/acp/terminal-result.ts`: TERMINAL_RESULTS_MAX,
-// TERMINAL_COMMAND_MAX_CHARS, TERMINAL_RESULT_MAX_BYTES, its runId pattern and TerminalResult). The web
-// view cannot import that module, which reads node:fs through its redaction. terminalRuns.test.ts loads it
-// and fails when a copy differs, or when a batch built here does not pass keryx's validator. That test is
-// in the desktop suite, which CI runs (desktop-check.yml) for a change under apps/desktop/** or to
-// src/acp/terminal-result.ts or src/session/terminal-note.ts; the replayed note's shape (reducer.ts
-// terminalNoteOf) and keryx's refusal conditions (useAcpSession.ts) are copies no test compares.
+// TERMINAL_COMMAND_MAX_CHARS, TERMINAL_RESULT_MAX_BYTES, TERMINAL_OUTPUT_CUT_LINE, its runId pattern and
+// TerminalResult). The web view cannot import that module, which reads node:fs through its redaction.
+// terminalRuns.test.ts loads it and fails when one of the three limits or the cut line differs, or when a
+// batch built here does not pass keryx's validator. That test is in the desktop suite, which CI runs
+// (desktop-check.yml) for a change under apps/desktop/** or to src/acp/terminal-result.ts or
+// src/session/terminal-note.ts. The copies it does not compare: the runId pattern (newRunId; a batch it
+// builds passes the validator, which covers a mismatch only through the ids the test makes), the replayed
+// note's shape (reducer.ts terminalNoteOf) and keryx's refusal conditions (useAcpSession.ts).
 
 /** The most results one prompt carries (keryx refuses more); the rest go after that turn ends. */
 export const RESULTS_PER_PROMPT = 8;
@@ -32,6 +34,12 @@ export const BUSY_RETRY_MAX_MS = 30_000;
 
 /** The first line of an output that lost its beginning to the line or byte cap: the agent is told it is a tail. */
 export const RUN_OUTPUT_CUT = "[… earlier output was cut; the end of the output follows]";
+
+/**
+ * The line after the cut line when no whole line fits (the last line alone is over the cap, or the host kept
+ * only part of one line): the end the cut line promises is not there, and the output is not empty.
+ */
+export const RUN_OUTPUT_NOTHING_WHOLE = "[the last line is longer than 16 KiB and was not sent]";
 
 /** What the card says when keryx's `initialize` did not offer `_meta.keryx.terminalResults`. */
 export const RESULTS_UNSUPPORTED = "this keryx does not take run results";
@@ -141,7 +149,7 @@ const NEWLINE = 0x0a;
  * `RUN_OUTPUT_CUT` line, counted within both caps. keryx redacts what it is sent, so a byte cut never
  * starts inside a line: the partial line is left out, and no fragment of a secret's line (a token whose
  * prefix was cut off, a value without its `NAME=`) reaches it. A last line longer than the caps leaves
- * only the cut line.
+ * only the cut line and the `RUN_OUTPUT_NOTHING_WHOLE` line.
  */
 export function capRunOutput(text: string, truncated = false): string {
   const body = text.endsWith("\n") ? text.slice(0, -1) : text;
@@ -161,7 +169,7 @@ export function capRunOutput(text: string, truncated = false): string {
     }
   }
   const kept = new TextDecoder().decode(bytes.subarray(start));
-  return kept === "" ? RUN_OUTPUT_CUT : `${RUN_OUTPUT_CUT}\n${kept}`;
+  return kept === "" ? `${RUN_OUTPUT_CUT}\n${RUN_OUTPUT_NOTHING_WHOLE}` : `${RUN_OUTPUT_CUT}\n${kept}`;
 }
 
 const errText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
