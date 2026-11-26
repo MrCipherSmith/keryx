@@ -4,6 +4,7 @@ import { reviewSourceTool } from "./read-review-source";
 import { applyPatchTool } from "./apply-patch-tool";
 import { shellExecTool } from "./shell-exec-tool";
 import { findLinkedProject, readLinkedProjects } from "../../../lib/linked-projects";
+import { resolveProjectRoot } from "../../../lib/contained-path";
 import { assignedReviewerWave } from "../../../review/reviewer-activity";
 import { CONTEXT_FILE_DENYLIST, SUBAGENT_CONTEXT_FILES_MAX_BYTES, SUBAGENT_CONTEXT_FILES_MAX_COUNT } from "../../../lib/subagent-context";
 export { SUBAGENT_CONTEXT_FILES_MAX_BYTES } from "../../../lib/subagent-context";
@@ -1398,7 +1399,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       if (input.project !== undefined && (typeof input.project !== "string" || input.project.trim() === "")) {
         return { status: "Error", output: "spawn_subagent project must be the name of a linked project", isError: true };
       }
-      const linked = await readLinkedProjects(deps.cwd).catch(() => ({ projects: [], warnings: [] }));
+      const linked = await readLinkedProjects(resolveProjectRoot(deps.cwd)).catch(() => ({ projects: [], warnings: [] }));
       let linkedProject: { name: string; root: string } | undefined;
       if (typeof input.project === "string") {
         if (rawCwd !== undefined) {
@@ -1418,7 +1419,9 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           };
         }
       }
-      const cwdResolution = await resolveSubagentCwd(linkedProject?.root ?? rawCwd, deps.cwd, linked.projects.map((project) => project.root));
+      // Only a named `project` reaches a linked root: a raw `cwd` keeps the old boundary (root, descendant, worktree),
+      // so a path a model composes cannot land in an arbitrary linked folder.
+      const cwdResolution = await resolveSubagentCwd(linkedProject?.root ?? rawCwd, deps.cwd, linkedProject !== undefined ? [linkedProject.root] : []);
       if (!cwdResolution.ok) {
         return { status: "Error", output: cwdResolution.reason, isError: true };
       }
@@ -2396,10 +2399,43 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         maxRounds,
         ...(configuredMaxToolCalls === undefined ? {} : { maxToolCalls: configuredMaxToolCalls }),
         subagentBudget: advisoryToolCalls === undefined ? {} : { advisoryToolCalls },
+        // A child under the parent's gate meets the parent's publish-lease floor for `git push`.
+        ...(inheritsGate && parentGate?.busLeases !== undefined ? { busLeases: parentGate.busLeases } : {}),
       };
 
       let assistant = "";
       let closed = false;
+      // Approvals the child is waiting on: the deadline stops while the operator decides.
+      const approvalWaitListeners = new Set<(waiting: boolean) => void>();
+      let pendingApprovals = 0;
+      const approvalWaits = {
+        onWait(listener: (waiting: boolean) => void) {
+          approvalWaitListeners.add(listener);
+          return () => { approvalWaitListeners.delete(listener); };
+        },
+      };
+      const parentRoot = path.resolve(deps.cwd);
+      const parentApprove = inheritsGate ? parentGate?.requestApproval : undefined;
+      /**
+       * The parent's approver, guarded for a child: an approval asked after the child was abandoned
+       * (deadline, abort) is refused unseen, and one answered after that is ignored; a call in another
+       * folder than the parent's root carries `foreignRoot`, so no rule granted for the parent's
+       * project answers it and the answer is never remembered.
+       */
+      const childApprove: NonNullable<AgentIO["requestApproval"]> = async (tool, preview, meta) => {
+        if (parentApprove === undefined || closed || composed.signal.aborted) return false;
+        const foreign = path.resolve(cwd) !== parentRoot;
+        const childMeta = meta === undefined ? undefined : { ...meta, subagent: true as const, ...(foreign ? { foreignRoot: path.resolve(cwd) } : {}) };
+        pendingApprovals += 1;
+        if (pendingApprovals === 1) for (const listener of approvalWaitListeners) listener(true);
+        try {
+          const answer = await parentApprove(tool, preview, childMeta);
+          return answer === true && !closed && !composed.signal.aborted;
+        } finally {
+          pendingApprovals -= 1;
+          if (pendingApprovals === 0) for (const listener of approvalWaitListeners) listener(false);
+        }
+      };
       // Flow 460 (H): the child's token use, summed over its provider requests; written into `save_result_to` as a
       // `KERYX_USAGE` line so `review ledger build` can state the round's spend. Unknown (no line) when nothing reported.
       const childUsage = { tokens_in: 0, tokens_out: 0, known: false };
@@ -2505,10 +2541,15 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         // parent could not, and a `general` spawn is itself never auto-approved in `ask` mode.
         ...(inheritsGate && parentGate !== undefined
           ? {
-              requestApproval: parentGate.requestApproval!,
+              requestApproval: childApprove,
               ...(parentGate.permissionMode !== undefined ? { permissionMode: parentGate.permissionMode } : {}),
               ...(parentGate.readOnly !== undefined ? { readOnly: parentGate.readOnly } : {}),
-              ...(parentGate.onAutoApproved !== undefined ? { onAutoApproved: parentGate.onAutoApproved } : {}),
+              ...(parentGate.onAutoApproved !== undefined
+                ? { onAutoApproved: (tool: string, input: string, meta: Parameters<NonNullable<AgentIO["onAutoApproved"]>>[2]) =>
+                    parentGate.onAutoApproved!(tool, input, { ...meta, subagent: true }) }
+                : {}),
+              // The parent's `/rewind` checkpoint sees the child's writes too.
+              ...(parentGate.beforeMutation !== undefined ? { beforeMutation: parentGate.beforeMutation } : {}),
             }
           : { requestApproval: async () => false }),
       };
@@ -2755,7 +2796,12 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           "direct, targeted lookup (exact file path, exact symbol) over a broad/guessed one, and fall " +
           "back to a different tool rather than repeating a failed call.\n\n" +
           "Return a concise summary of findings and any recommended next steps for the parent agent.";
-        const turn = runAgentTurn(io, childDeps, history, userLine, { signal: composed.signal });
+        // A parent that already read untrusted content hands the child a tainted session: its
+        // mutating calls are asked as untrusted-origin calls, as the parent's own would be.
+        const turn = runAgentTurn(io, childDeps, history, userLine, {
+          signal: composed.signal,
+          ...(inheritsGate && toolCtx?.untrustedContentSeen === true ? { untrustedPrompt: true } : {}),
+        });
         deps.onNativeTurn?.(turn);
         // D2b (flow 171, Phase D): the child's OWN `finishReason` (D2a,
         // `commands/agent.ts`) is only meaningful once `turn` has actually
@@ -2766,7 +2812,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         // or any `io.on*` callback.
         let turnResult: RunAgentTurnResult | undefined;
         if (deadlineMs > 0) {
-          const deadline = reviewerDeadline(deadlineMs, activity);
+          const deadline = reviewerDeadline(deadlineMs, activity, approvalWaits);
           let outcome: "done" | "timeout";
           try {
             outcome = await Promise.race([turn.then(() => "done" as const), deadline.expired]);

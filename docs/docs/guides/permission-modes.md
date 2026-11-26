@@ -36,11 +36,14 @@ authority.
 A `read_only` subagent (the default) has no shell and no writes, so starting
 one never asks. A `general` subagent has `shell_exec` and `apply_patch`, and
 each of its calls goes through **your** session's gate: the same mode, the same
-approval prompt, the same plan posture. It can do nothing you could not do
-yourself in this session, and starting it asks in `ask` mode. The subagent may
+approval prompt, the same plan posture, the same publish leases, and its writes
+land in your `/rewind` checkpoint. Starting it asks in `ask` mode. The subagent may
 run in another folder: one of the project's [linked projects](../cli-reference.md#ref)
 (`spawn_subagent` with `project: "<name>"`). Its prompt then points it at that
-folder's own `CLAUDE.md`, `AGENTS.md` and keryx index.
+folder's own `CLAUDE.md`, `AGENTS.md` and keryx index. Starting a subagent in a
+linked project always asks, even a `read_only` one, because it reads outside this
+project. Its commands there are asked with the folder named, no saved shell rule
+answers them, and "always allow" is not offered for them.
 
 ## Round limit per turn
 

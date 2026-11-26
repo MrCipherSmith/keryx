@@ -2201,7 +2201,8 @@ export async function runAgentRepl(
       // pattern from before the lease existed must not silently answer for it
       // either (see `rememberExactShellGrant`'s own `publishLease` guard below).
       const rememberable =
-        !evaled.destructive && !evaled.credentials && !evaled.sacReviewConfirmation && !evaled.publishLease && !evaled.hookAsk && !evaled.untrustedOrigin && evaled.hcLaunch === undefined;
+        !evaled.destructive && !evaled.credentials && !evaled.sacReviewConfirmation && !evaled.publishLease && !evaled.hookAsk && !evaled.untrustedOrigin && evaled.hcLaunch === undefined &&
+        evaled.foreignRoot === undefined;
       const prompt = rememberable ? "[y/N/A=always] " : "[y/N] ";
       out(`\n${GUTTER}${style.yellow(`Run: ${evaled.command}`)} ${style.dim(prompt)}`);
       const answer = ((await readLine()) ?? "").trim();

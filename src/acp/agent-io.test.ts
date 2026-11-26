@@ -214,6 +214,24 @@ describe("createAcpAgentIo — a call approved before it is announced", () => {
     expect(results[0]!.status).toBe("completed");
   });
 
+  test("a subagent's ask gets its own id and is closed after the answer, even when the parent has the same call open", async () => {
+    const input = JSON.stringify({ command: "echo hi" });
+    const { updates, asks, io } = collectGated(ACP_PERMISSION_OPTION_IDS.allowOnce);
+    io.onToolCall?.("shell_exec", input); // the parent's own call, still running
+    const parentId = toolCalls(updates)[0]!.toolCallId;
+    expect(await io.requestApproval?.("shell_exec", input, { fingerprint: "fp", destructive: false, subagent: true })).toBe(true);
+    const childId = asks[0]!.toolCall.toolCallId;
+    expect(childId).not.toBe(parentId);
+    expect(toolResults(updates).filter((u) => u.toolCallId === childId).at(-1)?.status).toBe("completed");
+    // The parent's entry is untouched and still closes on its own result.
+    io.onToolResult?.("shell_exec", { output: "hi", isError: false });
+    expect(toolResults(updates).filter((u) => u.toolCallId === parentId).at(-1)?.status).toBe("completed");
+    // A subagent's auto-approval opens nothing.
+    const before = toolCalls(updates).length;
+    io.onAutoApproved?.("shell_exec", input, { destructive: false, credentials: false, subagent: true });
+    expect(toolCalls(updates)).toHaveLength(before);
+  });
+
   test("a denial closes the announced id, with no second announcement (onToolCall never runs on that path)", async () => {
     const input = JSON.stringify({ command: "rm -rf /" });
     const { updates, asks, io } = collectGated(ACP_PERMISSION_OPTION_IDS.rejectOnce);

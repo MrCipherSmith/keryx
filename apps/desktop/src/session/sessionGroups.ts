@@ -83,26 +83,48 @@ export function groupSessions(sessions: readonly SessionInfo[], view: SidebarVie
   const visible = sessions.filter((s) => isArchived(s) === (view === "archived")).sort(byRecent);
   // A child is grouped with the root it descends from, so the tree is never split across days.
   const byId = new Map(visible.map((s) => [s.sessionId, s] as const));
+  const roots = new Map<string, SessionInfo>();
   const rootOf = (s: SessionInfo): SessionInfo => {
+    const known = roots.get(s.sessionId);
+    if (known !== undefined) return known;
+    const path: SessionInfo[] = [s];
     const seen = new Set<string>([s.sessionId]);
     let current = s;
     for (;;) {
       const parent = parentOf(current);
       const next = parent === undefined ? undefined : byId.get(parent);
-      if (next === undefined) return current;
-      // A parent cycle (a corrupt store): the session is its own root rather than lost.
-      if (seen.has(next.sessionId)) return s;
-      seen.add(next.sessionId);
-      current = next;
+      const root = next === undefined ? current : roots.get(next.sessionId);
+      if (root !== undefined) {
+        for (const member of path) roots.set(member.sessionId, root);
+        return root;
+      }
+      // A parent cycle (a corrupt store): the session is its own root rather than lost. Only this
+      // session is settled; each other member of the cycle settles the same way when asked.
+      if (seen.has(next!.sessionId)) {
+        roots.set(s.sessionId, s);
+        return s;
+      }
+      seen.add(next!.sessionId);
+      path.push(next!);
+      current = next!;
     }
   };
-  const inView = visible.filter((s) => rootOf(s) === s).flatMap((root) => [root, ...visible.filter((s) => s !== root && rootOf(s) === root)]);
+  // Each root, then its descendants in the given (recent-first) order: one pass, no rescans.
+  // Roots keep their own (recent-first) order, however recent their descendants are.
+  const members = new Map<string, SessionInfo[]>();
+  for (const s of visible) if (rootOf(s) === s) members.set(s.sessionId, [s]);
+  for (const s of visible) {
+    const root = rootOf(s);
+    if (root !== s) members.get(root.sessionId)?.push(s);
+  }
+  const inView = [...members.values()].flat();
   const groups: SessionGroup[] = [];
-  const pinnedRoot = (s: SessionInfo) => sessionFlags(rootOf(s)).pinnedAt !== undefined;
-  const rest = view === "active" ? inView.filter((s) => !pinnedRoot(s)) : inView;
+  // A session pinned itself, or under a pinned root, shows in Pinned; a pinned child leaves its day group.
+  const pinned = (s: SessionInfo) => sessionFlags(s).pinnedAt !== undefined || sessionFlags(rootOf(s)).pinnedAt !== undefined;
+  const rest = view === "active" ? inView.filter((s) => !pinned(s)) : inView;
   if (view === "active") {
-    const pinned = inView.filter(pinnedRoot);
-    if (pinned.length > 0) groups.push({ label: PINNED_GROUP, sessions: pinned });
+    const pinnedSessions = inView.filter(pinned);
+    if (pinnedSessions.length > 0) groups.push({ label: PINNED_GROUP, sessions: pinnedSessions });
   }
   for (const s of rest) {
     const label = dayBucket(rootOf(s).updatedAt, now);

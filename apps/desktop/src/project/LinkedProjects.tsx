@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
 import { Spinner } from "../components/ui";
 import { errMessage } from "../lib/format";
@@ -23,24 +23,29 @@ export function LinkedProjectsSettings({ cwd }: { cwd: string }) {
   const [result, setResult] = useState<LinkedProjectsResult | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  // Only the newest request answers: the first load must not overwrite an Add or Remove that finished first.
+  const latest = useRef(0);
   const run = useCallback(async (key: string, action: () => Promise<LinkedProjectsResult>) => {
+    const request = ++latest.current;
     setBusy(key);
     setError("");
     try {
-      setResult(await action());
+      const next = await action();
+      if (request === latest.current) setResult(next);
     } catch (failure) {
-      setError(errMessage(failure));
+      if (request === latest.current) setError(errMessage(failure));
     } finally {
       setBusy(null);
     }
   }, []);
   useEffect(() => {
-    let mounted = true;
+    const request = ++latest.current;
     void listLinkedProjects(cwd).then(
-      (loaded) => { if (mounted) setResult(loaded); },
-      (failure: unknown) => { if (mounted) setError(errMessage(failure)); },
+      (loaded) => { if (request === latest.current) setResult(loaded); },
+      (failure: unknown) => { if (request === latest.current) setError(errMessage(failure)); },
     );
-    return () => { mounted = false; };
+    // Unmounting or a new `cwd` retires this load.
+    return () => { latest.current += 1; };
   }, [cwd]);
   const add = async () => {
     const folder = await pickFolder("Link a folder to this project");

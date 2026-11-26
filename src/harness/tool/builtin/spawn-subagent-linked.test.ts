@@ -1,8 +1,9 @@
 // `spawn_subagent` in a linked project (`.metaproject/linked-projects.json`), and a
 // `general` child that answers its mutating calls through the parent's own gate.
 //
-// What these pin: `project: "<name>"` roots the child in that folder; a cwd inside a
-// linked project is accepted like one inside the root; anything else stays refused;
+// What these pin: `project: "<name>"` roots the child in that folder, and only that
+// names a linked project: a raw cwd outside the root stays refused, inside a linked
+// project too;
 // a `general` child gets shell_exec/apply_patch ONLY when the parent turn hands over
 // its gate, and then every mutating call goes through that gate (approver, mode),
 // so the child can do nothing the parent could not. `read_only` never changes.
@@ -15,7 +16,8 @@ import { createSpawnSubagentTool, type SpawnSubagentToolDeps } from "./spawn-sub
 import { addLinkedProject } from "../../../lib/linked-projects";
 import type { NormalizedEvent, NormalizedRequest, ProviderPort, StreamOptions } from "../../provider/types";
 import type { PermissionMode } from "../../../commands/permission-mode";
-import { runAgentTurn, type AgentIO } from "../../../commands/agent";
+import { runAgentTurn, type AgentIO, type ApprovalMeta } from "../../../commands/agent";
+import { reviewerDeadline } from "./reviewer-activity";
 import type { InteractiveTool, InteractiveToolContext } from "./interactive-tools";
 
 const CAPABILITIES = {
@@ -101,16 +103,23 @@ test("project names a linked project: the child is rooted there and told whose r
   expect(toolNames(requests[0])).not.toContain("shell_exec");
 });
 
-test("a cwd inside a linked project is accepted; an unlinked sibling is still refused", async () => {
-  const { home, backend, other } = await organiser();
+test("a raw cwd never reaches a linked project or an unlinked sibling; only project does", async () => {
+  const { home, other } = await organiser();
   const { provider, requests } = childProvider();
   const tool = spawnTool(home, provider);
+  // A linked root widens the read boundary only for the spawn that names it: a raw cwd that
+  // happens to fall inside one is refused, so the model cannot reach it without the project field.
   const inside = await tool.invoke({ task: "look", mode: "read_only", cwd: "../backend/src" });
-  expect(inside.isError).toBe(false);
-  expect(userText(requests[0])).toContain(`Project root: ${path.join(backend, "src")}`);
+  expect(inside.isError).toBe(true);
   const outside = await tool.invoke({ task: "look", mode: "read_only", cwd: other });
   expect(outside.isError).toBe(true);
-  expect(outside.output).toContain("a linked project");
+  expect(requests).toHaveLength(0);
+});
+
+test("a linked project's folder is refused when it would hold the project or everything", async () => {
+  const { home } = await organiser();
+  await expect(addLinkedProject(home, path.dirname(home), { name: "parent" })).rejects.toThrow("it contains this project");
+  await expect(addLinkedProject(home, "/", { name: "root" })).rejects.toThrow(/filesystem root|contains this project/);
 });
 
 test("an unknown project, project with cwd, and project with an external runtime are refused before anything starts", async () => {
@@ -134,14 +143,17 @@ test("a general child without the parent's gate stays read-only and refuses ever
   expect(toolNames(requests[0])).not.toContain("apply_patch");
 });
 
-function gate(mode: PermissionMode, answer: boolean) {
+function gate(mode: PermissionMode, answer: boolean | (() => Promise<boolean>)) {
   const asked: string[] = [];
+  const metas: Array<ApprovalMeta | undefined> = [];
   return {
     asked,
+    metas,
     parentGate: {
-      requestApproval: async (tool: string) => {
+      requestApproval: async (tool: string, _input: string, meta?: ApprovalMeta) => {
         asked.push(tool);
-        return answer;
+        metas.push(meta);
+        return typeof answer === "boolean" ? answer : answer();
       },
       permissionMode: () => mode,
     },
@@ -231,4 +243,59 @@ test("the agent loop hands its own gate to spawn_subagent, and to no other tool"
   expect(approvals.slice(before)).toEqual(["shell_exec"]);
   expect(seen["list_probe"]).toBeDefined();
   expect(seen["list_probe"]?.parentGate).toBeUndefined();
+});
+
+test("a child's call in a linked project names the folder, and is marked as a subagent's", async () => {
+  const { home, backend } = await organiser();
+  const { provider } = childProvider({ toolName: "shell_exec", input: { command: "echo hi" } });
+  const { metas, parentGate } = gate("ask", false);
+  await spawnTool(home, provider).invoke({ task: "run it", mode: "general", project: "be" }, { parentGate });
+  expect(metas[0]).toMatchObject({ foreignRoot: backend, subagent: true });
+});
+
+test("a child in the parent's own root carries no foreign folder", async () => {
+  const { home } = await organiser();
+  const { provider } = childProvider({ toolName: "shell_exec", input: { command: "echo hi" } });
+  const { metas, parentGate } = gate("ask", false);
+  await spawnTool(home, provider).invoke({ task: "run it", mode: "general" }, { parentGate });
+  expect(metas[0]?.subagent).toBe(true);
+  expect(metas[0]?.foreignRoot).toBeUndefined();
+});
+
+test("a parent that read untrusted content hands the child the taint", async () => {
+  const { home } = await organiser();
+  const { provider } = childProvider({ toolName: "shell_exec", input: { command: "echo hi" } });
+  const { metas, parentGate } = gate("trust", false);
+  await spawnTool(home, provider).invoke({ task: "run it", mode: "general", project: "be" }, { parentGate, untrustedContentSeen: true });
+  // In `trust` mode a clean call would run unasked; a tainted one is asked, as untrusted-origin.
+  expect(metas).toHaveLength(1);
+  expect(metas[0]?.untrustedOrigin).toBe(true);
+});
+
+test("a yes that arrives after the parent turn was interrupted does not run the child's call", async () => {
+  const { home, backend } = await organiser();
+  const { provider } = childProvider({ toolName: "shell_exec", input: { command: "echo hi > made.txt" } });
+  const controller = new AbortController();
+  const { asked, parentGate } = gate("ask", async () => {
+    controller.abort();
+    return true;
+  });
+  await spawnTool(home, provider).invoke({ task: "make a file", mode: "general", project: "be" }, { parentGate, signal: controller.signal });
+  expect(asked).toEqual(["shell_exec"]);
+  expect(existsSync(path.join(backend, "made.txt"))).toBe(false);
+});
+
+test("the child's deadline stops while an approval waits on the operator", async () => {
+  let notify!: (waiting: boolean) => void;
+  const approvals = { onWait: (listener: (waiting: boolean) => void) => { notify = listener; return () => {}; } };
+  const deadline = reviewerDeadline(40, undefined, approvals);
+  let expired = false;
+  void deadline.expired.then(() => { expired = true; });
+  notify(true);
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  expect(expired).toBe(false);
+  notify(false);
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  expect(expired).toBe(true);
+  deadline.dispose();
 });

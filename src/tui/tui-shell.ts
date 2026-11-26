@@ -1575,8 +1575,9 @@ export function isShellApproved(answer: string): boolean {
  * `publishLease`/`credentials` already get) is unit-testable without
  * mounting the whole TUI shell.
  */
-export function shouldAutoApproveReadOnlySpawn(mode: string, hookAsk: boolean | undefined, untrustedOrigin?: boolean): boolean {
-  return mode === "read_only" && hookAsk !== true && untrustedOrigin !== true;
+export function shouldAutoApproveReadOnlySpawn(mode: string, hookAsk: boolean | undefined, untrustedOrigin?: boolean, linkedProject?: boolean): boolean {
+  // A child rooted in a linked project reads another repository: the operator says yes to that once per spawn.
+  return mode === "read_only" && hookAsk !== true && untrustedOrigin !== true && linkedProject !== true;
 }
 
 /**
@@ -6445,6 +6446,16 @@ export async function launchTuiAgentShell(opts: {
           content: otui.t`${dimChunk(otui, approvalCauseLine(causeOfMeta(tool, meta), meta?.hcLaunch))}`,
         }),
       );
+      // A subagent's call in a linked project: say where it runs, since the card shows only the command.
+      const foreignRoot = meta !== undefined && "foreignRoot" in meta ? meta.foreignRoot : undefined;
+      if (typeof foreignRoot === "string") {
+        transcript.add(
+          new otui.TextRenderable(r, {
+            id: `ap${uid++}`,
+            content: otui.t`${roleChunk(otui, "attention", `in linked project ${foreignRoot} — a subagent's call; not remembered`)}`,
+          }),
+        );
+      }
     };
     const requestApprovalLocally: LocalApproval = async (tool, inputJson, meta, race) => {
       closeHistory();
@@ -6511,14 +6522,16 @@ export async function launchTuiAgentShell(opts: {
       // Multi-agent spawn: auto-allow read_only; ask for general.
       if (tool === "spawn_subagent") {
         let mode = "read_only";
+        let linkedProject: string | undefined;
         let taskPreview = inputJson;
         try {
           const parsed: unknown = JSON.parse(inputJson);
           if (parsed !== null && typeof parsed === "object") {
-            const o = parsed as { mode?: unknown; task?: unknown; label?: unknown };
+            const o = parsed as { mode?: unknown; task?: unknown; label?: unknown; project?: unknown };
             if (o.mode === "general" || o.mode === "read_only") {
               mode = o.mode;
             }
+            if (typeof o.project === "string" && o.project.trim() !== "") linkedProject = o.project.trim();
             if (typeof o.task === "string") {
               taskPreview = o.task.length > 80 ? `${o.task.slice(0, 77)}…` : o.task;
             }
@@ -6532,7 +6545,7 @@ export async function launchTuiAgentShell(opts: {
         // shortcut. A `PreToolUse` hook that tightened THIS read_only spawn to
         // `ask` must actually reach the operator, exactly like the `general`
         // branch below, not be waved through by the read_only fast path.
-        if (shouldAutoApproveReadOnlySpawn(mode, meta?.hookAsk, meta?.untrustedOrigin)) {
+        if (shouldAutoApproveReadOnlySpawn(mode, meta?.hookAsk, meta?.untrustedOrigin, linkedProject !== undefined)) {
           // Auto-approved without a prompt, so the transcript line is the ONLY
           // record that a child was started and at what privilege. It is not
           // dimmed: an auto-approval the user cannot notice is an auto-approval
@@ -6546,14 +6559,17 @@ export async function launchTuiAgentShell(opts: {
           return true;
         }
         chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
+        if (linkedProject !== undefined) taskPreview = `in ${linkedProject}: ${taskPreview}`;
         setMainAgent("blocked", "approval", { kind: "permission", text: `subagent (${mode}): ${taskPreview}` });
         addCauseLine(tool, meta);
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
             title:
               mode === "read_only"
-                ? meta?.hookAsk === true ? "Spawn read-only subagent? (policy hook asked)" : "Spawn read-only subagent? (follows untrusted content)"
-                : "Spawn general subagent?",
+                ? meta?.hookAsk === true ? "Spawn read-only subagent? (policy hook asked)"
+                  : linkedProject !== undefined && meta?.untrustedOrigin !== true ? `Spawn read-only subagent in linked project ${linkedProject}?`
+                  : "Spawn read-only subagent? (follows untrusted content)"
+                : linkedProject !== undefined ? `Spawn general subagent in linked project ${linkedProject}?` : "Spawn general subagent?",
             subtitle: taskPreview,
             cancelId: "deny",
             onOpen: () => {
@@ -6565,7 +6581,9 @@ export async function launchTuiAgentShell(opts: {
               {
                 id: "allow",
                 label: "Allow subagent",
-                description: "Run bounded child (still no shell in v1)",
+                description: mode === "read_only"
+                  ? "Run a bounded child that only reads (no shell, no writes)"
+                  : "Run a bounded child with shell and apply_patch; each of its writes asks as yours would",
                 recommended: true,
               },
               { id: "deny", label: "Deny", description: "Do not spawn" },
@@ -6890,7 +6908,7 @@ export async function launchTuiAgentShell(opts: {
       addCauseLine(tool, meta);
       const hub = hubControls(cmd, "once", SHELL_TOOL_NAMES.has(tool) && meta !== undefined &&
         !destructive && !ev.credentials && !ev.sacReviewConfirmation && !ev.publishLease &&
-        ev.hcLaunch === undefined);
+        ev.hcLaunch === undefined && ev.foreignRoot === undefined);
       const choice = await chrome.withOverlay(() =>
         pickShellApproval(
           otui,
@@ -6915,7 +6933,9 @@ export async function launchTuiAgentShell(opts: {
           ev.publishLeaseDetail,
           // Flow 306 (W6 T9): never offer to remember while a `PreToolUse`
           // hook asked about this specific call.
-          ev.hookAsk || ev.untrustedOrigin,
+          // A subagent's call in a linked project is never remembered: a rule saved here would answer
+          // for this project's commands, not that repository's.
+          ev.hookAsk || ev.untrustedOrigin || ev.foreignRoot !== undefined,
           causeOfMeta(tool, meta),
           meta?.hcLaunch,
         ),

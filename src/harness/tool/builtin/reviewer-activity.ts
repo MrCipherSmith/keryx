@@ -83,8 +83,14 @@ export async function desktopReviewerDispatchRoute(
   return isReviewAssignmentTier(tier) ? { tier, ...(typeof key === "string" && /^[a-f0-9]{64}$/.test(key) && { assignmentKey: key }) } : undefined;
 }
 
-/** A deadline counts execution time. Only an authenticated operator question can suspend it. */
-export function reviewerDeadline(ms: number, activity?: ReviewerActivity) {
+/** Something that reports when its run is waiting on the operator, so a deadline stops counting. */
+export type OperatorWaitSource = { onWait(listener: (waiting: boolean) => void): () => void };
+
+/**
+ * A deadline counts execution time. Only an operator wait suspends it: an authenticated reviewer
+ * question (`activity`), or an approval a child's call is waiting on (`approvals`).
+ */
+export function reviewerDeadline(ms: number, activity?: ReviewerActivity, approvals?: OperatorWaitSource) {
   let started = performance.now(), remaining = Math.min(ms, 2 ** 31 - 1);
   let timer: ReturnType<typeof setTimeout> | undefined;
   let expire!: () => void;
@@ -100,9 +106,11 @@ export function reviewerDeadline(ms: number, activity?: ReviewerActivity) {
       timer = setTimeout(expire, Math.max(0, remaining));
     }
   };
-  const unsubscribe = activity?.onWait(update);
+  let asking = false, approving = false;
+  const unsubscribe = activity?.onWait((waiting) => { asking = waiting; update(asking || approving); });
+  const unsubscribeApprovals = approvals?.onWait((waiting) => { approving = waiting; update(asking || approving); });
   update(false);
-  return { expired, dispose() { unsubscribe?.(); clearTimeout(timer); } };
+  return { expired, dispose() { unsubscribe?.(); unsubscribeApprovals?.(); clearTimeout(timer); } };
 }
 
 /** Per-invocation observer. Only the validated raw result path identifies a reviewer assignment. */

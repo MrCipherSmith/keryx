@@ -57,6 +57,22 @@ test("a child session follows its parent, in the parent's group, one level deepe
   expect(pinned[0]).toMatchObject({ label: PINNED_GROUP, depths: { fork: 1 } });
   const archived = groupSessions([{ sessionId: "root", cwd: "/p", updatedAt: at(1) }, child("fork", "root", at(0), { archivedAt: at(0) })], "active", NOW);
   expect(archived.flatMap((g) => g.sessions.map((s) => s.sessionId))).toEqual(["root"]);
+  // A pinned child shows in Pinned even when its root is not, and leaves the root's day group.
+  const pinnedChild = groupSessions([{ sessionId: "root", cwd: "/p", updatedAt: at(1) }, child("fork", "root", at(0), { pinnedAt: at(0) })], "active", NOW);
+  expect(pinnedChild.map((g) => [g.label, g.sessions.map((s) => s.sessionId)])).toEqual([[PINNED_GROUP, ["fork"]], [dayBucket(at(1), NOW), ["root"]]]);
+});
+
+test("a long chain of children groups in one pass", () => {
+  const chain = Array.from({ length: 3000 }, (_, i) => ({
+    sessionId: `s${i}`, cwd: "/p", updatedAt: at(0, i % 20),
+    ...(i === 0 ? {} : { _meta: { keryx: { parentSessionId: `s${i - 1}` } } }),
+  }));
+  const started = performance.now();
+  const groups = groupSessions(chain, "active", NOW);
+  expect(groups.flatMap((g) => g.sessions).length).toBe(3000);
+  expect(groups).toHaveLength(1);
+  // Quadratic root resolution took seconds here; one pass takes milliseconds.
+  expect(performance.now() - started < 1000).toBe(true);
 });
 
 test("a parent cycle keeps every session listed", () => {

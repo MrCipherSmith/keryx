@@ -109,6 +109,8 @@ export function permissionIsEscalated(meta?: ApprovalMeta): boolean {
     meta?.publishLease === true ||
     meta?.untrustedOrigin === true ||
     meta?.hookAsk === true ||
+    // A subagent's call in a linked project: a client's `allow_always` would answer for that repository.
+    meta?.foreignRoot !== undefined ||
     // Flow 486: an `hc run` of an agent is granted per session by the agent loop, never by the client, and
     // `alwaysAsk` is a call only a person may confirm (`hc keys`, `flow confirm`).
     meta?.hcLaunch !== undefined ||
@@ -132,6 +134,8 @@ export interface AcpPermissionReasons {
   hcLaunch?: true;
   hookAsk?: true;
   alwaysAsk?: true;
+  /** The linked-project folder a subagent's call runs in (`ApprovalMeta.foreignRoot`). */
+  foreignRoot?: string;
 }
 
 /** The escalation reasons `meta` carries — the same fields {@link permissionIsEscalated} reads. */
@@ -150,6 +154,7 @@ export function acpPermissionReasons(meta?: ApprovalMeta): AcpPermissionReasons 
   if (meta.hcLaunch !== undefined) reasons.hcLaunch = true;
   if (meta.hookAsk === true) reasons.hookAsk = true;
   if (meta.alwaysAsk === true) reasons.alwaysAsk = true;
+  if (meta.foreignRoot !== undefined) reasons.foreignRoot = meta.foreignRoot;
   return reasons;
 }
 

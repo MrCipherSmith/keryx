@@ -322,6 +322,7 @@ describe("the Telegram approver honours the saved allowlist (AC4)", () => {
       ["a publish lease", { fingerprint: "f", destructive: false, publishLease: true }, "bun test src/foo.test.ts"],
       ["untrusted content", { fingerprint: "f", destructive: false, untrustedOrigin: true }, "bun test src/foo.test.ts"],
       ["flow confirm", { fingerprint: "f", destructive: false }, "keryx flow confirm 396"],
+      ["a linked project", { fingerprint: "f", destructive: false, foreignRoot: "/work/backend" }, "bun test src/foo.test.ts"],
     ];
     for (const [label, meta, command] of cases) {
       const telegram = judge(command, [command], meta);

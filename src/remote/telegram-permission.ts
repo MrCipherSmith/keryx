@@ -63,7 +63,8 @@ export interface RememberOffer {
 /**
  * The pattern a Telegram prompt may offer to remember, or `undefined` when nothing may be offered.
  * Offered only when the shell's own dock would offer a grant: not destructive, no credentials, no
- * SAC or `flow confirm` confirmation, no publish lease, no hook ask, no untrusted origin, and the
+ * SAC or `flow confirm` confirmation, no publish lease, no hook ask, no untrusted origin, not a
+ * subagent's call in a linked project (`foreignRoot`), and the
  * pattern passes the same validators (`suggestShellPatterns`). The exact command is preferred; the
  * first-word prefix is offered only when the exact form is not allowed (for example `docker *` stays
  * banned, so such a command never gets a prefix grant here either). A pattern too long for the
@@ -72,7 +73,7 @@ export interface RememberOffer {
  * The pattern comes from the command the shell parsed, never from model text.
  */
 export function telegramRememberOffer(ev: ShellApprovalEval): RememberOffer | undefined {
-  if (ev.destructive || ev.credentials || ev.sacReviewConfirmation || ev.publishLease || ev.hookAsk || ev.untrustedOrigin || ev.hcLaunch !== undefined) {
+  if (ev.destructive || ev.credentials || ev.sacReviewConfirmation || ev.publishLease || ev.hookAsk || ev.untrustedOrigin || ev.hcLaunch !== undefined || ev.foreignRoot !== undefined) {
     return undefined;
   }
   // The operator approves what the prompt shows. A command whose tail the prompt cuts off is not fully

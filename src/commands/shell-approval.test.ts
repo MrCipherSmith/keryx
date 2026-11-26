@@ -183,6 +183,18 @@ test("untrusted-origin shell approval cannot be answered by a saved grant", () =
   expect(formatShellApprovalHints(ev).join(" ")).toContain("untrusted external content");
 });
 
+test("a subagent's command in a linked project is answered by no saved or session rule", () => {
+  const sessionAllow = new Set(["git status"]);
+  const ev = evaluateShellApproval({
+    inputJson: JSON.stringify({ command: "git status" }),
+    meta: { fingerprint: "fp", destructive: false, foreignRoot: "/work/backend", subagent: true },
+    sessionAllow, fingerprintAtStart: "start", io: cleanIo,
+  });
+  expect(ev.autoApprove).toBe(false);
+  expect(ev.foreignRoot).toBe("/work/backend");
+  expect(formatShellApprovalHints(ev).join(" ")).toContain("in /work/backend (a linked project)");
+});
+
 // --- hcLaunch (flow 486 AC4) ------------------------------------------------
 
 test("evaluateShellApproval: a saved rule cannot answer an hc agent launch the session has not granted", () => {

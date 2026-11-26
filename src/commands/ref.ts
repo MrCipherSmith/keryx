@@ -136,9 +136,10 @@ export function refArgsFromSlashLine(line: string): string[] | undefined {
 }
 
 /** Run one `/ref…` line against the project and answer with text, for the TUI and ACP. */
-export async function runRefSlashLine(projectRoot: string, line: string, appliesFrom = "the next session"): Promise<string> {
+export async function runRefSlashLine(cwd: string, line: string, appliesFrom = "the next session"): Promise<string> {
   const args = refArgsFromSlashLine(line) ?? [];
-  const result = await runRefAction(projectRoot, args);
+  // A session started in a subfolder still edits the project's list, never `<subfolder>/.metaproject`.
+  const result = await runRefAction(resolveProjectRoot(cwd), args);
   const changed = result.ok && args[0] !== undefined && args[0] !== "list" && args[0] !== "ls";
   const text = formatRefResult(result);
   return changed ? `${text}\nThe agent's system prompt picks this up from ${appliesFrom}.` : text;

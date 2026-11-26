@@ -54,6 +54,8 @@ describe("the options keryx offers", () => {
       // Flow 486: an `hc run` of an agent and a command only a person may confirm.
       { hcLaunch: "claude" },
       { alwaysAsk: true },
+      // A subagent's call in a linked project: the client's remembered answer would cover that repository.
+      { foreignRoot: "/work/backend" },
     ] satisfies Partial<ApprovalMeta>[]) {
       const options = permissionOptionsFor(meta(escalation));
       expect(permissionIsEscalated(meta(escalation))).toBe(true);
