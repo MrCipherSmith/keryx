@@ -8,8 +8,11 @@
 //                   command in flight (with and without a replay after it), a queued prompt, a released
 //                   session, a keryx shutting down, and a reconnect to a keryx without terminalResults;
 //   load-order      who takes the turn slot once a load holds a session again: resumed issue questions (sent at
-//                   once, or queued behind a Telegram turn) and a review sent as the load resolves go before the
+//                   once, or queued behind a Telegram turn) and a turn sent as the load resolves go before the
 //                   results that waited for it;
+//   review-hold     a board review started through App's own path (prWork.ts sendReviewTurn) on a released bound
+//                   session with a result waiting: the load holds the slot for the review across its awaited mode
+//                   switch, and the hold ends when the start fails (the send refused, the mode switch throwing);
 //   lost-connection a results prompt with no answer when keryx exits or is restarted: sent again to the next
 //                   keryx, which answers success for runs it had already stored. Its replay of the stored note
 //                   leaves the card before the reply that followed it (no turn runs), or, when the note ends the
@@ -26,7 +29,7 @@ const { emit } = await import("@tauri-apps/api/event");
 const { mockIPC, mockWindows, clearMocks } = await import("@tauri-apps/api/mocks");
 
 type Json = Record<string, unknown>;
-const SCENARIOS = ["delivery", "no-results", "refusals", "load-order", "lost-connection"] as const;
+const SCENARIOS = ["delivery", "no-results", "refusals", "load-order", "review-hold", "lost-connection"] as const;
 type Scenario = (typeof SCENARIOS)[number];
 // No argument is `delivery`; a name this fixture does not know fails instead of running `delivery` in its place.
 const requested = process.argv[2];
@@ -40,6 +43,9 @@ const commandsHeld: Array<{ id: number; params: Json }> = [];
 const loads: Array<{ id: number; params: Json }> = [];
 let holdLoads = false;
 let loadAnswer: Json = {};
+/** `session/set_mode` requests; answered `{}` at once, or by the script while `holdModes` is set. */
+const modeSets: Array<{ id: number; params: Json }> = [];
+let holdModes = false;
 const opened: Array<{ id: number; cwd: unknown; command: unknown; title: unknown }> = [];
 const tails = new Map<number, string>();
 let nextTab = 1;
@@ -96,6 +102,10 @@ mockIPC(
       if (!holdLoads) await reply(id, loadAnswer);
       return null;
     }
+    if (method === "session/set_mode") {
+      modeSets.push({ id, params });
+      if (holdModes) return null;
+    }
     if (method === "initialize") {
       initializes.push(params);
       if (holdInitialize) {
@@ -116,6 +126,8 @@ mockIPC(
 
 const { useAcpSession } = await import("../session/useAcpSession");
 const { BUSY_RETRY_MS } = await import("../session/terminalRuns");
+const { sendReviewTurn, subjectOpener } = await import("../review/prWork");
+const { REVIEW_SESSION_BUSY } = await import("../review/reviewTurn");
 const bus = await import("../panels/panelBus");
 const { ptyOpenCommand } = await import("../platform/panels");
 
@@ -470,8 +482,9 @@ async function loadOrder(): Promise<void> {
   await reply(hAgain.id, { stopReason: "end_turn" });
   await idle("idle after h");
 
-  // R2-RR-001: a review sent as soon as the load resolves (App's startSessionReview, which says
-  // REVIEW_SESSION_BUSY when this send is refused) gets the slot; the result that waited goes after it.
+  // R2-RR-001: a turn sent as soon as the load resolves, with no hold and nothing awaited between (an issue
+  // session's first turn) gets the slot; the result that waited goes after it. App's review start awaits a mode
+  // switch there and holds the slot instead: the review-hold scenario.
   loadAnswer = {};
   await exit(await run("echo r"), 0);
   const r = await next("r's prompt");
@@ -537,6 +550,119 @@ async function loadOrder(): Promise<void> {
   assert.deepEqual(commandsOf(qAgain), ["echo q"]);
   await reply(qAgain.id, { stopReason: "end_turn" });
   await idle("idle after q");
+  none();
+}
+
+async function reviewHold(): Promise<void> {
+  // A board review of PR #7, whose newest bound session is s1, through App's own path: sendReviewTurn loads s1
+  // holding its slot for the review, raises its mode (keryx answers set_mode when the script says), and sends.
+  const subject = { kind: "pr" as const, repo: "org/project", number: 7, url: "https://github.com/org/project/pull/7" };
+  const sessions = () => [{ sessionId: "s1", cwd, updatedAt: "2026-11-26T00:00:00Z", _meta: { keryx: { subject } } }];
+  const openSubject = subjectOpener();
+  const reviewText = "Review the pull request.";
+  let started: Promise<string> = Promise.resolve("");
+  const startReview = (s: typeof session = session) => React.act(async () => {
+    started = sendReviewTurn(s, { subject, mode: "auto", sessions, open: openSubject }, () => reviewText);
+    started.catch(() => {});
+  });
+  /** A Run result that waits for s1 while keryx's idle cap holds s1 released. */
+  async function waitsWhileReleased(command: string): Promise<void> {
+    await exit(await run(command), 0);
+    await releaseUnder(await next(`${command}'s prompt`));
+    await waitFor(() => card(command)?.state === "waiting" && !session.state.held, `${command} waiting while s1 is released`);
+  }
+  const telegram = (phase: "started" | "finished") => React.act(async () => {
+    await inbound({ method: "session/update", params: { sessionId: "s1", update: { sessionUpdate: "_keryx/telegram/turn", source: "telegram", phase, generation: "g3", updateId: 9 } } });
+  });
+  holdModes = true;
+  /** The mode switches sent before a review start, so a check waits for that start's own. */
+  let switches = 0;
+
+  // R5-DG-001: keryx answers the review's mode switch only once the load that holds s1 again has rendered and the
+  // window's arbiter has run. The review's load holds the slot: the result and a prompt the user queued wait, the
+  // review goes first and is not refused as busy, and they go once the review's turn ends, the result first.
+  const ui = { focusSessions() {}, mode() {}, model() {}, openProviders() {}, fillComposer() {} };
+  await exit(await run("echo r"), 0);
+  const r = await next("r's prompt");
+  await React.act(async () => { await session.runCommand("Queued after r", ui); });
+  await waitFor(() => session.state.queue.length === 1, "the prompt queued behind r's turn");
+  await releaseUnder(r);
+  await waitFor(() => card("echo r")?.state === "waiting" && !session.state.held, "r waiting while s1 is released");
+  switches = modeSets.length;
+  await startReview();
+  await waitFor(() => modeSets.length === switches + 1 && session.state.held, "the review's mode switch, after the load rendered");
+  await settle();
+  none();
+  assert.equal(card("echo r")?.state, "waiting");
+  assert.equal(session.state.queue.length, 1);
+  await reply(modeSets.at(-1)!.id, {});
+  const review = await next("the review turn");
+  assert.equal(textOf(review), reviewText);
+  assert.equal(await started, "s1");
+  await settle();
+  none();
+  await reply(review.id, { stopReason: "end_turn" });
+  const rAgain = await next("r after the review turn");
+  assert.deepEqual(commandsOf(rAgain), ["echo r"]);
+  assert.equal(session.state.queue.length, 1);
+  await reply(rAgain.id, { stopReason: "end_turn" });
+  const queued = await next("the queued prompt after r");
+  assert.equal(textOf(queued), "Queued after r");
+  await reply(queued.id, { stopReason: "end_turn" });
+  await waitFor(() => !session.state.busy && session.state.queue.length === 0, "idle after the queue");
+
+  // R5-DG-001: the start fails after the load: a Telegram turn takes s1 while the mode switch is on its way, so
+  // the review is refused as busy. The hold ends with the start: the result goes when the Telegram turn ends.
+  await waitsWhileReleased("echo t");
+  switches = modeSets.length;
+  await startReview();
+  await waitFor(() => modeSets.length === switches + 1 && session.state.held, "the second review's mode switch, after the load rendered");
+  await telegram("started");
+  await waitFor(() => session.state.busy, "the Telegram turn");
+  await reply(modeSets.at(-1)!.id, {});
+  await assert.rejects(started, { message: REVIEW_SESSION_BUSY });
+  await settle();
+  none();
+  assert.equal(card("echo t")?.state, "waiting");
+  await telegram("finished");
+  const tAgain = await next("t after the Telegram turn");
+  assert.deepEqual(commandsOf(tAgain), ["echo t"]);
+  await reply(tAgain.id, { stopReason: "end_turn" });
+  await idle("idle after t");
+
+  // R5-DG-001: the mode switch throws once the load has rendered: no review is sent, and the hold's end sends the
+  // result at once (nothing else changes in the window to run the arbiter).
+  await waitsWhileReleased("echo m");
+  let throwSwitch!: () => void;
+  const thrown = new Promise<void>((resolve) => { throwSwitch = resolve; });
+  await startReview({ ...session, raiseMode: async () => { await thrown; throw new Error("the mode switch threw"); } });
+  await waitFor(() => session.state.held, "s1 held again");
+  await settle();
+  none();
+  assert.equal(card("echo m")?.state, "waiting");
+  await React.act(async () => throwSwitch());
+  await assert.rejects(started, { message: "the mode switch threw" });
+  const mAgain = await next("m once the review start gave up");
+  assert.deepEqual(commandsOf(mAgain), ["echo m"]);
+  await reply(mAgain.id, { stopReason: "end_turn" });
+  await idle("idle after m");
+  none();
+
+  // R5-DG-001: a later load of s1 ends the hold while the review's mode switch has no answer (a start that never
+  // settles holds nothing for good): the result goes at once, and the review then meets a busy session.
+  await waitsWhileReleased("echo l");
+  switches = modeSets.length;
+  await startReview();
+  await waitFor(() => modeSets.length === switches + 1 && session.state.held, "the last review's mode switch, after the load rendered");
+  await settle();
+  none();
+  await React.act(async () => { await session.loadSession("s1"); });
+  const lAgain = await next("l once a later load ended the hold");
+  assert.deepEqual(commandsOf(lAgain), ["echo l"]);
+  await reply(modeSets.at(-1)!.id, {});
+  await assert.rejects(started, { message: REVIEW_SESSION_BUSY });
+  await reply(lAgain.id, { stopReason: "end_turn" });
+  await idle("idle after l");
   none();
 }
 
@@ -645,6 +771,7 @@ try {
   else if (scenario === "no-results") await noResults();
   else if (scenario === "refusals") await refusals();
   else if (scenario === "load-order") await loadOrder();
+  else if (scenario === "review-hold") await reviewHold();
   else await lostConnection();
 } finally {
   offRuns();

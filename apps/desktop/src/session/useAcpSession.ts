@@ -45,7 +45,7 @@ import {
   type SessionSubject,
   type SessionUpdate,
 } from "../acp/types";
-import { initialState, pendingQueueSend, reducer, sessionMarks, shownView, type Action, type RoutedUpdate } from "./reducer";
+import { initialState, pendingQueueSend, reducer, sessionMarks, shownView, type Action, type RoutedUpdate, type WindowState } from "./reducer";
 import { desktopReviewCommands, runCommandLine, type RunOptions, type UiActions } from "./commandRunner";
 import { DialogQueue, type PendingAsk, type PendingPermission } from "./dialogQueue";
 import { readSubagentHistory, subagentHistoryWriter } from "./subagentHistory";
@@ -433,6 +433,9 @@ export function useAcpSession(cwd: string) {
       dispatch({ t: "busy", sessionId, busy: true });
       const turn = { client } as Turn;
       l.reg.turns.set(sessionId, turn);
+      // The slot is taken: a hold a load's caller placed for its own turn ends here (that turn, or one that came
+      // first, which the caller's send then meets as busy). What waited goes when this turn ends.
+      l.reg.heldForCaller.delete(sessionId);
       turn.done = (async () => {
         let busyRefusal = false;
         try {
@@ -492,15 +495,17 @@ export function useAcpSession(cwd: string) {
    * Run results (flow 523) to `sessionId` as one prompt, when it can take one now (null otherwise). No
    * user bubble: keryx stores its own continuation line for the turn and the run cards show what was sent.
    * A command in flight counts as busy: keryx holds the session's turn slot for /compact and /rewind, and
-   * the command's end asks again (`trackCommand`). A prompt with no answer from keryx (its connection closed
-   * or was replaced) waits to be sent again; keryx answers success for runs it already stored.
+   * the command's end asks again (`trackCommand`). So does a session whose load's caller holds its slot for its
+   * own turn (`holdForCaller`): the results go after that turn, or when the hold ends without one (`releaseHold`).
+   * A prompt with no answer from keryx (its connection closed or was replaced) waits to be sent again; keryx
+   * answers success for runs it already stored.
    */
   const sendTerminalResults = useCallback(
     (sessionId: string, results: readonly TerminalResultEntry[]): Promise<DeliveryOutcome> | null => {
       const l = live.current;
       const client = l.client;
       if (!client || !l.initialized || !l.reg.held.has(sessionId) || l.reg.turns.has(sessionId) ||
-        l.reg.telegramTurns.has(sessionId) || l.reg.commands.has(sessionId)) return null;
+        l.reg.telegramTurns.has(sessionId) || l.reg.commands.has(sessionId) || l.reg.heldForCaller.has(sessionId)) return null;
       let outcome: DeliveryOutcome = { kind: "done" };
       const params = { prompt: [{ type: "text", text: terminalResultsLine(results) }], _meta: { keryx: { terminalResults: results } } };
       return runTurn(client, sessionId, params, (e) => {
@@ -566,15 +571,65 @@ export function useAcpSession(cwd: string) {
   }, [dispatch, sendPrompt]);
 
   /**
+   * One arbiter for every session's free turn slot (spec 3.9.5b), one prompt per session whose slot is free
+   * (its turn ended, it is held again), in this order:
+   * 1. the issue-question resume a load queued behind a running turn, when it is at the front of that
+   *    session's queue (a load's resume takes the session first, as it does when it can send at once);
+   * 2. the Run results waiting for the session (`terminalRuns.flush`);
+   * 3. the next prompt the user queued, where neither of those took the slot.
+   * Sending takes the slot at once (`runTurn` registers the turn), so a later step finds it taken. A session
+   * whose load's caller holds its slot for its own turn (`holdForCaller`) is passed over: the results prompt
+   * refuses it too (`sendTerminalResults`), and the hold's end runs this for it (`releaseHold`). `only` limits
+   * the pass to one session.
+   */
+  const arbitrate = useCallback(
+    (convs: WindowState["convs"], only?: string) => {
+      const l = live.current;
+      const turnRunning = (c: { sessionId: string }) => l.reg.turns.has(c.sessionId) || l.reg.telegramTurns.has(c.sessionId);
+      const free = Object.values(convs).filter((c) => (only === undefined || c.sessionId === only) && !l.reg.heldForCaller.has(c.sessionId));
+      for (const c of free) {
+        const front = pendingQueueSend(c, turnRunning(c));
+        if (front?.resumeIssueQuestions && sendPrompt(front.text, c.sessionId, undefined, false, undefined, { resumeIssueQuestions: true })) dispatch({ t: "queueShift", sessionId: c.sessionId });
+      }
+      const tookSlot = terminalRuns.flush(only);
+      for (const c of free) {
+        if (tookSlot.has(c.sessionId)) continue;
+        const next = pendingQueueSend(c, turnRunning(c));
+        // A resume at the front was step 1's: sent there, or refused on the same checks it would meet here.
+        if (next && !next.resumeIssueQuestions && sendPrompt(next.text, c.sessionId, undefined, false, undefined, next.issueLaunchId ? { issueLaunchId: next.issueLaunchId } : undefined)) dispatch({ t: "queueShift", sessionId: c.sessionId });
+      }
+    },
+    [sendPrompt, dispatch, terminalRuns],
+  );
+
+  /**
+   * End the hold a load's caller placed on `sessionId` (`holdForCaller`) when it starts no turn after all (it
+   * gave up, or its send was refused): what waited for the slot goes now, in the arbiter's order. Nothing
+   * happens when there is no hold (its turn took the slot, which already ended it).
+   */
+  const releaseHold = useCallback(
+    (sessionId: string) => {
+      if (live.current.reg.heldForCaller.delete(sessionId)) arbitrate(winRef.current.convs, sessionId);
+    },
+    [arbitrate],
+  );
+
+  /**
    * session/load of a session the window does not hold. Its replay lands off screen; the session is
    * shown on success unless the user has switched elsewhere since. A failure changes nothing on screen.
    * When keryx answers that issue questions wait, they are resumed (or queued); `onIssueQuestions` hears
-   * whether that happened.
+   * whether that happened. `holdForCaller`: the caller starts a turn in the session itself once this resolves
+   * (a review, after an awaited mode switch), so the session's free slot is held for that turn: its Run
+   * results and queued prompts wait until a turn takes the slot or the caller ends the hold (`releaseHold`).
+   * Any other load of the session ends a hold an earlier load placed.
    */
   const openLoad = useCallback(
-    async (client: AcpClient, gen: number, sessionId: string, issueScope?: AbortSignal, onIssueQuestions?: (resumed: boolean) => void): Promise<boolean> => {
+    async (client: AcpClient, gen: number, sessionId: string, opts: { issueScope?: AbortSignal; onIssueQuestions?: (resumed: boolean) => void; holdForCaller?: boolean } = {}): Promise<boolean> => {
       const l = live.current;
+      const { issueScope, onIssueQuestions } = opts;
       if (issueScope?.aborted) return false;
+      if (opts.holdForCaller === true) l.reg.heldForCaller.add(sessionId);
+      else releaseHold(sessionId);
       const plan = l.reg.planSwitch(sessionId);
       if (plan === "show") {
         l.reg.showLocal(sessionId);
@@ -596,8 +651,9 @@ export function useAcpSession(cwd: string) {
         const show = l.reg.loadDone(sessionId);
         dispatch({ t: "loadDone", sessionId, archive, modes: r?.modes, configOptions: r?.configOptions, show });
         // Held again: Run results that waited for it (released, keryx restarting, a lost connection) may go
-        // again. The window's arbiter sends them after this render, so the issue questions resumed here, and a
-        // turn the caller starts as soon as the load resolves (a review), take the slot first.
+        // again, from the window's arbiter. The issue questions resumed below are sent before this returns, so
+        // they take the slot first. A caller that starts a turn itself (a review) holds the slot from the
+        // load's start (`holdForCaller`): the results go after its turn, or once it gives up (`releaseHold`).
         terminalRuns.resume(sessionId);
         if (!issueScope?.aborted && r?._meta?.keryx?.pendingIssueQuestions) {
           const resumed = resumeIssueQuestions(sessionId);
@@ -614,7 +670,7 @@ export function useAcpSession(cwd: string) {
         return false;
       }
     },
-    [cwd, dispatch, resumeIssueQuestions, terminalRuns],
+    [cwd, dispatch, resumeIssueQuestions, terminalRuns, releaseHold],
   );
 
   /** session/new. The new session is added and shown unless the user switched elsewhere meanwhile; a failure changes nothing on screen. */
@@ -884,9 +940,13 @@ export function useAcpSession(cwd: string) {
     dialogs.dropSession(sessionId);
   }, [dialogs]);
 
-  /** Show a session: local when the window holds it, session/load otherwise. Nothing is cancelled or released. */
+  /**
+   * Show a session: local when the window holds it, session/load otherwise. Nothing is cancelled or released.
+   * `holdForCaller`: the caller sends a turn to the session itself once this resolves, and its Run results and
+   * queued prompts wait for that turn; a caller that then sends none ends the hold with `releaseHold`.
+   */
   const loadSession = useCallback(
-    async (id: string) => {
+    async (id: string, options?: { holdForCaller?: boolean }) => {
       const l = live.current;
       const client = l.client;
       if (!client || !l.usable) return false;
@@ -898,7 +958,7 @@ export function useAcpSession(cwd: string) {
         // A local switch sends no request; tell keryx so its idle cap counts this session as in use.
         client.notify(SESSION_SHOWN, { sessionId: id });
       }
-      return openLoad(client, l.gen, id);
+      return openLoad(client, l.gen, id, { holdForCaller: options?.holdForCaller === true });
     },
     [openLoad, dispatch],
   );
@@ -1009,30 +1069,8 @@ export function useAcpSession(cwd: string) {
     [dispatch],
   );
 
-  /**
-   * One arbiter for every session's free turn slot (spec 3.9.5b), one prompt per session whose slot is free
-   * (its turn ended, it is held again), in this order:
-   * 1. the issue-question resume a load queued behind a running turn, when it is at the front of that
-   *    session's queue (a load's resume takes the session first, as it does when it can send at once);
-   * 2. the Run results waiting for the session (`terminalRuns.flush`);
-   * 3. the next prompt the user queued, where neither of those took the slot.
-   * Sending takes the slot at once (`runTurn` registers the turn), so a later step finds it taken.
-   */
-  useEffect(() => {
-    const l = live.current;
-    const turnRunning = (c: { sessionId: string }) => l.reg.turns.has(c.sessionId) || l.reg.telegramTurns.has(c.sessionId);
-    for (const c of Object.values(win.convs)) {
-      const front = pendingQueueSend(c, turnRunning(c));
-      if (front?.resumeIssueQuestions && sendPrompt(front.text, c.sessionId, undefined, false, undefined, { resumeIssueQuestions: true })) dispatch({ t: "queueShift", sessionId: c.sessionId });
-    }
-    const tookSlot = terminalRuns.flush();
-    for (const c of Object.values(win.convs)) {
-      if (tookSlot.has(c.sessionId)) continue;
-      const next = pendingQueueSend(c, turnRunning(c));
-      // A resume at the front was step 1's: sent there, or refused on the same checks it would meet here.
-      if (next && !next.resumeIssueQuestions && sendPrompt(next.text, c.sessionId, undefined, false, undefined, next.issueLaunchId ? { issueLaunchId: next.issueLaunchId } : undefined)) dispatch({ t: "queueShift", sessionId: c.sessionId });
-    }
-  }, [win.convs, sendPrompt, dispatch, terminalRuns]);
+  /** The arbiter runs on every change of the window's sessions (`arbitrate`). */
+  useEffect(() => arbitrate(win.convs), [win.convs, arbitrate]);
 
   /** Replay a held session from keryx (after /compact or /rewind changed its history). */
   const reloadSession = useCallback(
@@ -1236,7 +1274,7 @@ export function useAcpSession(cwd: string) {
       const alreadyHeld = l.reg.held.has(sessionId);
       /** The load's answer said issue questions wait: whether they were resumed (or queued). */
       let loadResumed = true;
-      if (!l.client || !l.usable || !await openLoad(l.client, l.gen, sessionId, issueScope, (resumed) => { loadResumed = resumed; })) throw new Error("Could not open the linked session.");
+      if (!l.client || !l.usable || !await openLoad(l.client, l.gen, sessionId, { issueScope, onIssueQuestions: (resumed) => { loadResumed = resumed; } })) throw new Error("Could not open the linked session.");
       if (issueScope?.aborted) return;
       // Nothing is sent beside a turn running in a held session: a reopen from the board while the resume
       // turn runs must not start a second one.
@@ -1269,6 +1307,7 @@ export function useAcpSession(cwd: string) {
     cancel,
     newSession,
     loadSession,
+    releaseHold,
     reopen,
     setFlags,
     trashSession,

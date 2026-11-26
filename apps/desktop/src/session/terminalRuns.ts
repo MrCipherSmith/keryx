@@ -75,7 +75,8 @@ export interface TerminalRunDeps {
   acceptsResults(): boolean | null;
   /**
    * Send one `session/prompt` carrying `results` to `sessionId`, or null when that session cannot take a
-   * prompt now (not held, not initialized, a turn or a command running). The promise settles when keryx answers.
+   * prompt now (not held, not initialized, a turn or a command running, or a load's caller holding its slot
+   * for a turn of its own). The promise settles when keryx answers.
    */
   send(sessionId: string, results: readonly TerminalResultEntry[]): Promise<DeliveryOutcome> | null;
   /** The last `lines` lines of a tab's output as plain text, and whether the host dropped earlier output. */
@@ -112,8 +113,9 @@ export interface TerminalRuns {
   flush(sessionId?: string): ReadonlySet<string>;
   /**
    * The window holds `sessionId` again (its load finished): results that answered "wait" may go again.
-   * Nothing is sent here: the next `flush` (the window's arbiter, after the load's render) sends them, so
-   * a turn the load's caller starts at once (resumed issue questions, a review) takes the slot first.
+   * Nothing is sent here: the next `flush` sends them. Issue questions the load resumes are sent before that
+   * flush, and a load whose caller starts a turn itself (a review) holds the session's slot for that turn
+   * (useAcpSession `holdForCaller`: `send` answers null until the hold ends), so either goes first.
    */
   resume(sessionId: string): void;
   /** How many runs the store still holds; one that can no longer change is dropped (its card stays). */

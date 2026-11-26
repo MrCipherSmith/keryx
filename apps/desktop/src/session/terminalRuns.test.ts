@@ -703,6 +703,30 @@ describe("FE-W1-001: a reload of the session keeps the cards of the runs the win
     expect(order()).toEqual(["Still starting.", dev, "It exited cleanly."]);
   });
 
+  test("R5-TP-001: a card a reload put in a snapshot note's place stays there when that snapshot is sent again while the run still runs: keryx holds it already, and the agent's reply follows the card", async () => {
+    const r = rig();
+    const dev = r.start("bun run dev", 5);
+    await r.runs.sendNow(dev);
+    // keryx stored the snapshot and recorded its turn; its answer was lost. The process keeps running.
+    r.sent[0]!.settle({ kind: "wait" });
+    await r.settled();
+    expect(r.card(dev).state).toBe("waiting");
+    reload(r, [noteUpdate(1, dev, "bun run dev", { state: "running" }), agentUpdate(2, "Still starting.")]);
+    expect(r.card(dev).inHistory).toBe("running");
+    r.runs.resume("s1");
+    r.runs.flush("s1");
+    // The same snapshot goes again: a note of the same kind as the one keryx replayed, so the card keeps its place.
+    expect(r.sent[1]!.results.map((x) => x.state)).toEqual(["running"]);
+    const order = () => r.items().map((i) => (i.kind === "terminalRun" ? i.runId : i.kind === "agent" ? i.text : i.kind));
+    expect(order()).toEqual([dev, "Still starting."]);
+    expect(r.card(dev)).toMatchObject({ state: "sent-while-running", inHistory: "running" });
+    // keryx answers the duplicate: no turn runs, the card stays where it is.
+    r.sent[1]!.settle({ kind: "done" });
+    await r.settled();
+    expect(order()).toEqual([dev, "Still starting."]);
+    expect(r.card(dev).inHistory).toBe("running");
+  });
+
   test("R4-AR-003: a card a later reload appends at the end (the replay no longer holds its note) keeps no mark from the earlier reload, and moves when its result goes", async () => {
     const r = rig();
     const runId = r.start("make", 5);

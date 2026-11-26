@@ -19,8 +19,12 @@ test("keryx's answers to a results prompt: busy waits and is asked again, a fina
   expect(typeof run("refusals")).toBe("string");
 });
 
-test("R2-RR-001: once a load holds a session again, resumed issue questions and a review sent as the load resolves take the turn slot before the results that waited for it", () => {
+test("R2-RR-001: once a load holds a session again, resumed issue questions and a turn sent as the load resolves take the turn slot before the results that waited for it", () => {
   expect(typeof run("load-order")).toBe("string");
+});
+
+test("R5-DG-001: a board review's load holds the bound session's slot across the awaited mode switch: the review goes before the result that waited, and a start that fails after the load (send refused, mode switch throwing) lets the result go", () => {
+  expect(typeof run("review-hold")).toBe("string");
 });
 
 test("R2-HL-002: a results prompt with no answer when keryx exits or is restarted waits and goes to the next keryx; its duplicate answer is delivered", () => {
