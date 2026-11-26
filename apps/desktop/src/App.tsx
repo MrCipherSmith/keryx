@@ -31,7 +31,7 @@ import { SessionReviewActivity, type ReviewCardMemory } from "./review/SessionRe
 import { reviewCardAnchors, reviewCardGroup, splitReviewCards, withReviewActive } from "./review/reviewPlacement";
 import { loadSessionReviewTargets, readSessionReviewLinks, reviewFlowId, reviewSessionTitle, type SessionReviewLink } from "./review/sessionReview";
 import { reviewRun } from "./platform/reviewRuns";
-import { REVIEW_SESSION_BUSY, reviewContinueTurn, reviewPullRequestUrl, reviewStartTurn } from "./review/reviewTurn";
+import { reviewContinueTurn, reviewPullRequestUrl, reviewStartTurn } from "./review/reviewTurn";
 import { modelChoices, providerOf } from "./session/Composer";
 import type { IssueOriginRequest } from "./issues/IssueOriginDetail";
 import { IssuesView } from "./issues/IssuesView";
@@ -39,7 +39,7 @@ import { useIssueWork } from "./issues/IssueWork";
 import { FlowsBoard } from "./flows/FlowsBoard";
 import type { LinkedSession } from "./flows/FlowDetail";
 import { boundSessions, sessionFlags, type SessionSubject } from "./acp/types";
-import { flowPrompt, prFlows, prSubject, reviewLaunchTarget, subjectOpener, withPendingSubjects, type PrFlowOffer, type SubjectSessionTarget } from "./review/prWork";
+import { flowPrompt, prFlows, prSubject, reviewLaunchTarget, sendReviewTurn, subjectOpener, withPendingSubjects, type PrFlowOffer, type ReviewTurnTarget, type SubjectSessionTarget } from "./review/prWork";
 import { usePendingFlowLinks } from "./review/usePendingFlowLinks";
 import type { ReviewCard } from "./review/types";
 import { SessionSubjectLinks } from "./session/SessionSubjectLinks";
@@ -629,31 +629,16 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
    * Resolves the PR's current attempt history (empty when it cannot be read) with the session the turn went into.
    */
   const startSessionReview = useCallback(async (key: DeskRunKey, revision: DeskRevision, options?: DeskReviewOptions, owner?: string, prompt?: string): Promise<DeskRunSnapshot> => {
-    const session = acp.current;
-    let sessionId = owner;
-    if (!sessionId) {
-      const subject = prSubject({ number: key.number, url: reviewPullRequestUrl(key) }, key.repo, key.repositoryId);
-      const opened = await openSubject({
-        sessions: () => subjectSessionsRef.current,
-        loadSession: async id => { await session.loadSession(id); },
-        newSession: () => session.newSession(),
-        bind: (id, value) => void session.bindSubject(id, value),
-        // The review is sent as a turn: no composer draft is touched.
-        fill: () => {},
-        isShown: session.isShown,
-      }, subject, "latest", "");
-      if (!opened) throw new Error("Could not open the review session.");
-      sessionId = opened.sessionId;
-      // A session Desktop opened for the review runs unattended: Auto review mode → Auto permission mode, Manual → at
-      // least Trust. A session the user typed `/review` in (`owner`) keeps the mode the user chose. A failed switch
-      // leaves the session's mode as it was and shows a notice; the review is still sent.
-      await session.raiseMode(sessionId, reviewSessionMode(options?.mode));
-    }
     // A typed `/review [target]` is the command that opened the dialog, not a request: its target is already resolved.
     const request = prompt && !/^\/review(\s|$)/.test(prompt.trim()) ? prompt : undefined;
-    const turn = reviewStartTurn({ key, revision, sessionId, options, request });
-    // Refused (busy): the launch form stays where it was and shows why; nothing is queued.
-    if (!session.sendPrompt(turn, sessionId)) throw new Error(REVIEW_SESSION_BUSY);
+    // A session the user typed `/review` in (`owner`) keeps the mode the user chose; one Desktop opens is raised.
+    const target: ReviewTurnTarget = owner ? { owner } : {
+      subject: prSubject({ number: key.number, url: reviewPullRequestUrl(key) }, key.repo, key.repositoryId),
+      mode: reviewSessionMode(options?.mode),
+      sessions: () => subjectSessionsRef.current,
+      open: openSubject,
+    };
+    const sessionId = await sendReviewTurn(acp.current, target, id => reviewStartTurn({ key, revision, sessionId: id, options, request }));
     if (!owner) setView("session");
     // The turn is already running: a failed history read must not report the start as failed, so it shows no attempts.
     const history = await reviewRun(cwd, key, { kind: "status" }).catch((): DeskRunSnapshot => ({ version: 1, runs: [] }));

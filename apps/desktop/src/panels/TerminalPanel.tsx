@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
 import { useToast } from "../components/Toasts";
-import { onAgentTerminal, ptyClose, ptyList, ptyOpen, ptyWrite, type PtyTab } from "../platform/panels";
-import { notifyTabClosed, onCloseTabRequest, onRunRequest, onShowTab } from "./panelBus";
+import { onAgentTerminal, ptyClose, ptyList, ptyOpen, ptyOpenCommand, type PtyTab } from "../platform/panels";
+import { notifyTabClosed, onCloseTabRequest, onRunRequest, onShowTab, runFailed, runOpened, runTabTitle } from "./panelBus";
 import { TermView } from "./TermView";
 import { StreamView } from "./StreamView";
 import { onStreamTab, type StreamTab } from "./streamTabs";
@@ -22,6 +22,8 @@ export function TerminalPanel({ cwd }: { cwd: string }) {
   const state = useRef({ tabs, active });
   state.current = { tabs, active };
   const opening = useRef<Promise<PtyTab> | null>(null);
+  /** A Run reached this panel: its own tab is the panel's first, no extra shell tab. */
+  const runRequested = useRef(false);
 
   /** A new shell tab; `show` false keeps a shown stream tab in front (the panel's own first tab). */
   const open = useCallback((show = true): Promise<PtyTab> => {
@@ -49,9 +51,10 @@ export function TerminalPanel({ cwd }: { cwd: string }) {
         if (!live) return;
         setLoaded(true);
         if (list.length > 0) {
-          setTabs(list);
+          // A run tab opened meanwhile stays (the list may have been taken before it existed).
+          setTabs((t) => [...list, ...t.filter((x) => !list.some((y) => y.id === x.id))]);
           setActive((a) => a ?? list[list.length - 1]!.id);
-        } else void open(false).catch((e) => live && setError(errText(e)));
+        } else if (!runRequested.current) void open(false).catch((e) => live && setError(errText(e)));
       })
       .catch((e) => {
         if (!live) return;
@@ -77,22 +80,28 @@ export function TerminalPanel({ cwd }: { cwd: string }) {
     };
   }, []);
 
-  // Run buttons: the active tab while its shell runs, a new tab otherwise.
+  // Run buttons (flow 523): a tab of its own whose process is the login shell running exactly the
+  // command, in the project root; no other tab gets any input. Its end reaches the run tracker through
+  // `panel://pty-exit`.
   useEffect(
     () =>
-      onRunRequest((command) => {
-        const { tabs: list, active: id } = state.current;
-        const target = list.find((t) => t.id === id && t.running);
-        const tab = target ? Promise.resolve(target) : open();
-        void tab
-          .then((t) => {
+      onRunRequest((request) => {
+        runRequested.current = true;
+        void ptyOpenCommand(cwd, request.command, runTabTitle(request.command), 80, 24).then(
+          (t) => {
+            setTabs((list) => (list.some((x) => x.id === t.id) ? list : [...list, t]));
             setActive(t.id);
             setActiveStream(null);
-            return ptyWrite(t.id, `${command}\r`);
-          })
-          .catch((e) => toast({ level: "error", title: "Could not run the command", body: errText(e) }));
+            setError(null);
+            runOpened(request, t);
+          },
+          (e: unknown) => {
+            toast({ level: "error", title: "Could not run the command", body: errText(e) });
+            runFailed(request, errText(e));
+          },
+        );
       }),
-    [open, toast],
+    [cwd, toast],
   );
 
   // `/delegate`: a tab opened by the app; shown and focused.

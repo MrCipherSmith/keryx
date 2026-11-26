@@ -469,6 +469,7 @@ describe("AC6 — initialize reports the real version and the profiles; _keryx/i
         liveSessions: true,
         issuePreparation: true,
         minDesktopVersion: MIN_DESKTOP_VERSION,
+        terminalResults: true,
       });
       const infoId = c.request("_keryx/info", {});
       const info = await c.waitFor((m) => m.id === infoId, "the _keryx/info reply");

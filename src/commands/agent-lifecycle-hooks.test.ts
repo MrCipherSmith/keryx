@@ -27,6 +27,7 @@ import type { HookEventName } from "../harness/hooks/types";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type { ToolRisk } from "../harness/tool/types";
 import type { NormalizedEvent, ProviderDescription, ProviderPort } from "../harness/provider/types";
+import { isOperatorMessage } from "../session/compact";
 
 const DESCRIPTION: ProviderDescription = {
   capabilities: {
@@ -850,6 +851,58 @@ test("UserPromptSubmit is skipped for a synthesized task-notification continuati
     { origin: "task-notification" },
   );
   expect(events).not.toContain("UserPromptSubmit");
+});
+
+test("flow 523 review AR2-001: a terminal-results turn's line is keryx's — no UserPromptSubmit, stored as a marked injected harness line", async () => {
+  const events: HookEventName[] = [];
+  // A hook that refuses every operator prompt: it must never see keryx's own continuation line.
+  const { hooks } = fakeHooks(true, (event) => {
+    events.push(event);
+    return event === "UserPromptSubmit" ? { ...EMPTY_RESULT, tightened: "deny", denyReason: "test" } : EMPTY_RESULT;
+  });
+  const history: Parameters<typeof runAgentTurn>[2] = [];
+  await runAgentTurn(
+    { write: () => {} },
+    { provider: scriptedProvider([[{ kind: "text_delta", text: "ok" }, { kind: "model_end" }]]), providerId: "s", modelId: "m", tools: [], systemInstruction: "sys", idSeq, hooks },
+    history,
+    "The commands you proposed ran; continue.",
+    { origin: "terminal-results" },
+  );
+  expect(events).not.toContain("UserPromptSubmit");
+  const line = history[0];
+  expect(line).toMatchObject({ role: "user", content: "The commands you proposed ran; continue.", provenance: "harness", injected: true, terminalContinuation: true });
+  // Compaction and every other reader of the provenance model see no operator turn in it.
+  expect(line === undefined ? true : isOperatorMessage(line)).toBe(false);
+  expect(history.at(-1)).toMatchObject({ role: "assistant", content: "ok" });
+});
+
+test("flow 523 review R2-TP-002: the terminal-results origin alone turns the untrusted-content floor on (no untrustedPrompt)", async () => {
+  const runTurn = async (options: Parameters<typeof runAgentTurn>[4]): Promise<{ asks: number; untrustedAsks: number; ran: boolean }> => {
+    const { tool, ran } = fakeTool("shell_exec", "shell");
+    let asks = 0;
+    let untrustedAsks = 0;
+    const io: AgentIO = {
+      write: () => {},
+      permissionMode: () => "trust",
+      requestApproval: async (_tool, _input, meta) => {
+        asks += 1;
+        if (meta?.untrustedOrigin === true) untrustedAsks += 1;
+        return false;
+      },
+    };
+    await runAgentTurn(
+      io,
+      { provider: scriptedProvider(callScript("shell_exec", '{"command":"touch result-ran"}')), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq },
+      [],
+      "The commands you proposed ran; continue.",
+      options,
+    );
+    return { asks, untrustedAsks, ran: ran() };
+  };
+  // Control: the same mutating call in trust mode, on an operator line, runs unasked.
+  expect(await runTurn(undefined)).toEqual({ asks: 0, untrustedAsks: 0, ran: true });
+  // The origin by itself, with no untrustedPrompt beside it: the call is asked for as untrusted, and refused, it does not run.
+  expect(await runTurn({ origin: "terminal-results" })).toEqual({ asks: 1, untrustedAsks: 1, ran: false });
 });
 
 // --- tool-name alias mapping ----------------------------------------------

@@ -1,0 +1,146 @@
+{
+  "task_id": "task-7",
+  "task_name": "Desktop: run tracking, delivery on idle, run card and replay",
+  "task_type": "mixed",
+  "status": "success",
+  "description": "Keryx Desktop web view. panelBus.ts: runInTerminal(command, origin?) with RunOrigin {sessionId, source: message|tool}; a RunTracker registry (setRunTracker) that gives a Run with an origin a runId; RunRequest {command, runId?}; runOpened/runFailed; runTabTitle. Markdown.tsx: RunSessionContext (set by the transcript) gives the code-block Run its session; Markdown outside a session has no origin. Transcript.tsx: sessionId prop provides the context; the execute tool card's Run passes source tool; a terminalRun block renders TerminalRunCard and starts a new agent turn label. TerminalPanel.tsx: a Run opens a new tab with ptyOpenCommand(cwd, command, runTabTitle(command), 80, 24) and writes into no tab; a start failure keeps the 'Could not run the command' toast and tells the tracker; a Run that mounts the panel opens only its own tab; a run tab opened before ptyList answered is kept. session/terminalRuns.ts (new, no React): createTerminalRuns(deps) keyed by runId with states starting|running|waiting|sent|sent-while-running|closed|start-failed|not-sent; exit -> ptyTail(tab, 200) -> capRunOutput (last 200 lines, then last 16 KiB of UTF-8 at a character boundary) -> one entry of exactly runId, command, state, exitCode, durationMs, output; delivery per session in seq order, 8 per prompt, only when keryx's initialize offered terminalResults (null while reconnecting = wait), busy refusal -> waiting and a retry after 1 s, refused -> not-sent with keryx's reason; close before exit -> closed, the later exit ignored; Send output now -> a running snapshot without exitCode, the later exit only updates the card; an exit before the tab id is known is kept. reducer.ts: TerminalRunItem/TerminalRunView/TerminalRunState, actions terminalRun (upsert by runId) and terminalSent (cards move to the end, parentTurn + 1); replayed user chunks with _meta.keryx.terminalResult draw a sent card (sent-while-running for a running snapshot) with no actions, _meta.keryx.terminalContinuation draws nothing. useAcpSession.ts: runTurn() is the shared turn core of sendPrompt and the new sendTerminalResults (session/prompt {sessionId, prompt:[{type:text,text:<display line>}], _meta:{keryx:{terminalResults}}}, no user bubble, delivered only when the session is held, initialized and has no turn or Telegram turn); l.terminalResults read from initialize._meta.keryx.terminalResults; the run store is registered as tracker and card API, listens to onPtyExit/onTabClosed, and flushes on every conversation change (before the user's queued prompts). TerminalRunCard.tsx + terminalRunBus.ts + styles/runs.css: the card (command, state in words, exit badge ok/failed, duration, collapsible text-only output, Show tab while the tab exists, Send output now while running and unsent). duration.ts: formatDuration moved out of Transcript.tsx for the card.",
+  "files_modified": [
+    "apps/desktop/src/acp/types.ts",
+    "apps/desktop/src/components/Markdown.tsx",
+    "apps/desktop/src/main.tsx",
+    "apps/desktop/src/panels/RunButton.dom.test.tsx",
+    "apps/desktop/src/panels/SidePanels.dom.test.tsx",
+    "apps/desktop/src/panels/SideTabs.dom.test.tsx",
+    "apps/desktop/src/panels/TerminalPanel.tsx",
+    "apps/desktop/src/panels/panelBus.ts",
+    "apps/desktop/src/session/SessionView.tsx",
+    "apps/desktop/src/session/Transcript.tsx",
+    "apps/desktop/src/session/reducer.ts",
+    "apps/desktop/src/session/useAcpSession.ts",
+    "apps/desktop/src/test/bun-test.d.ts"
+  ],
+  "files_created": [
+    "apps/desktop/src/session/terminalRuns.ts",
+    "apps/desktop/src/session/terminalRuns.test.ts",
+    "apps/desktop/src/session/TerminalRunCard.tsx",
+    "apps/desktop/src/session/terminalRunBus.ts",
+    "apps/desktop/src/session/terminalRunCard.dom.test.tsx",
+    "apps/desktop/src/session/terminalRunDelivery.dom.test.tsx",
+    "apps/desktop/src/session/duration.ts",
+    "apps/desktop/src/styles/runs.css",
+    "apps/desktop/src/test/terminal-run-delivery.fixture.tsx"
+  ],
+  "files_deleted": [],
+  "commits": [],
+  "lint_result": "not applicable as configured: the root eslint.config.mjs ignores apps/desktop/** (every changed file reports 'File ignored because of a matching ignore pattern'). An ad hoc run with the root's own TypeScript rules (js.recommended + typescript-eslint recommended + the root no-unused-vars options, config in the scratchpad, --no-ignore) over the 17 changed source and test files found 6 errors, all on pre-existing lines: panelBus.ts HIDDEN regex (no-control-regex, no-irregular-whitespace x2, the deliberate control-character class) and three existing `eslint-disable-next-line react-hooks/exhaustive-deps` comments in useAcpSession.ts (plugin not loaded). None in the new code.",
+  "type_check_result": "pass: bunx tsc --noEmit -p apps/desktop exit 0, no output (bun-test.d.ts gained toBeLessThanOrEqual); cd apps/desktop && bun run build (tsc --noEmit && vite build) built, with the existing >500 kB chunk warning",
+  "test_result": "pass: bun --cwd apps/desktop test src/session/terminalRun src/panels/RunButton (runs the package script `bun test src ...`, i.e. the whole desktop suite) 1235 passed, 0 failed across 103 files; base before the change 1199 passed, 0 failed across 100 files. Focused: terminalRuns.test.ts 21 passed; terminalRun* + RunButton + SidePanels + SideTabs 56 passed. bun test src/acp/terminal-result (AC7 server half, T6's) 59 passed, 0 failed. The delivery fixture was mutation-checked twice: ignoring initialize's terminalResults made the no-results run exit 1, removing the turn-end flush made the main run fail 'timed out waiting for the batched results prompt'; both restored.",
+  "story_result": "not applicable (the desktop app has no Storybook)",
+  "acceptance_criteria_met": "all",
+  "skill_drift": "none",
+  "project_context_applied": [
+    { "path": ".metaproject/rules/activity/implement.mdc", "sha256": "813c83ec25a56fc0b0a67327de443736e6fe995c1ca5a9ab8fc82bbbb6c6eb3a", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/coding-style.mdc", "sha256": "19420374bfb17f47d6b2d5fef0b31def69b51eb11923c46ce0a9868ea214a806", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/patterns.mdc", "sha256": "bb1d33308b235f5cb28c1feafcf8b84fcab364f703e49c0bb609b605d37f8d3b", "how": "followed" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/security.mdc", "sha256": "a6db0e3ccb8968da98c2afc4693a4e5e1b7800d109863444fae6e48b963a1d82", "how": "read" },
+    { "path": ".metaproject/rules/stacks/ts-js-node/testing.mdc", "sha256": "f6930f1327a68a32fa6d56329e33cde64ae08879c62ea4963ff7fd73319e4dc2", "how": "followed" },
+    { "path": ".metaproject/rules/core/tdd-workflow.mdc", "sha256": "3233aeaec14c75403c3bc20d8b3299b5a03623cc2e2f0451e7beeb3f33967507", "how": "followed" },
+    { "path": ".metaproject/rules/core/error-handling.mdc", "sha256": "af8d77f00d7a261b535709bab04ad47b08af340439e8e9faa8f3097c56527bd6", "how": "followed" },
+    { "path": ".metaproject/rules/core/solid-principles.mdc", "sha256": "ddeafd7a48e8cd2a276ba7069c4a79e30d44c0afda5c08706917576b4cbf2796", "how": "followed" },
+    { "path": ".metaproject/rules/core/security-baseline.mdc", "sha256": "152836e15eb3a4c36481d997156ef431a69bebccea6bc7b6ca1edfd1fa340cee", "how": "followed" },
+    { "path": ".metaproject/rules/core/async-patterns.mdc", "sha256": "8a192ca022f9d719b104cc6d144de51a78e0fc85b05c016605ee7779fd966aaa", "how": "followed" }
+  ],
+  "noticed_not_touched": [
+    {
+      "what": "AC11's verify command `bun --cwd apps/desktop run build` does not build here (bun 1.4.2): run from the repository root it prints bun run's usage and exits 0, so the AC would pass without a build. `cd apps/desktop && bun run build` builds. The frozen criterion was not edited.",
+      "where": ".metaproject/flows/523-2026-11-24-desktop-run-result-followup/acceptance-criteria.md AC11"
+    },
+    {
+      "what": "`bun --cwd apps/desktop test <filters>` runs the package script `bun test src <filters>`, and the `src` filter selects every desktop test, so the desktop AC verify commands (AC1, AC3, AC4, AC7, AC8, AC9) always run the whole suite rather than the named files.",
+      "where": "apps/desktop/package.json scripts.test and the flow's acceptance-criteria.md verify commands"
+    },
+    {
+      "what": "The root ESLint config ignores apps/desktop/**, so no lint runs on desktop code at all; tsc (strict, noUnusedLocals/Parameters) is the only static check.",
+      "where": "eslint.config.mjs ignores"
+    },
+    {
+      "what": "Markdown a session renders outside its transcript (the Activity panel's subagent texts, portaled into the side panel) has no run origin: Run there opens a tab but nothing is tracked or sent back. Giving the Activity panel the RunSessionContext would make those runs tracked too.",
+      "where": "apps/desktop/src/session/ActivityPanel.tsx (Markdown at ~:202), apps/desktop/src/components/Markdown.tsx RunSessionContext"
+    },
+    {
+      "what": "SidePanels.dom.test.tsx prints 7 React act() warnings for TerminalPanel (async ptyList/ptyOpen resolution after a sync act); the same 7 are in the base run. RunButton.dom.test.tsx avoids them with an async act around render.",
+      "where": "apps/desktop/src/panels/SidePanels.dom.test.tsx"
+    }
+  ],
+  "assumptions": [
+    "The run card's \"Send output now\" is shown only while the run is running, its process has not ended, its tab is open and nothing was sent; on a keryx without terminalResults the click makes the card 'not sent' at once and the later exit only shows the exit code.",
+    "A tool card's or delegate result's Markdown inside the transcript carries the shown session's origin like an agent message does (the context wraps the whole transcript).",
+    "After a busy refusal the session is asked again no sooner than 1 s later (and at its next turn end), so a turn the client cannot see cannot cause a tight loop of refused prompts.",
+    "The prompt's display text is a fixed line ('The result of a command run from the Run button.' / 'The results of N commands …'); keryx ignores it.",
+    "durationMs counts from the moment the panel reported the tab open to the exit (or the snapshot), rounded to whole milliseconds."
+  ],
+  "behavior_changes": [
+    {
+      "description": "When a result is delivered, its run card moves to the end of the transcript, so the agent's follow-up reply comes right after it, as a reload shows it (note, then reply). Without the move the reply would be glued onto the previous agent message, because keryx sends no message ids and no user bubble separates the turns.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": ["Keep the card where the Run was clicked and mark a turn boundary so the reply starts a new agent message below everything else"]
+    },
+    {
+      "description": "Run results waiting for a session go out before prompts the user queued during the same turn (the results flush runs before the queue on every turn end).",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": ["Send the user's queued prompt first and the results after its turn"]
+    },
+    {
+      "description": "A 'Send output now' snapshot that still waits for the session's turn to end when the process exits is replaced by the exit's result (one entry per run, state exited with exit code and the fresh tail); a snapshot already sent is never replaced, the exit only updates the card.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": ["Send the snapshot as captured and show the exit only on the card"]
+    },
+    {
+      "description": "When the output tail cannot be read after the exit (the tab was closed in between, or the host failed), the result is still sent with its exit code and the output '[the output could not be read: <host error>]', which the card also shows.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": ["Send an empty output", "Do not send the result and say so on the card"]
+    },
+    {
+      "description": "Results keryx would refuse are not sent: a prompt keryx refuses before storing anything (invalid params, invalid request other than busy, unknown session, no provider) leaves its cards 'not sent: <keryx's message>' with no retry and no notice; a command longer than keryx's 4096 characters is tracked but its result is 'not sent: the command is longer than the 4096 characters keryx takes'. A failure after keryx stored the results (the follow-up turn failed) keeps the cards 'sent' and shows the error as a transcript notice, like any failed turn.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": ["Retry a refused prompt", "Also show a notice for a refused prompt", "Truncate an over-long command to 4096 characters and send it"]
+    },
+    {
+      "description": "A Run that opens the terminal panel for the first time (no tabs yet) opens only the run tab; before, the panel started its own shell tab and typed the command into it. A run tab that opened before the panel's tab list answered is kept in the list.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": ["Keep the panel's own first shell tab next to the run tab"]
+    },
+    {
+      "description": "Card wording the dispatch did not give: 'starting…' while the tab opens, 'output sent to the agent while it was running' for a snapshot, the exit badge 'exit N' (ok for 0, failed otherwise) or 'ended by a signal', the duration as the tool cards show it, and 'not sent: the command is longer than …' / 'not sent: <keryx's message>'. The dispatch's own phrases are used as given.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": ["'sent while running' for a snapshot", "No 'starting…' state shown (card appears once the tab is open)"]
+    },
+    {
+      "description": "A result that becomes ready while keryx is restarting (no initialize answered on the new connection yet) waits instead of being marked not sent; once the new keryx answers, it is sent if that keryx offers terminalResults and marked 'not sent: this keryx does not take run results' otherwise. The matrix covers a window reload (runs lost) but not a keryx restart.",
+      "user_visible": true,
+      "needs_operator": true,
+      "alternatives": ["Mark results not sent when the connection resets"]
+    },
+    {
+      "description": "After a busy refusal the session is asked again no sooner than 1 s later (and at its next turn end).",
+      "user_visible": false,
+      "needs_operator": false,
+      "alternatives": ["Retry only at the next observed turn end"]
+    }
+  ],
+  "not_touched": [
+    { "path": "apps/desktop/src/platform/panels.ts", "reason": "ptyOpenCommand, ptyTail and onPtyExit (T5) already fit; no wrapper was missing" },
+    { "path": "apps/desktop/src/session/delegateTerminals.ts", "reason": "the /delegate runs stay unchanged (constraint); the run store sits beside them with its own onPtyExit/onTabClosed listeners" },
+    { "path": "apps/desktop/src/styles/delegate.css", "reason": "the model only; the run card's styles are the new styles/runs.css (theme tokens, imported in main.tsx)" },
+    { "path": "src/acp/terminal-result.ts", "reason": "keryx server, read for the exact contract only (constraint: do not change the server)" },
+    { "path": "src/acp/profile.ts", "reason": "keryx server, read for initialize._meta.keryx.terminalResults only" }
+  ],
+  "notes": "TDD order: terminalRuns.test.ts, terminalRunCard.dom.test.tsx and the RunButton/SidePanels/SideTabs test changes were written first and run red (terminalRuns.test.ts: \"Cannot find module './terminalRuns'\"; the whole desktop run at that point: 1100 pass / 31 fail / 1 error, the DOM tests not inspected one by one); then reducer, panelBus, TerminalPanel, terminalRuns, card, transcript, Markdown and hook code made them green. The hook-level fixture (terminal-run-delivery.fixture.tsx run by terminalRunDelivery.dom.test.tsx, the issue-question-resume pattern) was written after the hook code and proven by two mutations instead of a red run. sendPrompt was refactored onto the shared runTurn() with its behaviour kept (userSent, userSendFailed, busy notice text, end-of-turn bookkeeping); only buildUserPrompt (pure) now runs before the turn slot is taken. Known host limits from T5 apply unchanged: a fast command's output can be missing from the tail under load, and a signal exit arrives as code 1 (null is passed through when it arrives). Not verified: a live run in the installed app (T9, AC13), real Tauri IPC (pty_open_command / pty_tail / panel://pty-exit are faked in every test), zsh rc noise in the tail, and the card's look in the themes. The vite build wrote the gitignored apps/desktop/dist/. No project-skill routes to apps/desktop/src (keryx skills route gave only generic token matches). The on_demand entries of resolved/T7.implement.json (concurrency-patterns, cli-interface-design) were not read: no lock files, JSONL, child processes or CLI surface are touched. flow.json, acceptance-criteria.md and journal.md were not edited; nothing was staged or committed."
+}

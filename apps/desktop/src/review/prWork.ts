@@ -1,6 +1,8 @@
 import { boundSessionIndex, boundSessions, sessionFlags, subjectKey, type SessionInfo, type SessionSubject } from "../acp/types";
 import { byUpdatedDesc, STATUS_LABEL } from "../flows/model";
 import type { FlowCard } from "../platform/commands";
+import type { ReviewSessionMode } from "../session/useAcpSession";
+import { REVIEW_SESSION_BUSY } from "./reviewTurn";
 import type { ReviewCard } from "./types";
 
 /** Where "Open in session" goes: the newest bound session, a new bound one, or the named session. */
@@ -235,4 +237,66 @@ export function subjectOpener(): typeof openSubjectSession {
     inFlight.set(key, open);
     return open;
   };
+}
+
+/** What sending a review turn needs from the window's session hook (`useAcpSession`). */
+export interface ReviewTurnSession {
+  loadSession: (id: string, options?: { holdForCaller?: boolean }) => Promise<boolean>;
+  newSession: () => Promise<string | null>;
+  bindSubject: (id: string, subject: SessionSubject) => unknown;
+  isShown: (id: string) => boolean;
+  raiseMode: (id: string, mode: ReviewSessionMode) => Promise<boolean>;
+  sendPrompt: (text: string, target?: string) => boolean;
+  releaseHold: (id: string) => void;
+}
+
+/** Where a review's turn goes. */
+export type ReviewTurnTarget =
+  /** The session the user typed `/review` in: the turn goes there, in the mode the user chose. */
+  | { owner: string }
+  /**
+   * A start from the board or the Reviews tab: the Subject's newest bound session, or a new one bound to it,
+   * opened through `open` (App's `subjectOpener`) and raised to `mode` first.
+   */
+  | { subject: SessionSubject; mode: ReviewSessionMode; sessions: () => readonly SessionInfo[]; open: typeof openSubjectSession };
+
+/**
+ * Desktop Review v3, stage 1: send a review's turn (`turnFor` its session) and resolve the session it went
+ * into. An existing bound session is loaded holding its free turn slot for the review (`holdForCaller`), so
+ * Run results and queued prompts that waited for it go after the review's turn and cannot take the slot
+ * while the mode switch is on its way; the hold ends however this ends. Throws when no session opened, and
+ * REVIEW_SESSION_BUSY when the session refused the turn: nothing is queued.
+ */
+export async function sendReviewTurn(session: ReviewTurnSession, target: ReviewTurnTarget, turnFor: (sessionId: string) => string): Promise<string> {
+  if ("owner" in target) return sendTurn(session, target.owner, turnFor);
+  /** The bound session the open loaded with its slot held for this turn. */
+  let held: string | undefined;
+  try {
+    const opened = await target.open({
+      sessions: target.sessions,
+      loadSession: async id => {
+        held = id;
+        await session.loadSession(id, { holdForCaller: true });
+      },
+      newSession: () => session.newSession(),
+      bind: (id, value) => void session.bindSubject(id, value),
+      // The review is sent as a turn: no composer draft is touched.
+      fill: () => {},
+      isShown: id => session.isShown(id),
+    }, target.subject, "latest", "");
+    if (!opened) throw new Error("Could not open the review session.");
+    // A session Desktop opened for the review runs unattended: Auto review mode → Auto permission mode, Manual → at
+    // least Trust. A failed switch leaves the session's mode as it was and shows a notice; the review is still sent.
+    await session.raiseMode(opened.sessionId, target.mode);
+    return sendTurn(session, opened.sessionId, turnFor);
+  } finally {
+    // Sent: the review's turn took the slot, which ended the hold. Not sent: what waited for the slot goes now.
+    if (held !== undefined) session.releaseHold(held);
+  }
+}
+
+function sendTurn(session: ReviewTurnSession, sessionId: string, turnFor: (sessionId: string) => string): string {
+  // Refused (busy): the launch form stays where it was and shows why; nothing is queued.
+  if (!session.sendPrompt(turnFor(sessionId), sessionId)) throw new Error(REVIEW_SESSION_BUSY);
+  return sessionId;
 }

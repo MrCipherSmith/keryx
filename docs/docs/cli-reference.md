@@ -500,10 +500,15 @@ is what the keryx desktop app launches, and is open to any ACP client:
   ACP, plus `_meta.keryx.call`/`turn`/`session` input and output token
   totals), and `session_info_update` with the session title.
 - **Discovery:** `initialize` carries `_meta.keryx = {profile, profiles,
-  extensions, liveSessions: true}` in this profile; `_keryx/info` answers
+  extensions, liveSessions: true, issuePreparation: true, minDesktopVersion,
+  terminalResults: true}` in this profile; `_keryx/info` answers
   `{version, profile, profiles, extensions}` in either profile (plus
-  `liveSessions: true` in this one), and
-  `agentInfo.version` is the keryx version.
+  `liveSessions`, `issuePreparation`, `minDesktopVersion` and
+  `terminalResults` at the top level in this one), and
+  `agentInfo.version` is the keryx version. `terminalResults: true` says that
+  `session/prompt` takes `_meta.keryx.terminalResults` (the results of the
+  desktop's Run button), only from a client that advertised
+  `_meta.keryx.terminalResults: true` in its `initialize` client capabilities.
 
 Any other value of `--profile` is a usage error: keryx exits with status 2
 before reading stdin.

@@ -49,7 +49,94 @@ export type Item =
   /** A non-text content block (image, resource link, embedded resource) of a message, shown as itself. */
   | { kind: "block"; id: number; role: "user" | "agent"; block: ContentBlock }
   | DelegateResultItem
-  | CommandItem;
+  | CommandItem
+  | TerminalRunItem;
+
+/** Where a Run click's run stands (flow 523), as its card says it. */
+export type TerminalRunState =
+  | "starting"
+  | "running"
+  /** Its result is ready and waits for the session's turn to end. */
+  | "waiting"
+  | "sent"
+  /** "Send output now" sent a snapshot; the process kept running. */
+  | "sent-while-running"
+  | "closed"
+  | "start-failed"
+  | "not-sent";
+
+/**
+ * A Run click in this session's transcript (flow 523): the command in a terminal tab of its own and,
+ * once it ends or on "Send output now", its result sent to the agent, which continues on its own.
+ * A live run is the window's (`terminalRuns.ts`); a replayed note (`_meta.keryx.terminalResult`) draws it
+ * again in a sent state, with no actions. The output is the command's, untrusted: shown as text only.
+ */
+export interface TerminalRunItem {
+  kind: "terminalRun";
+  id: number;
+  runId: string;
+  command: string;
+  state: TerminalRunState;
+  /** The process's exit code once it ended, null when it ended by a signal; absent while it runs. */
+  exitCode?: number | null;
+  /** How long it ran, once it ended. */
+  durationMs?: number;
+  /** The output tail as sent (or as it would have been). */
+  output?: string;
+  /** Why it could not start, or why its result was not sent. */
+  error?: string;
+  /** The run's tab is still in the terminal panel. */
+  tabOpen: boolean;
+  /** Drawn from the session's history on load. */
+  replayed?: boolean;
+  /**
+   * A reload put this live card in the place of its replayed note, a note of this kind (`keepLiveRuns`). When
+   * the result the run sends next is of the same kind, keryx holds it already and answers a duplicate: the
+   * card stays there, before the agent's reply to the note. A result of the other kind (the exit after a
+   * "still running" snapshot) is a new note at the end of keryx's history with a turn of its own:
+   * `terminalSent` moves the card to the end and drops the mark.
+   */
+  inHistory?: RunNoteKind;
+}
+
+/** The kind of note keryx stores for a run's result (flow 523): a "still running" snapshot, or the final result. */
+export type RunNoteKind = "running" | "final";
+
+/** The note a sent card stands for, a replayed one included: a snapshot is the one sent while its process ran. */
+function noteKindOf(state: TerminalRunState): RunNoteKind {
+  return state === "sent-while-running" ? "running" : "final";
+}
+
+/** A run card's fields as the run store or a replayed note gives them; the reducer keeps the card's id and place mark. */
+export type TerminalRunView = Omit<TerminalRunItem, "kind" | "id" | "inHistory">;
+
+/** A live run card whose result has not gone to the agent (yet, or ever): not a turn of its own. */
+export function isUndeliveredRun(item: Item | undefined): boolean {
+  return item?.kind === "terminalRun" && item.replayed !== true && item.state !== "sent" && item.state !== "sent-while-running";
+}
+
+/** States a run leaves only through its tab or its process (flow 523): the run store and the reducer read them alike. */
+export const FINAL_RUN_STATES: ReadonlySet<TerminalRunState> = new Set<TerminalRunState>(["sent", "sent-while-running", "closed", "start-failed", "not-sent"]);
+
+/**
+ * The run store's rule: a live run its tab or its process can still change, so the store keeps it
+ * (`terminalRuns.ts` forgetIfDone). Its state is not final, or its tab is still open (its exit, Show tab, the
+ * tab's close), a "not sent" run included: its Show tab works and its tab's close reaches its card.
+ */
+export function runCanChange(run: Pick<TerminalRunItem, "state" | "tabOpen">): boolean {
+  return !FINAL_RUN_STATES.has(run.state) || run.tabOpen;
+}
+
+/**
+ * The reload's rule, stricter than the store's (R2-UX-001): a live run whose card a reload keeps at the end
+ * (`keepLiveRuns`) is one that can still change, unless it is "not sent". That card goes whatever its tab
+ * does: its result will never go, so nothing the tab does changes what the card is for, and a reload drops it
+ * as it drops a closed or could-not-start one. The store still holds the run until its tab closes; the
+ * updates that follow do not draw the card again (`terminalRun`).
+ */
+function keptOnReload(run: Pick<TerminalRunItem, "state" | "tabOpen">): boolean {
+  return run.state !== "not-sent" && runCanChange(run);
+}
 
 /**
  * A `/delegate` terminal run finished a turn: its answer as keryx put it in the parent's history, shown
@@ -208,6 +295,25 @@ export function blockText(block: ContentBlock): string {
 }
 
 /**
+ * Where a turn's stream ends in `items` (flow 523): the end, except, while a turn streams, before the
+ * undelivered Run cards that trail it. A Run clicked while the agent writes adds its card at the end; the
+ * rest of the reply still joins the message it belongs to, and the card stays after the turn's stream
+ * until its result goes (`terminalSent` then moves it, and the follow-up turn starts after it). The
+ * reducer inserts streamed items here and the transcript marks the item before it as the one streaming.
+ */
+export function streamEndOf(items: readonly Item[], streaming: boolean): number {
+  let at = items.length;
+  if (!streaming) return at;
+  while (at > 0 && isUndeliveredRun(items[at - 1])) at -= 1;
+  return at;
+}
+
+/** Where the running turn's next streamed item goes. */
+function streamEnd(d: ConvState): number {
+  return streamEndOf(d.items, d.busy || !!d.telegramTurn);
+}
+
+/**
  * The update helpers below mutate a draft: a shallow copy of the conversation whose `items` array is
  * already a private copy. Item objects themselves are never mutated (memoised rows compare them).
  */
@@ -220,13 +326,15 @@ function appendChunk(
 ): boolean {
   if (text === "") return false;
   const items = d.items;
-  const last = items[items.length - 1];
+  // A user chunk opens a turn: it goes at the very end.
+  const end = kind === "user" ? items.length : streamEnd(d);
+  const last = items[end - 1];
   if (last && last.kind === kind && (last.kind !== "user" || last.source === source) &&
     (messageId == null || last.messageId == null || last.messageId === messageId)) {
-    items[items.length - 1] = { ...last, text: last.text + text, messageId: last.messageId ?? messageId };
+    items[end - 1] = { ...last, text: last.text + text, messageId: last.messageId ?? messageId };
     return true;
   }
-  items.push({ kind, id: d.nextId, text, messageId, ...(kind === "user" && source ? { source } : {}) });
+  items.splice(end, 0, { kind, id: d.nextId, text, messageId, ...(kind === "user" && source ? { source } : {}) });
   d.nextId += 1;
   return true;
 }
@@ -279,7 +387,7 @@ function upsertTool(d: ConvState, u: ToolCallFields, isNew: boolean, at: number)
     d.items[idx] = next;
     return true;
   }
-  d.items.push(next);
+  d.items.splice(streamEnd(d), 0, next);
   d.nextId += 1;
   return true;
 }
@@ -299,6 +407,31 @@ function replayDate(meta: unknown): number | undefined {
   const value = (meta as { keryx?: { recordedAt?: unknown } } | null)?.keryx?.recordedAt;
   const ms = typeof value === "string" ? Date.parse(value) : NaN;
   return Number.isFinite(ms) ? ms : undefined;
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/**
+ * `_meta.keryx.terminalResult` of a replayed user chunk (flow 523): a Run's result as keryx stored it,
+ * drawn as a sent run card. Null for anything else.
+ */
+function terminalNoteOf(meta: unknown): TerminalRunView | null {
+  const keryx = isRecord(meta) ? meta["keryx"] : undefined;
+  const n = isRecord(keryx) ? keryx["terminalResult"] : undefined;
+  if (!isRecord(n) || typeof n.runId !== "string" || typeof n.command !== "string" || typeof n.output !== "string") return null;
+  if (n.state !== "exited" && n.state !== "running") return null;
+  const base: TerminalRunView = { runId: n.runId, command: n.command, output: n.output, tabOpen: false, replayed: true, state: "sent-while-running" };
+  if (n.state === "running") return base;
+  const durationMs = typeof n.durationMs === "number" && Number.isFinite(n.durationMs) && n.durationMs >= 0 ? { durationMs: n.durationMs } : {};
+  return { ...base, ...durationMs, state: "sent", exitCode: typeof n.exitCode === "number" ? n.exitCode : null };
+}
+
+/** `_meta.keryx.terminalContinuation`: keryx's own user line of a terminal-results turn, never drawn. */
+function isTerminalContinuation(meta: unknown): boolean {
+  const keryx = isRecord(meta) ? meta["keryx"] : undefined;
+  return isRecord(keryx) && keryx["terminalContinuation"] === true;
 }
 
 function replayDelegateNote(d: ConvState, n: { runId: string; agentId: string; turn: number; text: string }, startedAt?: number): boolean {
@@ -331,7 +464,7 @@ const MEDIA_BLOCKS = new Set(["image", "resource_link", "resource"]);
 
 /** A message's image or resource: its own item, so the text around it stays two separate messages. */
 function pushBlock(d: ConvState, role: "user" | "agent", block: ContentBlock): true {
-  d.items.push({ kind: "block", id: d.nextId, role, block });
+  d.items.splice(role === "user" ? d.items.length : streamEnd(d), 0, { kind: "block", id: d.nextId, role, block });
   d.nextId += 1;
   return true;
 }
@@ -340,7 +473,7 @@ function pushBlock(d: ConvState, role: "user" | "agent", block: ContentBlock): t
 function pushSystemNote(d: ConvState, text: string): boolean {
   const note = parseSystemNote(text);
   if (note.body === "" && note.tag === null) return false;
-  d.items.push({ kind: "notice", id: d.nextId, level: note.level, text: note.body, system: { tag: note.tag } });
+  d.items.splice(streamEnd(d), 0, { kind: "notice", id: d.nextId, level: note.level, text: note.body, system: { tag: note.tag } });
   d.nextId += 1;
   return true;
 }
@@ -379,10 +512,18 @@ function applyUpdate(d: ConvState, u: SessionUpdate, at: number): boolean {
       if (!d.replaying && !d.telegramTurn) return false; // Desktop user text is added locally on send
       const c = u as ChunkUpdate;
       const note = delegateNoteOf((u as { _meta?: unknown })._meta);
+      const terminal = terminalNoteOf(c._meta);
       const parentTurn = (c._meta as { keryx?: { parentTurn?: number } } | undefined)?.keryx?.parentTurn;
       if (typeof parentTurn === "number" && Number.isSafeInteger(parentTurn) && parentTurn >= 0) d.parentTurn = parentTurn;
-      else if (!note && d.items.at(-1)?.kind !== "user") d.parentTurn++;
+      else if (!note && !terminal && d.items.at(-1)?.kind !== "user") d.parentTurn++;
       if (note) return replayDelegateNote(d, note, replayDate(c._meta));
+      if (terminal) {
+        d.items.push({ ...terminal, kind: "terminalRun", id: d.nextId });
+        d.nextId += 1;
+        return true;
+      }
+      // The turn it starts is counted above; the line itself is keryx's, not the operator's: no bubble.
+      if (isTerminalContinuation(c._meta)) return true;
       if (MEDIA_BLOCKS.has(c.content?.type)) return pushBlock(d, "user", c.content);
       const source = d.telegramTurn || (c._meta as { keryx?: { source?: string } } | undefined)?.keryx?.source === "telegram" ? "telegram" : undefined;
       const messageId = c.messageId ?? (d.telegramTurn ? `telegram:${d.telegramTurn.generation}:${d.telegramTurn.updateId}` : undefined);
@@ -513,6 +654,15 @@ export type Action =
   /** A command card; with `replaceId` it takes the place of that card (a view acting on itself). */
   /** `_keryx/delegate_result`: a terminal run's turn answer, shown in the session it was delegated from. */
   | { t: "delegateResult"; sessionId: string; runId: string; agentId: string; turn: number; text: string }
+  /** A Run's run changed (flow 523): its card is added, or replaced in place (same runId). */
+  | { t: "terminalRun"; sessionId: string; run: TerminalRunView }
+  /**
+   * Run results went to the agent in one prompt and its follow-up turn begins: their cards move to the
+   * end, so the reply that streams in comes after them (as after a note on reload), and the turn is counted.
+   */
+  | { t: "terminalSent"; sessionId: string; runIds: readonly string[] }
+  /** keryx stored nothing of a results prompt (busy, refused, wait): the turn `terminalSent` counted did not start. */
+  | { t: "terminalUnsent"; sessionId: string }
   | { t: "command"; sessionId: string; card: Omit<CommandItem, "kind" | "id">; replaceId?: number }
   | { t: "queueAdd"; sessionId: string; text: string; issueLaunchId?: string; resumeIssueQuestions?: true }
   | { t: "queueRemove"; sessionId: string; index: number }
@@ -580,6 +730,40 @@ function routeUpdates(state: WindowState, updates: readonly RoutedUpdate[]): Win
   return convs === state.convs && loading === state.loading ? state : { ...state, convs, loading };
 }
 
+/**
+ * A reload (after /compact or /rewind, a return to a session keryx released, a restart) keeps the cards of
+ * the runs the window still tracks (flow 523): a replayed note of such a run shows the live card in the
+ * note's place, marked with the note's kind (`inHistory`), and a run that can still change (starting,
+ * running, waiting, or its tab still open: its exit and Show tab change it), unless it is "not sent", keeps
+ * its card at the end, unmarked (`keptOnReload`). Any other card goes with the history it was in: a delivered
+ * run's card comes back from keryx's note, as the history now has it, and a run that ended without
+ * reaching the agent (closed, could not start, not sent) has no note, so it is not drawn again below newer
+ * messages, nor brought back from a turn /rewind removed.
+ */
+function keepLiveRuns(loaded: ConvState, previous: readonly Item[]): ConvState {
+  const live = new Map<string, TerminalRunItem>();
+  for (const i of previous) if (i.kind === "terminalRun" && i.replayed !== true) live.set(i.runId, i);
+  if (live.size === 0) return loaded;
+  // keryx can hold two notes for one run (a "still running" snapshot, then its exit): the live card takes the
+  // place of the newest one, and the older stays a replayed note.
+  const newestNote = new Map<string, number>();
+  loaded.items.forEach((i, n) => {
+    if (i.kind === "terminalRun" && live.has(i.runId)) newestNote.set(i.runId, n);
+  });
+  const items = loaded.items.map((i, n): Item => {
+    if (i.kind !== "terminalRun" || newestNote.get(i.runId) !== n) return i;
+    const run = live.get(i.runId)!;
+    live.delete(i.runId);
+    return { ...run, id: i.id, inHistory: noteKindOf(i.state) };
+  });
+  let nextId = loaded.nextId;
+  // At the end, in no note's place: a mark an earlier reload set does not hold here.
+  for (const { inHistory: _earlierPlace, ...run } of live.values()) {
+    if (keptOnReload(run)) items.push({ ...run, id: nextId++ });
+  }
+  return { ...loaded, items, nextId };
+}
+
 /** Detached children have no verified live runtime in this connection. */
 function releaseConversation(c: ConvState, reason: LostReason): ConvState {
   if (!c.held && !c.busy) return c;
@@ -639,6 +823,33 @@ export function reducer(state: WindowState, a: Action): WindowState {
         nextId: c.nextId + 1,
         items: [...c.items, { kind: "delegate", id: c.nextId, runId: a.runId, agentId: a.agentId, turn: a.turn, text: a.text }],
       }));
+    case "terminalRun":
+      return withConv(state, a.sessionId, (c) => {
+        // The live card, never a replayed note of the same run (keryx can hold a snapshot and its exit).
+        const at = c.items.findIndex((i) => i.kind === "terminalRun" && i.runId === a.run.runId && i.replayed !== true);
+        // A "not sent" card a reload dropped is not drawn again by a late update of the store (the process's
+        // exit, the tab's close: the store holds such a run until its tab closes).
+        if (at < 0 && a.run.state === "not-sent") return c;
+        if (at < 0) return { ...c, nextId: c.nextId + 1, items: [...c.items, { ...a.run, kind: "terminalRun", id: c.nextId }] };
+        // The store's view carries no place mark: the card keeps its own.
+        return { ...c, items: c.items.map((i, n) => (n === at ? { ...a.run, kind: "terminalRun" as const, id: i.id, ...(i.kind === "terminalRun" && i.inHistory ? { inHistory: i.inHistory } : {}) } : i)) };
+      });
+    case "terminalSent":
+      return withConv(state, a.sessionId, (c) => {
+        const sent = new Set(a.runIds);
+        // A card a reload put in its note's place stays there when keryx holds that note for this send already
+        // (the same kind: a duplicate), so the agent's reply to the note follows it. Any other sent card goes to
+        // the end, unmarked: keryx stores its result as a new note at the end, and the turn's reply follows it.
+        // A replayed note is history and never moves.
+        const moves = (i: Item): i is TerminalRunItem =>
+          i.kind === "terminalRun" && sent.has(i.runId) && i.replayed !== true && i.inHistory !== noteKindOf(i.state);
+        const cards = a.runIds
+          .flatMap((id) => c.items.filter((i): i is TerminalRunItem => moves(i) && i.runId === id))
+          .map(({ inHistory: _movedFrom, ...card }) => card);
+        return { ...c, parentTurn: c.parentTurn + 1, items: [...c.items.filter((i) => !moves(i)), ...cards] };
+      });
+    case "terminalUnsent":
+      return withConv(state, a.sessionId, (c) => (c.parentTurn > 0 ? { ...c, parentTurn: c.parentTurn - 1 } : c));
     case "queueAdd":
       return withConv(state, a.sessionId, c => {
         if (!a.text.trim() || (a.issueLaunchId && c.queue.some(prompt => prompt.issueLaunchId === a.issueLaunchId)) || (a.resumeIssueQuestions && c.queue.some(prompt => prompt.resumeIssueQuestions))) return c;
@@ -677,8 +888,9 @@ export function reducer(state: WindowState, a: Action): WindowState {
     case "loadStart":
       return { ...state, loading: { ...state.loading, [a.sessionId]: newConv(a.sessionId, { replaying: true }) } };
     case "loadDone": {
-      const loaded = state.loading[a.sessionId];
-      if (!loaded) return state;
+      const replayed = state.loading[a.sessionId];
+      if (!replayed) return state;
+      const loaded = keepLiveRuns(replayed, state.convs[a.sessionId]?.items ?? []);
       const conv: ConvState = {
         ...loaded,
         replaying: false,

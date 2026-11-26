@@ -3,16 +3,23 @@ name: Desktop Check
 # Tests and lints the macOS desktop client (apps/desktop) on every change to
 # it: the Rust core (cargo test, clippy with warnings as errors) and the web
 # view's unit tests. Builds nothing for release; desktop-release.yml does that.
+# keryx's run-result contract (flow 523) is in the paths too: the desktop keeps
+# copies of its limits, which apps/desktop/src/session/terminalRuns.test.ts
+# compares, so a keryx-only change to that contract runs the comparison.
 on:
   push:
     branches: [main]
     paths:
       - "apps/desktop/**"
       - ".github/workflows/desktop-check.yml"
+      - "src/acp/terminal-result.ts"
+      - "src/session/terminal-note.ts"
   pull_request:
     paths:
       - "apps/desktop/**"
       - ".github/workflows/desktop-check.yml"
+      - "src/acp/terminal-result.ts"
+      - "src/session/terminal-note.ts"
 
 permissions:
   contents: read

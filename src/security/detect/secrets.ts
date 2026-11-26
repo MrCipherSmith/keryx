@@ -29,22 +29,251 @@ type Rule = {
 const PRIVATE_KEY_BEGIN = /-----BEGIN (?:[A-Z0-9]{1,16} ){0,3}PRIVATE KEY(?: BLOCK)?-----/g;
 const PRIVATE_KEY_END = /-----END (?:[A-Z0-9]{1,16} ){0,3}PRIVATE KEY(?: BLOCK)?-----/g;
 
+function nextMatch(pattern: RegExp, content: string, from: number): RegExpExecArray | null {
+  pattern.lastIndex = from;
+  return pattern.exec(content);
+}
+
+// A line of key body once its prefix is cut off: base64, the PGP checksum line (`=abcd`) included.
+const PEM_BODY = /^=?[A-Za-z0-9+/]+={0,2}$/;
+// A header field between a key's BEGIN line and its body (RFC 1421 PEM, OpenPGP armor); the first one
+// on a line, after that line's prefix.
+const PEM_HEADER_FIELD = /(?:Proc-Type|DEK-Info|Content-Domain|Version|Comment|Hash|Charset|MessageID): /;
+
+const NEWLINE = 10;
+const BACKSLASH = 92;
+const LETTER_U = 117;
+// The letters after a backslash that make a JSON escape of one character a key body may hold:
+// `\n` `\r` `\t` `\b` `\f` `\/`. `\\` and `\uXXXX` are read on their own; `\"` ends the body.
+const BODY_ESCAPE_LETTERS: ReadonlySet<number> = new Set([110, 114, 116, 98, 102, 47]);
+
+function isBase64Code(code: number): boolean {
+  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || (code >= 48 && code <= 57) || code === 43 || code === 47 || code === 61;
+}
+
+function isDigitCode(code: number): boolean {
+  return code >= 48 && code <= 57;
+}
+
+function isHexCode(code: number): boolean {
+  return isDigitCode(code) || (code >= 65 && code <= 70) || (code >= 97 && code <= 102);
+}
+
+function isSeparatorCode(code: number): boolean {
+  return code === 58 || code === 45; // `:` `-`
+}
+
+function isSpaceCode(code: number): boolean {
+  return code === 32 || code === 9 || code === 13 || code === 11 || code === 12;
+}
+
+// The marker a unified diff puts in the first column of every line of a hunk: ` ` (context), `+`, `-`.
+function isDiffMarkerCode(code: number): boolean {
+  return code === 32 || code === 43 || code === 45;
+}
+
+// The number of backslashes directly before `index`, none before `from` counted.
+function backslashesBefore(content: string, index: number, from: number): number {
+  let count = 0;
+  for (let i = index - 1; i >= from && content.charCodeAt(i) === BACKSLASH; i--) count += 1;
+  return count;
+}
+
+// Where the run of key body that ends at `end` starts, on one line and never before `from`: base64
+// characters and whole JSON string escapes (`\n` `\r` `\t` `\b` `\f` `\/` `\\` `\uXXXX`, RFC 8259 §7), so
+// a key serialized into one string is body escapes and all, and the run never starts inside an escape.
+// It ends at a quote (`\"` included) or any other character. Linear: a run of backslashes is counted
+// once to decide the escape it ends and once more when it is taken.
+function bodyRunStart(content: string, end: number, from: number): number {
+  let run = end;
+  while (run > from) {
+    const last = run - 1;
+    const code = content.charCodeAt(last);
+    if (
+      isHexCode(code) &&
+      last - 5 >= from &&
+      content.charCodeAt(last - 5) === BACKSLASH &&
+      content.charCodeAt(last - 4) === LETTER_U &&
+      isHexCode(content.charCodeAt(last - 3)) &&
+      isHexCode(content.charCodeAt(last - 2)) &&
+      isHexCode(content.charCodeAt(last - 1)) &&
+      backslashesBefore(content, last - 5, from) % 2 === 0
+    ) {
+      run -= 6; // `\uXXXX`
+      continue;
+    }
+    if (code === BACKSLASH) {
+      // Whole `\\` pairs are body. An odd one escapes the character after it, which the run does not hold.
+      const count = backslashesBefore(content, run, from);
+      if (count % 2 === 1) break;
+      run -= count;
+      continue;
+    }
+    if (backslashesBefore(content, last, from) % 2 === 1) {
+      if (!BODY_ESCAPE_LETTERS.has(code)) break; // `\"` or no JSON escape: the body starts after it
+      run -= 2;
+      continue;
+    }
+    if (!isBase64Code(code)) break;
+    run -= 1;
+  }
+  return run;
+}
+
+// What a line prefix looks like, where only its digits, the separators beside them and the spaces that pad
+// a number may change from line to line of one listing. Each digit run becomes one token. The spaces that
+// pad it on the left are no part of the shape, whatever their width, none included: `cat -n` and `nl`
+// right-align the number in six columns, so ` 99999\t` and `100000\t` read alike (review R4-PC-005). A
+// digit run and the `:`/`-` after it are one field token, and so are the fields that follow it directly,
+// so a match line's `name:27:1:` (rg --column) reads like a context line's `name-25-` (grep/rg print `:`
+// after a match line's name and number, `-` after a context line's). A `:`/`-` before a digit run or at the
+// end of the prefix is one separator token (`a.pem:` and `a.pem-`, grep without -n). Every other character
+// stays itself, other spaces included. Tokens are NUL and a letter, a NUL is doubled.
+function prefixShape(text: string): string {
+  let shape = "";
+  let i = 0;
+  while (i < text.length) {
+    const code = text.charCodeAt(i);
+    if (isDigitCode(code)) {
+      let j = i;
+      while (j < text.length && isDigitCode(text.charCodeAt(j))) j += 1;
+      if (j < text.length && isSeparatorCode(text.charCodeAt(j))) {
+        j += 1;
+        for (;;) {
+          let k = j;
+          while (k < text.length && isDigitCode(text.charCodeAt(k))) k += 1;
+          if (k === j || k === text.length || !isSeparatorCode(text.charCodeAt(k))) break;
+          j = k + 1;
+        }
+        shape += "\u0000F";
+      } else {
+        shape += "\u0000N";
+      }
+      i = j;
+    } else if (isSpaceCode(code)) {
+      let j = i;
+      while (j < text.length && isSpaceCode(text.charCodeAt(j))) j += 1;
+      if (j === text.length || !isDigitCode(text.charCodeAt(j))) shape += text.slice(i, j);
+      i = j;
+    } else if (isSeparatorCode(code) && (i + 1 === text.length || isDigitCode(text.charCodeAt(i + 1)))) {
+      shape += "\u0000S";
+      i += 1;
+    } else {
+      shape += code === 0 ? "\u0000\u0000" : text.charAt(i);
+      i += 1;
+    }
+  }
+  return shape;
+}
+
+type KeyLine = "body" | "header" | "blank";
+
+// What a line above an orphan END is to that END's key, given the shape of the END line's prefix (and
+// of that prefix with its trailing spaces cut, for a blank line): a body line (that prefix, then
+// base64), a header field after that prefix, a blank line (nothing, or that prefix alone), or none.
+function keyLineOf(line: string, shape: string, blankShape: string): KeyLine | undefined {
+  const text = line.trimEnd();
+  if (text.length === 0) return "blank";
+  let bodyStart = text.length;
+  while (bodyStart > 0 && isBase64Code(text.charCodeAt(bodyStart - 1))) bodyStart -= 1;
+  if (bodyStart < text.length && PEM_BODY.test(text.slice(bodyStart)) && prefixShape(text.slice(0, bodyStart)) === shape) return "body";
+  const header = PEM_HEADER_FIELD.exec(text);
+  if (header !== null && prefixShape(text.slice(0, header.index)) === shape) return "header";
+  return prefixShape(text) === blankShape ? "blank" : undefined;
+}
+
+// What a line above a unified diff's END line is to that END's key (review R4-RR-002): its first
+// character, when it is ` `, `+` or `-`, is its whole prefix, whichever of the three it is, and the rest
+// is key body, a header field or nothing, read as an unprefixed line is (`keyLineOf`). `+` is a base64
+// character, so it is cut as the column before the rest is read, never taken as body. A line that starts
+// with anything else (a hunk header, `diff --git`, a line of another file) is none, unless it is blank.
+function diffKeyLineOf(line: string): KeyLine | undefined {
+  if (line.length > 0 && isDiffMarkerCode(line.charCodeAt(0))) return keyLineOf(line.slice(1), "", "");
+  return line.trimEnd().length === 0 ? "blank" : undefined;
+}
+
+// Where an END line with no header before it starts its mask (flow 523 reviews R2-SC-003, R3-SC-001,
+// R3-SC-003, R4-RR-002): the start of the key body directly above it, never further back than `from`, so
+// never into the block before it. On the END's own line the body is the run before the marker
+// (`bodyRunStart`: base64 and whole JSON escapes); the text before that run is the END line's prefix. The
+// lines above are read one of two ways, chosen by the END line:
+// - A unified diff's line (`git diff`, `git show`, `git log -p`, `diff -u`): the END line's first character
+//   is ` `, `+` or `-` and the marker follows it directly (for `+-----END` the run took the `+`). Each line
+//   above is read by `diffKeyLineOf`: its first character, any of the three, is its whole prefix, so a
+//   replaced key's `-` and `+` lines above a context END are both read, and an added key's `+=abcd` PGP
+//   checksum line is body.
+// - Any other END line: a line above is read by `keyLineOf` against the END line's prefix, its digits, the
+//   separators beside them and the spaces that pad a number aside (`prefixShape`): what `cat -n`, `nl`,
+//   `grep`/`rg` with or without a file name and line number, `diff` (`< `), `docker compose logs`,
+//   timestamped logs, keryx's `ctx rg` items and an indented value put before every line.
+// Either way a line above is key body (base64, the PGP checksum line included), a PEM header field, or
+// blank (nothing, or the prefix alone). A blank line is masked only under a key line above it, and above
+// a header field only more header fields count. The lines are masked from the first such line up to the
+// first line that is none of these: the line a tail cut starts after, a hunk header (`@@ … @@`), a
+// `diff --git` line, a frame keryx wrote, a record, another file's lines. With none, only the run and the
+// marker are masked. Linear: each character between `from` and the END line is read a bounded number of
+// times.
+function orphanBodyStart(content: string, endIndex: number, from: number): number {
+  const run = bodyRunStart(content, endIndex, from);
+  let lineStart = run;
+  while (lineStart > from && content.charCodeAt(lineStart - 1) !== NEWLINE) lineStart -= 1;
+  const diffLine = endIndex === lineStart + 1 && isDiffMarkerCode(content.charCodeAt(lineStart));
+  const prefix = content.slice(lineStart, run);
+  const shape = prefixShape(prefix);
+  const blankShape = prefixShape(prefix.trimEnd());
+  let start = run;
+  let headerSeen = false;
+  let below = lineStart;
+  while (below > from) {
+    const lineEnd = below - 1; // the newline that ends the line above
+    let lineBegin = lineEnd;
+    while (lineBegin > from && content.charCodeAt(lineBegin - 1) !== NEWLINE) lineBegin -= 1;
+    const line = content.slice(lineBegin, lineEnd);
+    const kind = diffLine ? diffKeyLineOf(line) : keyLineOf(line, shape, blankShape);
+    below = lineBegin;
+    if (kind === "blank") continue; // masked only under a key line above it
+    if (kind === "header") {
+      headerSeen = true; // header fields sit above the body: only more of them can follow
+    } else if (kind !== "body" || headerSeen) {
+      break;
+    }
+    start = lineBegin;
+  }
+  return start;
+}
+
+// Both cuts of a window fail closed. A header with no END line (`head -20 id_rsa`, a cut-off paste)
+// masks to the end of the input. An END line with no header before it (`tail -20 id_rsa`, a terminal
+// tail cut inside the key — flow 523 review SC3-001) masks the key body directly above it and the END
+// line (`orphanBodyStart`): its body lines are key material whatever cut them, but the text above
+// them is not (review R2-SC-003). Each pattern is searched forward from where the last block ended,
+// and a header found ahead is kept until it is reached, so the scan stays linear.
 function scanPrivateKeyBlocks(content: string): Array<[number, number]> {
   const spans: Array<[number, number]> = [];
-  PRIVATE_KEY_BEGIN.lastIndex = 0;
-  let begin: RegExpExecArray | null;
-  while ((begin = PRIVATE_KEY_BEGIN.exec(content)) !== null) {
-    PRIVATE_KEY_END.lastIndex = begin.index + begin[0].length;
-    const end = PRIVATE_KEY_END.exec(content);
+  let from = 0;
+  let begin = nextMatch(PRIVATE_KEY_BEGIN, content, 0);
+  let end = nextMatch(PRIVATE_KEY_END, content, 0);
+  while (begin !== null || end !== null) {
+    if (end !== null && (begin === null || end.index < begin.index)) {
+      const stop = end.index + end[0].length;
+      spans.push([orphanBodyStart(content, end.index, from), stop]);
+      from = stop;
+      end = nextMatch(PRIVATE_KEY_END, content, stop);
+      continue;
+    }
+    if (begin === null) break;
+    const headerEnd = begin.index + begin[0].length;
+    if (end !== null && end.index < headerEnd) end = nextMatch(PRIVATE_KEY_END, content, headerEnd);
     if (end === null) {
-      // No END line (`head -20 id_rsa`, a cut-off paste): fail closed and mask
-      // to the end of the input. No later header can close either, so stop.
+      // No later header can close either, so stop.
       spans.push([begin.index, content.length]);
       break;
     }
     const stop = end.index + end[0].length;
     spans.push([begin.index, stop]);
-    PRIVATE_KEY_BEGIN.lastIndex = stop;
+    from = stop;
+    begin = nextMatch(PRIVATE_KEY_BEGIN, content, stop);
+    end = nextMatch(PRIVATE_KEY_END, content, stop);
   }
   return spans;
 }

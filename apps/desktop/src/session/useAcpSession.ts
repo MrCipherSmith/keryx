@@ -16,10 +16,12 @@ import {
 import { acpStart, acpTransport, acpStop, listenBridge, versionCheck } from "../platform/commands";
 import { isTauri } from "../platform/backend";
 import { buildUserPrompt, type UserPromptContext } from "./userPrompt";
-import { onPtyExit, panelMcpServers, ptyOpenRun } from "../platform/panels";
-import { closeTerminalTab, onTabClosed, showTerminalTab } from "../panels/panelBus";
+import { onPtyExit, panelMcpServers, ptyOpenRun, ptyTail } from "../platform/panels";
+import { closeTerminalTab, onTabClosed, setRunTracker, showTerminalTab } from "../panels/panelBus";
 import { notifyDelegateChange, setDelegateApi } from "./delegateBus";
 import { createDelegateTerminals, type DelegateLaunch } from "./delegateTerminals";
+import { createTerminalRuns, newRunId, type DeliveryOutcome, type TerminalResultEntry } from "./terminalRuns";
+import { setTerminalRunApi } from "./terminalRunBus";
 import {
   canOrganizeSessions,
   hasLiveSessions,
@@ -43,7 +45,7 @@ import {
   type SessionSubject,
   type SessionUpdate,
 } from "../acp/types";
-import { initialState, pendingQueueSend, reducer, sessionMarks, shownView, type Action, type RoutedUpdate } from "./reducer";
+import { initialState, pendingQueueSend, reducer, sessionMarks, shownView, type Action, type RoutedUpdate, type WindowState } from "./reducer";
 import { desktopReviewCommands, runCommandLine, type RunOptions, type UiActions } from "./commandRunner";
 import { DialogQueue, type PendingAsk, type PendingPermission } from "./dialogQueue";
 import { readSubagentHistory, subagentHistoryWriter } from "./subagentHistory";
@@ -82,6 +84,40 @@ function errMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+/** keryx refused a prompt because the session already runs a turn. */
+function isBusyRefusal(e: unknown): boolean {
+  return e instanceof RpcError && (e.data as { condition?: unknown } | undefined)?.condition === "session-busy";
+}
+
+/**
+ * JSON-RPC errors keryx answers a prompt with before it stores anything or starts a turn: invalid request
+ * (busy, opening, stopping), method not found, invalid params, unknown session.
+ */
+const PRE_TURN_REFUSALS: ReadonlySet<number> = new Set([-32600, -32601, -32602, -32002]);
+/** keryx's "unknown ACP session" (resourceNotFound). */
+const UNKNOWN_SESSION = -32002;
+
+/**
+ * A results prompt failed for a reason that passes (flow 523, plan "State × event matrix": the results
+ * are kept and sent again once the window holds the session again): the session was released (the window
+ * saw `_keryx/session_released` before the "unknown session" answer), keryx is shutting down, or the
+ * failure is not keryx's answer at all (the connection closed or broke under the prompt, which may never
+ * have reached keryx; keryx skips a run id it already stored, so sending it again is safe).
+ */
+function waitsForHold(e: unknown, stillHeld: boolean): boolean {
+  if (!(e instanceof RpcError)) return true;
+  if (e.code === UNKNOWN_SESSION) return !stillHeld;
+  return (e.data as { condition?: unknown } | undefined)?.condition === "shutting-down";
+}
+
+/** The prompt that resumes keryx's saved issue questions. */
+const RESUME_ISSUE_QUESTIONS = "Resume the pending issue questions.";
+
+/** The display line of a results prompt; keryx ignores it and stores its own continuation line. */
+function terminalResultsLine(results: readonly TerminalResultEntry[]): string {
+  return results.length === 1 ? "The result of a command run from the Run button." : `The results of ${results.length} commands run from the Run button.`;
+}
+
 
 interface Turn {
   client: AcpClient;
@@ -98,6 +134,8 @@ interface Live {
   commandMethod: boolean;
   /** `initialize._meta.keryx.extensions`: the extension methods this keryx serves. */
   extensions: readonly string[];
+  /** `initialize._meta.keryx.terminalResults`: this keryx takes Run results in `session/prompt` (flow 523). */
+  terminalResults: boolean;
   unlisten: (() => void) | null;
   /** Which sessions keryx holds for this window, their turns, and which one is shown. */
   reg: SessionRegistry<Turn>;
@@ -155,7 +193,7 @@ export function useAcpSession(cwd: string) {
   /** The keryx this window runs (`acp_start`), for project commands run in a terminal tab. */
   const [keryxPath, setKeryxPath] = useState<string | null>(null);
   const challengeListeners = useRef(new Set<(c: LoginChallenge) => void>());
-  const live = useRef<Live>({ client: null, gen: 0, initialized: false, usable: false, commandMethod: false, extensions: [], unlisten: null, reg: new SessionRegistry<Turn>() });
+  const live = useRef<Live>({ client: null, gen: 0, initialized: false, usable: false, commandMethod: false, extensions: [], terminalResults: false, unlisten: null, reg: new SessionRegistry<Turn>() });
 
   // session/update notifications are queued and applied once per animation frame (a timer covers a
   // hidden window, where frames do not fire), so a long replay or a fast stream is not one render per update.
@@ -383,6 +421,52 @@ export function useAcpSession(cwd: string) {
     [dialogs, dispatch],
   );
 
+  /**
+   * One prompt turn of `sessionId`, whatever started it: the busy mark, the turn slot, keryx's stop-reason
+   * notices and the end-of-turn bookkeeping. `onFailed` hears a failure on this connection (a busy refusal
+   * included); `onLost`, a failure once the window has moved to another connection (a restart replaced the
+   * client before the old one's rejection ran). Resolves when the turn is over; never rejects.
+   */
+  const runTurn = useCallback(
+    (client: AcpClient, sessionId: string, params: Record<string, unknown>, onFailed: (e: unknown) => void, onLost?: (e: unknown) => void): Promise<void> => {
+      const l = live.current;
+      dispatch({ t: "busy", sessionId, busy: true });
+      const turn = { client } as Turn;
+      l.reg.turns.set(sessionId, turn);
+      // The slot is taken: a hold a load's caller placed for its own turn ends here (that turn, or one that came
+      // first, which the caller's send then meets as busy). What waited goes when this turn ends.
+      l.reg.heldForCaller.delete(sessionId);
+      turn.done = (async () => {
+        let busyRefusal = false;
+        try {
+          const r = await client.request<{ stopReason?: string }>("session/prompt", { sessionId, ...params });
+          if (l.client !== client) return;
+          const notice = (level: "info" | "warn", t: string) => dispatch({ t: "notice", sessionId, level, text: t });
+          if (r?.stopReason === "max_tokens") notice("warn", "Stopped: the model hit its token limit.");
+          else if (r?.stopReason === "max_turn_requests") notice("warn", "Stopped: too many model requests in one turn.");
+          else if (r?.stopReason === "refusal") notice("warn", "The model refused to continue.");
+          else if (r?.stopReason === "cancelled") notice("info", "Stopped.");
+        } catch (e) {
+          if (l.client === client) {
+            busyRefusal = isBusyRefusal(e);
+            onFailed(e);
+          } else onLost?.(e);
+        } finally {
+          if (l.reg.turns.get(sessionId) === turn) l.reg.turns.delete(sessionId);
+          if (l.client === client) {
+            // keryx sends no request for a turn after its prompt reply: anything still queued is stale.
+            if (!busyRefusal) dialogs.dropSession(sessionId);
+            dispatch({ t: "busy", sessionId, busy: false });
+            // One flags write at a time: the flow link first, then the subject binding.
+            void applyPendingFlow(sessionId).then(() => subjects.apply(sessionId)).finally(() => void refreshSessions());
+          }
+        }
+      })();
+      return turn.done;
+    },
+    [dialogs, dispatch, refreshSessions, applyPendingFlow, subjects],
+  );
+
   /** Starts a turn in the shown session; returns true only when the prompt was accepted (the caller may then clear its draft). */
   const sendPrompt = useCallback(
     (text: string, target?: string, context?: UserPromptContext, literal = false, replaces?: number, issue?: { issueLaunchId: string } | { resumeIssueQuestions: true }): boolean => {
@@ -395,55 +479,157 @@ export function useAcpSession(cwd: string) {
       const restoringQuestions = !!issue && "resumeIssueQuestions" in issue;
       const sendId = ++sendSequence.current;
       if (!restoringQuestions) dispatch({ t: "userSent", sessionId, sendId, text, context, ...(replaces !== undefined ? { replaces } : {}) });
-      dispatch({ t: "busy", sessionId, busy: true });
-      const turn = { client } as Turn;
-      l.reg.turns.set(sessionId, turn);
-      turn.done = (async () => {
-        let busyRefusal = false;
-        try {
-          const prompt = buildUserPrompt(text, extra, literal);
-          const r = await client.request<{ stopReason?: string }>("session/prompt", { sessionId, prompt, ...(issue ? { _meta: { keryx: issue } } : {}) });
-          if (l.client !== client) return;
-          const notice = (level: "info" | "warn", t: string) => dispatch({ t: "notice", sessionId, level, text: t });
-          if (r?.stopReason === "max_tokens") notice("warn", "Stopped: the model hit its token limit.");
-          else if (r?.stopReason === "max_turn_requests") notice("warn", "Stopped: too many model requests in one turn.");
-          else if (r?.stopReason === "refusal") notice("warn", "The model refused to continue.");
-          else if (r?.stopReason === "cancelled") notice("info", "Stopped.");
-        } catch (e) {
-          if (l.client === client) {
-            busyRefusal = e instanceof RpcError && (e.data as { condition?: unknown } | undefined)?.condition === "session-busy";
-            if (!restoringQuestions) dispatch({ t: "userSendFailed", sessionId, sendId, busyRefusal });
-            dispatch({ t: "notice", sessionId, level: busyRefusal ? "warn" : "error",
-              text: busyRefusal ? "This session is already running a turn. Edit your message to retry once it finishes." : errMessage(e) });
-          }
-        } finally {
-          if (l.reg.turns.get(sessionId) === turn) l.reg.turns.delete(sessionId);
-          if (l.client === client) {
-            // keryx sends no request for a turn after its prompt reply: anything still queued is stale.
-            if (!busyRefusal) dialogs.dropSession(sessionId);
-            dispatch({ t: "busy", sessionId, busy: false });
-            // One flags write at a time: the flow link first, then the subject binding.
-            void applyPendingFlow(sessionId).then(() => subjects.apply(sessionId)).finally(() => void refreshSessions());
-          }
-        }
-      })();
+      const prompt = buildUserPrompt(text, extra, literal);
+      void runTurn(client, sessionId, { prompt, ...(issue ? { _meta: { keryx: issue } } : {}) }, (e) => {
+        const busyRefusal = isBusyRefusal(e);
+        if (!restoringQuestions) dispatch({ t: "userSendFailed", sessionId, sendId, busyRefusal });
+        dispatch({ t: "notice", sessionId, level: busyRefusal ? "warn" : "error",
+          text: busyRefusal ? "This session is already running a turn. Edit your message to retry once it finishes." : errMessage(e) });
+      });
       return true;
     },
-    [dialogs, dispatch, refreshSessions, applyPendingFlow, subjects],
+    [dispatch, runTurn],
   );
 
-  const resumeIssueQuestions = useCallback((sessionId: string) =>
-    sendPrompt("Resume the pending issue questions.", sessionId, undefined, false, undefined, { resumeIssueQuestions: true }),
-  [sendPrompt]);
+  /**
+   * Run results (flow 523) to `sessionId` as one prompt, when it can take one now (null otherwise). No
+   * user bubble: keryx stores its own continuation line for the turn and the run cards show what was sent.
+   * A command in flight counts as busy: keryx holds the session's turn slot for /compact and /rewind, and
+   * the command's end asks again (`trackCommand`). So does a session whose load's caller holds its slot for its
+   * own turn (`holdForCaller`): the results go after that turn, or when the hold ends without one (`releaseHold`).
+   * A prompt with no answer from keryx (its connection closed or was replaced) waits to be sent again; keryx
+   * answers success for runs it already stored.
+   */
+  const sendTerminalResults = useCallback(
+    (sessionId: string, results: readonly TerminalResultEntry[]): Promise<DeliveryOutcome> | null => {
+      const l = live.current;
+      const client = l.client;
+      if (!client || !l.initialized || !l.reg.held.has(sessionId) || l.reg.turns.has(sessionId) ||
+        l.reg.telegramTurns.has(sessionId) || l.reg.commands.has(sessionId) || l.reg.heldForCaller.has(sessionId)) return null;
+      let outcome: DeliveryOutcome = { kind: "done" };
+      const params = { prompt: [{ type: "text", text: terminalResultsLine(results) }], _meta: { keryx: { terminalResults: results } } };
+      return runTurn(client, sessionId, params, (e) => {
+        if (isBusyRefusal(e)) outcome = { kind: "busy" };
+        else if (waitsForHold(e, l.reg.held.has(sessionId))) outcome = { kind: "wait" };
+        else if (e instanceof RpcError && PRE_TURN_REFUSALS.has(e.code)) outcome = { kind: "refused", error: errMessage(e) };
+        // The results were stored and the follow-up turn failed: said like any failed turn.
+        else dispatch({ t: "notice", sessionId, level: "error", text: errMessage(e) });
+      }, () => {
+        outcome = { kind: "wait" };
+      }).then(() => outcome);
+    },
+    [dispatch, runTurn],
+  );
+  const sendResults = useRef(sendTerminalResults);
+  sendResults.current = sendTerminalResults;
+
+  /** Run clicks from this window's transcripts (flow 523): tracked runs whose results go back to their sessions. */
+  const terminalRuns = useMemo(
+    () =>
+      createTerminalRuns({
+        acceptsResults: () => (live.current.initialized ? live.current.terminalResults : null),
+        send: (sessionId, results) => sendResults.current(sessionId, results),
+        tail: (id, lines) => ptyTail(id, lines),
+        showTab: showTerminalTab,
+        dispatch,
+        now: () => Date.now(),
+        newRunId,
+        later: (fn, ms) => void window.setTimeout(fn, ms),
+      }),
+    [dispatch],
+  );
+  useEffect(() => {
+    setRunTracker(terminalRuns);
+    setTerminalRunApi({ showTab: (runId) => terminalRuns.showTab(runId), sendNow: (runId) => void terminalRuns.sendNow(runId) });
+    return () => {
+      setRunTracker(null);
+      setTerminalRunApi(null);
+    };
+  }, [terminalRuns]);
+  useEffect(() => {
+    let alive = true;
+    let off: (() => void) | null = null;
+    void onPtyExit((e) => void terminalRuns.exited(e.id, e.code)).then((u) => (alive ? (off = u) : u()));
+    const offClosed = onTabClosed((id) => terminalRuns.closed(id));
+    return () => {
+      alive = false;
+      off?.();
+      offClosed();
+    };
+  }, [terminalRuns]);
+
+  /**
+   * Resume keryx's saved issue questions in `sessionId` now, or queue the resume behind the turn that holds
+   * its slot (the queue sends it when that turn ends). False when neither: the session cannot take it.
+   */
+  const resumeIssueQuestions = useCallback((sessionId: string): boolean => {
+    if (sendPrompt(RESUME_ISSUE_QUESTIONS, sessionId, undefined, false, undefined, { resumeIssueQuestions: true })) return true;
+    const reg = live.current.reg;
+    if (!reg.held.has(sessionId) || (!reg.turns.has(sessionId) && !reg.telegramTurns.has(sessionId))) return false;
+    dispatch({ t: "queueAdd", sessionId, text: RESUME_ISSUE_QUESTIONS, resumeIssueQuestions: true });
+    return true;
+  }, [dispatch, sendPrompt]);
+
+  /**
+   * One arbiter for every session's free turn slot (spec 3.9.5b), one prompt per session whose slot is free
+   * (its turn ended, it is held again), in this order:
+   * 1. the issue-question resume a load queued behind a running turn, when it is at the front of that
+   *    session's queue (a load's resume takes the session first, as it does when it can send at once);
+   * 2. the Run results waiting for the session (`terminalRuns.flush`);
+   * 3. the next prompt the user queued, where neither of those took the slot.
+   * Sending takes the slot at once (`runTurn` registers the turn), so a later step finds it taken. A session
+   * whose load's caller holds its slot for its own turn (`holdForCaller`) is passed over: the results prompt
+   * refuses it too (`sendTerminalResults`), and the hold's end runs this for it (`releaseHold`). `only` limits
+   * the pass to one session.
+   */
+  const arbitrate = useCallback(
+    (convs: WindowState["convs"], only?: string) => {
+      const l = live.current;
+      const turnRunning = (c: { sessionId: string }) => l.reg.turns.has(c.sessionId) || l.reg.telegramTurns.has(c.sessionId);
+      const free = Object.values(convs).filter((c) => (only === undefined || c.sessionId === only) && !l.reg.heldForCaller.has(c.sessionId));
+      for (const c of free) {
+        const front = pendingQueueSend(c, turnRunning(c));
+        if (front?.resumeIssueQuestions && sendPrompt(front.text, c.sessionId, undefined, false, undefined, { resumeIssueQuestions: true })) dispatch({ t: "queueShift", sessionId: c.sessionId });
+      }
+      const tookSlot = terminalRuns.flush(only);
+      for (const c of free) {
+        if (tookSlot.has(c.sessionId)) continue;
+        const next = pendingQueueSend(c, turnRunning(c));
+        // A resume at the front was step 1's: sent there, or refused on the same checks it would meet here.
+        if (next && !next.resumeIssueQuestions && sendPrompt(next.text, c.sessionId, undefined, false, undefined, next.issueLaunchId ? { issueLaunchId: next.issueLaunchId } : undefined)) dispatch({ t: "queueShift", sessionId: c.sessionId });
+      }
+    },
+    [sendPrompt, dispatch, terminalRuns],
+  );
+
+  /**
+   * End the hold a load's caller placed on `sessionId` (`holdForCaller`) when it starts no turn after all (it
+   * gave up, or its send was refused): what waited for the slot goes now, in the arbiter's order. Nothing
+   * happens when there is no hold (its turn took the slot, which already ended it).
+   */
+  const releaseHold = useCallback(
+    (sessionId: string) => {
+      if (live.current.reg.heldForCaller.delete(sessionId)) arbitrate(winRef.current.convs, sessionId);
+    },
+    [arbitrate],
+  );
 
   /**
    * session/load of a session the window does not hold. Its replay lands off screen; the session is
    * shown on success unless the user has switched elsewhere since. A failure changes nothing on screen.
+   * When keryx answers that issue questions wait, they are resumed (or queued); `onIssueQuestions` hears
+   * whether that happened. `holdForCaller`: the caller starts a turn in the session itself once this resolves
+   * (a review, after an awaited mode switch), so the session's free slot is held for that turn: its Run
+   * results and queued prompts wait until a turn takes the slot or the caller ends the hold (`releaseHold`).
+   * Any other load of the session ends a hold an earlier load placed.
    */
   const openLoad = useCallback(
-    async (client: AcpClient, gen: number, sessionId: string, issueScope?: AbortSignal): Promise<boolean> => {
+    async (client: AcpClient, gen: number, sessionId: string, opts: { issueScope?: AbortSignal; onIssueQuestions?: (resumed: boolean) => void; holdForCaller?: boolean } = {}): Promise<boolean> => {
       const l = live.current;
+      const { issueScope, onIssueQuestions } = opts;
       if (issueScope?.aborted) return false;
+      if (opts.holdForCaller === true) l.reg.heldForCaller.add(sessionId);
+      else releaseHold(sessionId);
       const plan = l.reg.planSwitch(sessionId);
       if (plan === "show") {
         l.reg.showLocal(sessionId);
@@ -464,7 +650,15 @@ export function useAcpSession(cwd: string) {
         if (l.gen !== gen) return false;
         const show = l.reg.loadDone(sessionId);
         dispatch({ t: "loadDone", sessionId, archive, modes: r?.modes, configOptions: r?.configOptions, show });
-        if (!issueScope?.aborted && r?._meta?.keryx?.pendingIssueQuestions) resumeIssueQuestions(sessionId);
+        // Held again: Run results that waited for it (released, keryx restarting, a lost connection) may go
+        // again, from the window's arbiter. The issue questions resumed below are sent before this returns, so
+        // they take the slot first. A caller that starts a turn itself (a review) holds the slot from the
+        // load's start (`holdForCaller`): the results go after its turn, or once it gives up (`releaseHold`).
+        terminalRuns.resume(sessionId);
+        if (!issueScope?.aborted && r?._meta?.keryx?.pendingIssueQuestions) {
+          const resumed = resumeIssueQuestions(sessionId);
+          onIssueQuestions?.(resumed);
+        }
         return true;
       } catch (e) {
         if (l.gen !== gen) return false;
@@ -476,7 +670,7 @@ export function useAcpSession(cwd: string) {
         return false;
       }
     },
-    [cwd, dispatch, resumeIssueQuestions],
+    [cwd, dispatch, resumeIssueQuestions, terminalRuns, releaseHold],
   );
 
   /** session/new. The new session is added and shown unless the user switched elsewhere meanwhile; a failure changes nothing on screen. */
@@ -549,6 +743,7 @@ export function useAcpSession(cwd: string) {
       l.usable = false;
       l.commandMethod = false;
       l.extensions = [];
+      l.terminalResults = false;
       setExtensions([]);
       setCanPrepareIssue(false);
       l.reg.reset();
@@ -652,7 +847,9 @@ export function useAcpSession(cwd: string) {
             fs: { readTextFile: true, writeTextFile: false },
             terminal: false,
             // `terminal`: /delegate runs the vendor CLI in the side panel's terminal (D-14); only the app has one.
-            _meta: { keryx: { askUser: true, prepareReview: true, operatorCards: true, ...(isTauri() ? { terminal: true, telegramSession: true } : {}) } },
+            // `terminalResults`: a Run click is tracked and its result comes back as a `session/prompt`
+            // (flow 523); keryx gives the Run guidance and takes results only from a client that says so.
+            _meta: { keryx: { askUser: true, prepareReview: true, operatorCards: true, ...(isTauri() ? { terminal: true, terminalResults: true, telegramSession: true } : {}) } },
           },
           clientInfo: { name: "keryx-desktop", title: "Keryx", version: "0.2.5" },
         });
@@ -660,6 +857,7 @@ export function useAcpSession(cwd: string) {
         l.initialized = true;
         l.commandMethod = hasCommandExtension(init);
         l.extensions = extensionsOf(init);
+        l.terminalResults = init._meta?.keryx?.terminalResults === true;
         setExtensions(l.extensions);
         setCanPrepareIssue(init._meta?.keryx?.issuePreparation === true);
 
@@ -742,9 +940,13 @@ export function useAcpSession(cwd: string) {
     dialogs.dropSession(sessionId);
   }, [dialogs]);
 
-  /** Show a session: local when the window holds it, session/load otherwise. Nothing is cancelled or released. */
+  /**
+   * Show a session: local when the window holds it, session/load otherwise. Nothing is cancelled or released.
+   * `holdForCaller`: the caller sends a turn to the session itself once this resolves, and its Run results and
+   * queued prompts wait for that turn; a caller that then sends none ends the hold with `releaseHold`.
+   */
   const loadSession = useCallback(
-    async (id: string) => {
+    async (id: string, options?: { holdForCaller?: boolean }) => {
       const l = live.current;
       const client = l.client;
       if (!client || !l.usable) return false;
@@ -756,7 +958,7 @@ export function useAcpSession(cwd: string) {
         // A local switch sends no request; tell keryx so its idle cap counts this session as in use.
         client.notify(SESSION_SHOWN, { sessionId: id });
       }
-      return openLoad(client, l.gen, id);
+      return openLoad(client, l.gen, id, { holdForCaller: options?.holdForCaller === true });
     },
     [openLoad, dispatch],
   );
@@ -867,14 +1069,8 @@ export function useAcpSession(cwd: string) {
     [dispatch],
   );
 
-  /** Prompts queued while a turn ran go out in order, one per ended turn. */
-  useEffect(() => {
-    const l = live.current;
-    for (const c of Object.values(win.convs)) {
-      const next = pendingQueueSend(c, l.reg.turns.has(c.sessionId) || l.reg.telegramTurns.has(c.sessionId));
-      if (next && sendPrompt(next.text, c.sessionId, undefined, false, undefined, next.issueLaunchId ? { issueLaunchId: next.issueLaunchId } : next.resumeIssueQuestions ? { resumeIssueQuestions: true } : undefined)) dispatch({ t: "queueShift", sessionId: c.sessionId });
-    }
-  }, [win.convs, sendPrompt, dispatch]);
+  /** The arbiter runs on every change of the window's sessions (`arbitrate`). */
+  useEffect(() => arbitrate(win.convs), [win.convs, arbitrate]);
 
   /** Replay a held session from keryx (after /compact or /rewind changed its history). */
   const reloadSession = useCallback(
@@ -963,12 +1159,19 @@ export function useAcpSession(cwd: string) {
           openTerminal,
           prepareReview,
           ui,
-          trackCommand: (target) => l.reg.beginCommand(target),
+          trackCommand: (target) => {
+            const end = l.reg.beginCommand(target);
+            return () => {
+              end();
+              // Run results that waited for the command go now (a command that ends with no card changes nothing else).
+              terminalRuns.flush(target);
+            };
+          },
         },
         opts,
       );
     },
-    [dispatch, sendPrompt, newSession, cancel, applyEffects, openTerminal, prepareReview],
+    [dispatch, sendPrompt, newSession, cancel, applyEffects, openTerminal, prepareReview, terminalRuns],
   );
 
   /** Archive/unarchive or pin/unpin a stored session. Errors show as a banner. */
@@ -1069,12 +1272,14 @@ export function useAcpSession(cwd: string) {
     openIssueSession: async (sessionId: string, initialTurn?: { launchId: string; text: string }, pendingQuestions = false, issueScope?: AbortSignal) => {
       const l = live.current;
       const alreadyHeld = l.reg.held.has(sessionId);
-      if (!l.client || !l.usable || !await openLoad(l.client, l.gen, sessionId, issueScope)) throw new Error("Could not open the linked session.");
+      /** The load's answer said issue questions wait: whether they were resumed (or queued). */
+      let loadResumed = true;
+      if (!l.client || !l.usable || !await openLoad(l.client, l.gen, sessionId, { issueScope, onIssueQuestions: (resumed) => { loadResumed = resumed; } })) throw new Error("Could not open the linked session.");
       if (issueScope?.aborted) return;
-      if (alreadyHeld && pendingQuestions && !l.reg.turns.has(sessionId) && !resumeIssueQuestions(sessionId)) {
-        if (l.reg.telegramTurns.has(sessionId)) dispatch({ t: "queueAdd", sessionId, text: "Resume the pending issue questions.", resumeIssueQuestions: true });
-        else throw new Error("Reopen the linked session and resume Flow preparation.");
-      }
+      // Nothing is sent beside a turn running in a held session: a reopen from the board while the resume
+      // turn runs must not start a second one.
+      const resumed = alreadyHeld && pendingQuestions && !l.reg.turns.has(sessionId) ? resumeIssueQuestions(sessionId) : loadResumed;
+      if (!resumed) throw new Error("Reopen the linked session and resume Flow preparation.");
       if (initialTurn && !sendPrompt(initialTurn.text, sessionId, undefined, false, undefined, { issueLaunchId: initialTurn.launchId })) {
         if (!l.reg.turns.has(sessionId) && !l.reg.telegramTurns.has(sessionId)) throw new Error("Reopen the linked session and resume Flow preparation.");
         dispatch({ t: "queueAdd", sessionId, text: initialTurn.text, issueLaunchId: initialTurn.launchId });
@@ -1111,6 +1316,7 @@ export function useAcpSession(cwd: string) {
     cancel,
     newSession,
     loadSession,
+    releaseHold,
     reopen,
     setFlags,
     trashSession,
