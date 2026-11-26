@@ -2005,7 +2005,7 @@
         },
         {
           "path": "src/tui/decisions-surface.ts",
-          "sha256": "1707ff598e6d5e5b4a1aee74469b4923ea4815712081b8f812579e38168be08e",
+          "sha256": "8c2f5fdae8fb17925396543611251741d09afd1b44177c9f289cd9730656434b",
           "anchor": "line:1"
         },
         {
@@ -13009,7 +13009,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "b4e3e75914650b41a82adc35530837e375fbab4f890b2525c3cb1be791920354"
+      "receiptDigest": "610f60e527567be1ac6a37e6ca948dc9872e73047cc5a79f19bc39eb0eb399d8"
     },
     {
       "variantId": "setup.init",
@@ -13017,7 +13017,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "5a6a8cdfd27353db0fb912c14c976ea6c43a20946bf69458130a2bb7ff7a93e1"
+      "receiptDigest": "0b05ee64e32aa2b10047c7836cedc1dd20db25bbc757b15bcb33e0b1eb182d62"
     },
     {
       "variantId": "setup.refresh",
@@ -13025,7 +13025,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "e7b17109e067e27e3cf0798f2ab6af8027c4251401d2eea489f5c1e07bdb1585"
+      "receiptDigest": "3638bf1cc8e0812e43676b3635ca8ff21565e96c852a4a8c481fa288175da09a"
     },
     {
       "variantId": "setup.repair",
@@ -13033,7 +13033,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "3f2eeac3eea79b487f651bbad4f86260a1ff3da149ecaf5730fdae56953df839"
+      "receiptDigest": "d9cf27759bd86868e3731c1dd0dfc54429a08570c69691922bd912b3e616a1c3"
     },
     {
       "variantId": "ac.cached",
@@ -13609,7 +13609,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "fb29759a07ca54ec01234abf07a30bebc55b12df93c5479b6cea81205dddf79b"
+      "receiptDigest": "814f68e0bd761a7d153186ac1f01e44ee9dd381d5829d75505754707fcf82ea9"
     },
     {
       "variantId": "decisions.arms",
@@ -13617,7 +13617,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "645ebecb2cb303a80489043d056994acd6db51c97e567501b2f8374b4812d48c"
+      "receiptDigest": "193c9f005126a185c024a06023cd49f0bdd099845f48a1fea706dc519a9d048b"
     },
     {
       "variantId": "decisions.reason",
@@ -13625,7 +13625,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "be0c0b96e3697b1e8e916fd0c8efeaec0563f89d32b7c45b338e064aee7689ba"
+      "receiptDigest": "3a95011c03901b91c32d49665522cb867bc40e9196f852fb02cf182304085fd0"
     },
     {
       "variantId": "decisions.change",
@@ -13633,7 +13633,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "2f1e30fb69c01819377bcbcca05b751eeb331a821035a8e3fe22f13a3f970f05"
+      "receiptDigest": "5b90df72f8bc7454ada23f1b83d43fe386a0aacf319c268663b6256489650d44"
     },
     {
       "variantId": "integrate.default",
@@ -14369,7 +14369,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "applied",
       "matched": true,
-      "receiptDigest": "73ba59b137647696b5e88c8529993e71680ff6d3034c1ea280a48273efe5a4bc"
+      "receiptDigest": "ba1de6920372fc9012ff17918acb92086f280fe4582773f865852b3b351c3cda"
     },
     {
       "variantId": "bus.-name-text",
@@ -14817,7 +14817,7 @@
       "localOutcome": "applied",
       "headlessOutcome": "not sent",
       "matched": false,
-      "receiptDigest": "a0af5cd79ad8e4153200bc1f798578ff3806afbe7b7d6ef66bb752bb817aa03c"
+      "receiptDigest": "6d2df95663d1e98b736b34ad0f9230e5e5d403eb673e9e147619b79a124aead4"
     },
     {
       "variantId": "setup.navigate",

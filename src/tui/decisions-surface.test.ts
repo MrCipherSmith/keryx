@@ -602,6 +602,38 @@ otuiTest("the arms row is absent with no decisions and appears with the shares o
   }
 });
 
+otuiTest("an open still reading the journal when the sidebar is disposed and the renderer destroyed draws nothing and does not throw", async () => {
+  const h = await mountChrome(OTUI!);
+  const state: { n: number; report: unknown } = { n: 2, report: ARM_REPORT };
+  const { sidebar } = mountArms(h, state);
+  await sidebar.refresh();
+  await settle(h);
+  // Both opens are started and left unawaited, as a typed `/decisions` and a click on the row leave them.
+  const report = sidebar.show();
+  const arms = sidebar.showArms();
+  sidebar.dispose();
+  h.destroy();
+  expect(await report).toBeUndefined();
+  expect(await arms).toBeUndefined();
+});
+
+otuiTest("of two opens started back to back only the later one draws its modal", async () => {
+  const h = await mountChrome(OTUI!);
+  const state: { n: number; report: unknown } = { n: 2, report: ARM_REPORT };
+  const { sidebar } = mountArms(h, state);
+  try {
+    await sidebar.refresh();
+    await settle(h);
+    const first = sidebar.show();
+    const second = sidebar.showArms();
+    expect(await first).toBeUndefined();
+    expect(await second).toBeDefined();
+  } finally {
+    sidebar.dispose();
+    h.destroy();
+  }
+});
+
 otuiTest("/decisions arms and a click on the arms row open the arm modal; /decisions still opens the report", async () => {
   const h = await mountChrome(OTUI!);
   const state: { n: number; report: unknown } = { n: 2, report: ARM_REPORT };
