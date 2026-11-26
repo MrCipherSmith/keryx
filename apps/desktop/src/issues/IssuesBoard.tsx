@@ -7,7 +7,7 @@ import { requestIssues } from "../platform/issues";
 import { IssueDetail, type WorkAction, type WorkProps } from "./IssueDetail";
 import { IssueFilters } from "./IssueFilters";
 import { IssueWorkRow } from "./IssueWorkRow";
-import { DEFAULT_SOURCE, defaultFilters, groupForRow, issueGroups, issueName, issueSubject, readPreferences, SOURCES, STAGES, visibleRows,
+import { assignedToViewerOnly, DEFAULT_SOURCE, defaultFilters, groupForRow, issueGroups, issueName, issueSubject, issuePeople, readPreferences, SOURCES, STAGES, visibleRows,
   type Filters, type IssueSource, type ProjectBoard, type ProjectSource, type Row } from "./model";
 import { isAccessError, repositoryUnavailable, useIssueCollection } from "./useIssueCollection";
 import "./IssuesBoard.css";
@@ -255,6 +255,8 @@ function Collection({ cwd, login, source, target, prefsKey, sourceControls, clea
   const groups = issueGroups(project, filters.state);
   const activeFilters = Object.entries(filters).filter(([k, v]) => k !== "text" && v !== defaultFilters[k as keyof Filters]);
   const setFilters = (f: Filters) => setPrefs(p => ({ ...p, filters: f }));
+  const mine = assignedToViewerOnly(filters, viewer.login);
+  const people = useMemo(() => issuePeople(snapshot?.rows ?? [], filters, viewer.login), [snapshot, filters, viewer.login]);
   const dragItem = useRef<Row | null>(null);
   return <div className="issue-workspace" ref={board}>
     <section className="flows issues-main" hidden={mobile && !!selected}>
@@ -262,6 +264,8 @@ function Collection({ cwd, login, source, target, prefsKey, sourceControls, clea
         <div className="flows-heading"><h1 tabIndex={-1} ref={title}>Issues</h1>{snapshot && <span className="count-label">{snapshot.rows.length} loaded</span>}</div>
         {sourceControls}
         <input type="search" aria-label="Search issues" placeholder="Search by title or #number" value={filters.text} onChange={e => setFilters({ ...filters, text: e.target.value })} />
+        <button className="btn btn-sm issue-mine" aria-pressed={mine} title={"Issues assigned to " + viewer.login}
+          onClick={() => setFilters({ ...filters, assignee: mine ? "" : viewer.login })}><Icon name="user" size={14} />My issues</button>
         <button className="btn btn-sm" onClick={() => setFilterDialog(true)}><Icon name="list" size={14} />Filters{activeFilters.length > 0 && " (" + activeFilters.length + ")"}</button>
         <div className="segmented" aria-label="Issue layout">{[false, true].map(asList => <button key={String(asList)} aria-pressed={list === asList}
           onClick={() => setPrefs(p => ({ ...p, list: asList }))}><Icon name={asList ? "list" : "board"} size={14} />{asList ? "List" : "Board"}</button>)}</div>
@@ -318,7 +322,7 @@ function Collection({ cwd, login, source, target, prefsKey, sourceControls, clea
       request={request} mobile={mobile} onAccessLost={accessLost} close={close} actions={workActions(selected)}
       onPrevious={selectedIndex > 0 ? () => setSelection(rows[selectedIndex - 1]!) : undefined}
       onNext={selectedIndex < rows.length - 1 ? () => setSelection(rows[selectedIndex + 1]!) : undefined} />}
-    {filterDialog && <IssueFilters filters={filters} project={project} apply={f => { setFilters(f); setFilterDialog(false); }} close={() => setFilterDialog(false)} />}
+    {filterDialog && <IssueFilters filters={filters} project={project} people={people} apply={f => { setFilters(f); setFilterDialog(false); }} close={() => setFilterDialog(false)} />}
   </div>;
 }
 

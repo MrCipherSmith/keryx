@@ -399,6 +399,42 @@ test("AC11 the Flow stage filter is gone and a stored stage preference is ignore
   expect(host.textContent).not.toContain("All stages");
 });
 
+test("My issues shows the issues assigned to the viewer, and a second press shows all again", async () => {
+  await render(async (_login, action) => {
+    if (action === "list") return page([other(5, { assignees: ["Fixture"] }), other(6, { assignees: ["lee"] }), other(7, { assignees: [] })]);
+    throw new Error("Unexpected " + action);
+  });
+  const mine = button("My issues");
+  expect(mine.getAttribute("aria-pressed")).toBe("false");
+  expect(host.querySelectorAll(".flow-card")).toHaveLength(3);
+  await click(mine);
+  expect(button("My issues").getAttribute("aria-pressed")).toBe("true");
+  expect([...host.querySelectorAll(".flow-card .flow-id")].map(el => el.textContent)).toEqual(["org/sample#5"]);
+  expect(host.querySelector('button[aria-label="Remove assignee filter"]')).not.toBeNull();
+  await click(button("My issues"));
+  expect(host.querySelectorAll(".flow-card")).toHaveLength(3);
+});
+
+test("Author and Assignee are chosen from the people on the loaded issues", async () => {
+  await render(async (_login, action) => {
+    if (action === "list") return page([other(5, { author: "sam", assignees: ["lee"] }), other(6, { author: "ada", assignees: [] })]);
+    throw new Error("Unexpected " + action);
+  });
+  await click(button("Filters"));
+  const groups = [...host.querySelectorAll(".issue-filter-people fieldset")];
+  const names = (group: Element) => [...group.querySelectorAll("label span")].map(el => el.textContent);
+  expect(groups.map(group => group.querySelector("legend")?.textContent)).toEqual(["Author", "Assignee"]);
+  expect(names(groups[0]!)).toEqual(["ada", "fixture", "sam"]);
+  expect(names(groups[1]!)).toEqual(["Unassigned", "fixture", "lee"]);
+  expect(host.querySelector('input[placeholder="GitHub login"]')).toBeNull();
+  const box = (group: Element, name: string) => [...group.querySelectorAll("label")].find(label => label.textContent === name)!.querySelector("input")!;
+  await click(box(groups[0]!, "ada"));
+  await click(box(groups[1]!, "Unassigned"));
+  await click(button("Apply filters"));
+  expect([...host.querySelectorAll(".flow-card .flow-id")].map(el => el.textContent)).toEqual(["org/sample#6"]);
+  expect(button("Filters (2)")).not.toBeNull();
+});
+
 test("AC12 the work row has a Flow slot and a session slot counted from sessions bound through subject", async () => {
   const subject = (number: number, kind = "issue", repo = "Org/Sample") => ({ kind, repo, number, url: "https://github.com/org/sample/issues/" + number });
   const session = (id: string, keryx: Record<string, unknown>): SessionInfo =>
