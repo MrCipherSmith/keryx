@@ -192,6 +192,16 @@ describe("keryx sessions fork (flow 134, S4)", () => {
     expect(logged.join("\n")).toContain("↳ original work (fork)");
   });
 
+  test("the listing is a tree: a fork of a fork sits under its own parent, one level deeper", async () => {
+    const sourceId = seedSession();
+    await runSessions(["fork", sourceId, "--title", "child"]);
+    const child = listSessions(projectDir).find((summary) => summary.title === "child")!;
+    await runSessions(["fork", child.id, "--title", "grandchild"]);
+    logged = [];
+    await runSessions(["list"]);
+    const titles = logged.filter((line) => /original work|child/.test(line)).map((line) => line.slice(69)); // the TITLE column: ID 10 + UPDATED 22 + MSGS 6 + LIVE 7 + MODEL 24
+    expect(titles).toEqual(["original work", "↳ child", "  ↳ grandchild"]);
+  });
   test("help mentions fork", async () => {
     await runSessions(["--help"]);
     expect(logged.join("\n")).toContain("keryx sessions fork");

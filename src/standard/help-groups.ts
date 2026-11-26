@@ -456,6 +456,30 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/ref",
+    group: "Managed work",
+    summary: "Linked projects: list, add and remove the folders this project organises — /ref [list|add <folder>|remove <name>].",
+  },
+  {
+    kind: "slash",
+    name: "/ref-list",
+    group: "Managed work",
+    summary: "List the linked projects with a summary of each.",
+  },
+  {
+    kind: "slash",
+    name: "/add-ref",
+    group: "Managed work",
+    summary: "Link a folder (usually a sibling repository) to this project.",
+  },
+  {
+    kind: "slash",
+    name: "/ref-remove",
+    group: "Managed work",
+    summary: "Unlink a linked project; the folder itself is not touched.",
+  },
+  {
+    kind: "slash",
     name: "/jevprofile",
     group: "Managed work",
     summary: "Every review.jev.* setting next to its measured verdict; toggle one or apply the recommended profile.",
@@ -822,6 +846,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     name: "projects",
     group: "Maintenance and diagnostics",
     summary: "Inspect the user-global registry of initialized projects.",
+  },
+  {
+    kind: "cli",
+    name: "ref",
+    group: "Maintenance and diagnostics",
+    summary: "Linked projects: list, add and remove the folders this project organises.",
   },
   {
     kind: "cli",

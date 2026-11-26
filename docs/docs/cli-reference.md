@@ -1634,6 +1634,35 @@ refused; there is no fallback to "some other project".
 
 ---
 
+## ref
+
+Manage the **linked projects** of the current project: other folders, usually
+sibling repositories, that this project organises. The list lives in
+`.metaproject/linked-projects.json`, with each path stored relative to the
+project root so the file holds for everyone who checks the repositories out side
+by side. The agent's system prompt names every linked project with a short
+summary (what it is, its stack, where its own keryx context and agent rules
+are), and `spawn_subagent` with `project: "<name>"` starts a subagent rooted in
+one of them.
+
+```
+keryx ref [list] [--json]
+keryx ref add <folder> [--name <name>] [--note <text>] [--json]
+keryx ref remove <name|folder> [--json]
+```
+
+| Subcommand | Flags | Description |
+|---|---|---|
+| `list` (default) | `--json` | Print each linked project with its resolved path and summary. |
+| `add <folder>` | `--name`, `--note`, `--json` | Link an existing folder. The name defaults to the folder's name; the note replaces the summary read from its README. |
+| `remove <name\|folder>` | `--json` | Unlink it. The folder itself is not touched. |
+
+Every form answers with the whole list; `--json` is the form keryx Desktop
+reads. In `keryx shell` the same actions are `/ref list`, `/ref add <folder>`
+and `/ref remove <name>` (also `/ref-list` and `/add-ref <folder>`).
+
+---
+
 ## auth
 
 Authorize a **vendor-sanctioned subscription** (SuperGrok, ChatGPT Plus/Pro, GitHub Copilot) or inspect that state. Credentials are written to the user-global `auth.json` at mode 0600. Secrets are never printed.

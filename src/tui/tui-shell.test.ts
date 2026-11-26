@@ -312,6 +312,9 @@ test("shouldAutoApproveReadOnlySpawn: hookAsk overrides the read_only fast path 
   // `general` mode was never auto-approved and hookAsk changes nothing there.
   expect(shouldAutoApproveReadOnlySpawn("general", undefined)).toBe(false);
   expect(shouldAutoApproveReadOnlySpawn("general", true)).toBe(false);
+  // A read_only child in a linked project reads outside this project: it is always asked.
+  expect(shouldAutoApproveReadOnlySpawn("read_only", false, false, true)).toBe(false);
+  expect(shouldAutoApproveReadOnlySpawn("read_only", false, false, false)).toBe(true);
 });
 
 test("isUserPromptApprovalCard: routes user_prompt away from the schedule confirmation (review finding C)", () => {

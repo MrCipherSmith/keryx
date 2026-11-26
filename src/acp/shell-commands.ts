@@ -64,6 +64,7 @@ export type ShellCommandRunnerId =
   | "guard"
   | "editguard"
   | "projectctx"
+  | "ref"
   | "external"
   | "external-agents"
   | "goal"
@@ -170,6 +171,10 @@ const RUNNERS: Readonly<Record<string, ShellCommandRunnerId>> = {
   guard: "guard",
   editguard: "editguard",
   projectctx: "projectctx",
+  ref: "ref",
+  "ref-list": "ref",
+  "add-ref": "ref",
+  "ref-remove": "ref",
   external: "external",
   "external-agents": "external-agents",
   goal: "goal",
@@ -208,6 +213,9 @@ const HINTS: Readonly<Record<string, string>> = {
   route: "on | off",
   editguard: "on | off",
   projectctx: "warn | block | refs",
+  ref: "list | add <folder> [--name n] [--note text] | remove <name>",
+  "add-ref": "folder [--name n] [--note text]",
+  "ref-remove": "name or folder",
   external: "on | off",
   "external-agents": "on | off",
   rendering: "auto | rich | html | plain",

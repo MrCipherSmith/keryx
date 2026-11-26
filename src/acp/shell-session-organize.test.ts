@@ -94,6 +94,14 @@ describe("shell profile: organise sessions", () => {
         await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, flow: null });
         expect((await call(h, FLAGS, { sessionId: id, cwd: h.projectDir, flow: 7 })).error?.code).toBe(-32602);
 
+        // A session started from another names it, so Desktop can show the sessions as a tree.
+        const child = createSession({ cwd: h.projectDir, provider: "test", model: "test-model", dataDir: dataDirOf(h), parentSessionId: id });
+        persistHistory(child, [{ role: "user", content: "q" }], { provider: "test", model: "test-model" });
+        const tree = await call(h, "session/list", { cwd: h.projectDir });
+        const sessions = tree.result?.["sessions"] as Array<Record<string, any>>;
+        expect(sessions.find((s) => s["sessionId"] === child.summary.id)?.["_meta"]?.keryx?.parentSessionId).toBe(id);
+        expect(sessions.find((s) => s["sessionId"] === id)?.["_meta"]?.keryx?.parentSessionId).toBeUndefined();
+
         expect((await call(h, FLAGS, { sessionId: id, archived: "yes" })).error?.code).toBe(-32602);
         expect((await call(h, FLAGS, { sessionId: "missing", cwd: h.projectDir, archived: true })).error).toBeDefined();
       } finally {

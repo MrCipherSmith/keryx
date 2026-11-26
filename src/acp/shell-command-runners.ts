@@ -12,6 +12,7 @@
 
 import type { AcpModelChoice } from "./models";
 import { parseDemoteCommand } from "../commands/agent-commands";
+import { runRefSlashLine } from "../commands/ref";
 import { buildDoctorReport, formatDoctorReport } from "../commands/doctor";
 import { approvalsSlashText } from "../commands/approvals";
 import { permissionsSlashText } from "../commands/permissions-command";
@@ -458,6 +459,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
   guard: async (host, args) => guardText(host, args),
   editguard: (host, args) => editGuardText(host, args),
   projectctx: (host, args) => projectContextText(host, args),
+  // Linked projects. The ACP server rebuilds the system instruction every turn, so a change applies from the next one.
+  ref: async (host, args, row) => text(`${await runRefSlashLine(host.cwd, `/${row.name} ${args}`, "the next turn")}\n`),
   external: (host, args) => externalText(host, args),
   "external-agents": async (host, args) => text(await runExternalAgentsCommand(args, host.cwd, host.configDir)),
   goal: async (host, args) => {

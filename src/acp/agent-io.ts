@@ -282,8 +282,10 @@ export function createAcpAgentIo(
    * is left alone (`onToolCall`/`onToolResult` still own it) by only acting
    * when the queue still holds an entry for `toolCallId`.
    */
-  const closePseudoToolCall = (tool: string, toolCallId: string, approved: boolean): void => {
-    if (tool !== "user_prompt") {
+  // A subagent's call asked through this gate (`ApprovalMeta.subagent`) is the same kind of pseudo call:
+  // the child's own io announces and closes its tool calls, never this one, so it is closed here too.
+  const closePseudoToolCall = (tool: string, toolCallId: string, approved: boolean, subagent = false): void => {
+    if (tool !== "user_prompt" && !subagent) {
       return;
     }
     const queue = pendingByName.get(tool);
@@ -312,7 +314,9 @@ export function createAcpAgentIo(
     // `commands/agent.ts` passes verbatim from the same `call.input` that
     // reaches `onToolCall` — precise enough to pair the right call even when
     // several calls to the same tool are open at once.
-    const pending = pendingByName.get(tool)?.find((entry) => entry.input === input);
+    const subagent = meta?.subagent === true;
+    // Never adopt a parent entry for a child's call: the parent's own result closes that one.
+    const pending = subagent ? undefined : pendingByName.get(tool)?.find((entry) => entry.input === input);
     const toolCallId = pending?.toolCallId ?? openToolCall(tool, input, false);
     const options = permissionOptionsFor(meta);
     // The only projected execution ask is a non-escalated, read-only listing of the project root.
@@ -341,14 +345,14 @@ export function createAcpAgentIo(
     });
     if (response === undefined) {
       // The client could not be asked. A call nobody authorised does not run.
-      closePseudoToolCall(tool, toolCallId, false);
+      closePseudoToolCall(tool, toolCallId, false, subagent);
       return false;
     }
     const approved = approvalFromPermissionResponse(response, options, meta?.fingerprint, meta?.mcpTrustAvailable === true);
     // `ApprovalResponse` is `boolean | {approved, fingerprint?}` (the
     // "allow_always" shape carries a fingerprint for the allowlist match
     // elsewhere) — `closePseudoToolCall` only needs the plain outcome.
-    closePseudoToolCall(tool, toolCallId, typeof approved === "boolean" ? approved : approved.approved);
+    closePseudoToolCall(tool, toolCallId, typeof approved === "boolean" ? approved : approved.approved, subagent);
     return approved;
   };
 
@@ -358,7 +362,10 @@ export function createAcpAgentIo(
    * goes on THAT id; a call with no announced entry is announced here first, so
    * the client never sees a mark for an id it was not shown.
    */
-  const onAutoApproved = (tool: string, input: string): void => {
+  const onAutoApproved = (tool: string, input: string, meta?: { subagent?: true }): void => {
+    // A subagent's call has no entry of its own here and nothing would close one: the parent's
+    // `spawn_subagent` call stands for the child's work, so its auto-approvals are not announced.
+    if (meta?.subagent === true) return;
     const pending = pendingByName.get(tool)?.find((entry) => entry.input === input);
     const toolCallId = pending?.toolCallId ?? openToolCall(tool, input, false);
     emit({

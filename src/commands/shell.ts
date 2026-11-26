@@ -1,3 +1,4 @@
+import { loadLinkedProjectsPromptBlock } from "../lib/linked-projects";
 import { acceptShellIssuePreparation, issueShellSource, startIssueSessionActivity } from "../session/issues/runtime";
 import { executePlanCommand } from "../session/commands/plan-command";
 import { startShellStateExports } from "../session/shell-state-exports";
@@ -2200,7 +2201,8 @@ export async function runAgentRepl(
       // pattern from before the lease existed must not silently answer for it
       // either (see `rememberExactShellGrant`'s own `publishLease` guard below).
       const rememberable =
-        !evaled.destructive && !evaled.credentials && !evaled.sacReviewConfirmation && !evaled.publishLease && !evaled.hookAsk && !evaled.untrustedOrigin && evaled.hcLaunch === undefined;
+        !evaled.destructive && !evaled.credentials && !evaled.sacReviewConfirmation && !evaled.publishLease && !evaled.hookAsk && !evaled.untrustedOrigin && evaled.hcLaunch === undefined &&
+        evaled.foreignRoot === undefined;
       const prompt = rememberable ? "[y/N/A=always] " : "[y/N] ";
       out(`\n${GUTTER}${style.yellow(`Run: ${evaled.command}`)} ${style.dim(prompt)}`);
       const answer = ((await readLine()) ?? "").trim();
@@ -2575,6 +2577,7 @@ export async function runAgentRepl(
             modelId: deps.modelId,
             toolNames: interactiveAgentToolNames(rebuiltTools),
             herdrCore: herdrCoreSectionFromEnv(process.env, { keryxPath: startupKeryxPath(), busName: joined.name }),
+            linkedProjects: await loadLinkedProjectsPromptBlock(sessionCwd),
             busJoined: true,
           }),
         };
@@ -4288,6 +4291,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         } catch {
           orient = "";
         }
+        const linkedProjects = await loadLinkedProjectsPromptBlock(cwd);
         trace.mark("orientation");
         const metaprojectPort = createMetaprojectAdapter(cwd);
         trace.mark("metaproject-adapter");
@@ -4441,6 +4445,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
             modelId: sel.model,
             toolNames: interactiveAgentToolNames(deps.tools),
             herdrCore: herdrCoreSectionFromEnv(process.env, { keryxPath: startupKeryxPath(), busName: bus?.client()?.name }),
+            linkedProjects,
             // Flow 274 (T6/T7 contract): true only once `bus.client()` actually
             // resolves. `tui-shell.ts` rebuilds via this same function right
             // after its own join settles, so a session that starts before the
@@ -4828,6 +4833,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       } catch {
         orient = ""; // orientation is best-effort; the builder falls back
       }
+      const linkedProjects = await loadLinkedProjectsPromptBlock(process.cwd());
       // In-process metaproject access (flow 037): the adapter serves graph +
       // memory in-process; search_code still falls back to the subprocess runner.
       const metaprojectPort = createMetaprojectAdapter(process.cwd());
@@ -5011,6 +5017,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           modelId: model,
           toolNames: interactiveAgentToolNames(agentDepsBase.tools),
           herdrCore: herdrCoreSectionFromEnv(process.env, { keryxPath: startupKeryxPath(), busName: busBox.current?.name }),
+          linkedProjects,
           // Flow 274 (T6/T7 contract): always `false` here — the bus join
           // happens later, inside `runAgentRepl` (`busBox.current` is still
           // empty at this point, and `agentDepsBase.tools` above was built

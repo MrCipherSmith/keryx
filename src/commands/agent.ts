@@ -239,6 +239,19 @@ export interface ApprovalMeta {
    */
   untrustedOrigin?: boolean;
   /**
+   * The call comes from a subagent working in another folder than this session's root (a linked
+   * project): the absolute folder. A saved or session shell rule was granted for THIS project's
+   * commands, so it never answers for another repository, and the answer is never remembered.
+   * Set only by `spawn_subagent`'s parent-gate wrapper.
+   */
+  foreignRoot?: string;
+  /**
+   * The call is a subagent's, asked through the parent's gate (`spawn_subagent`'s wrapper). A driver
+   * that tracks the parent's own tool calls (ACP) shows it as a call of its own and closes it after the
+   * answer: no `onToolCall`/`onToolResult` of the parent ever reaches it.
+   */
+  subagent?: true;
+  /**
    * Offer an exact-FQN, session-only grant, never a wildcard. Never sent while
    * `untrustedOrigin` is set.
    */
@@ -460,7 +473,7 @@ export interface AgentIO {
   onAutoApproved?: (
     tool: string,
     input: string,
-    meta: { destructive: boolean; credentials: boolean; mcpTrusted?: boolean },
+    meta: { destructive: boolean; credentials: boolean; mcpTrusted?: boolean; subagent?: true },
   ) => void;
   /**
    * The session's current permission mode (see `permission-mode.ts`).
@@ -1932,6 +1945,13 @@ export interface AgentInstructionContext {
    */
   herdrCore?: string | undefined;
   /**
+   * The linked-projects section (`renderLinkedProjectsPromptBlock`): the other
+   * folders this project organises, each with a short summary. Read once when the
+   * session starts, so it is stable for the session. It quotes other
+   * repositories' READMEs, so it sits after the trusted orientation, on its own.
+   */
+  linkedProjects?: string | undefined;
+  /**
    * Flow 523: the ACP client returns Run results (a run-tracking Keryx Desktop advertised
    * `initialize.clientCapabilities._meta.keryx.terminalResults: true`), so a reply's single-command shell
    * block gets a Run button there, and the run's result comes back as a terminal-result note that starts
@@ -2190,10 +2210,9 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
   // index.md already embeds it verbatim in the orientation, so it is not sent
   // twice; an older index.md without it still gets it from here.
   const conducted = containsAgentConduct(trimmed) ? base : `${base}\n\n${AGENT_CONDUCT_PROMPT_BLOCK}`;
-  if (trimmed.length === 0) {
-    return conducted;
-  }
-  return `${conducted}\n\nProject orientation (trusted context):\n${trimmed}`;
+  const linked = ctx.linkedProjects?.trim() ?? "";
+  const withOrient = trimmed.length === 0 ? conducted : `${conducted}\n\nProject orientation (trusted context):\n${trimmed}`;
+  return linked.length === 0 ? withOrient : `${withOrient}\n\n${linked}`;
 }
 
 interface PendingCall {
@@ -6427,6 +6446,11 @@ async function executeCallUnbounded(
     ...(confirmationToken !== undefined && confirmationVia === "remote" && confirmationPressedBy !== undefined ? { confirmationPressedBy } : {}),
     ...(confirmationToken !== undefined && confirmationVia === "remote" && confirmationPressedAt !== undefined ? { confirmationPressedAt } : {}),
     ...(untrustedContentSeen ? { untrustedContentSeen: true } : {}),
+    // A `general` subagent answers its own mutating calls through this turn's gate (spawn-subagent-tool.ts).
+    ...(call.name === "spawn_subagent" && requestApproval !== undefined
+      ? { parentGate: { requestApproval, ...(permissionMode === undefined ? {} : { permissionMode }), ...(readOnly === undefined ? {} : { readOnly }), ...(onAutoApproved === undefined ? {} : { onAutoApproved }),
+          ...(beforeMutation === undefined ? {} : { beforeMutation }), ...(busLeases === undefined ? {} : { busLeases }) } }
+      : {}),
   });
   if (review !== undefined && call.name === "shell_exec" && typeof input.command === "string") {
     review.observe(input.command, result);

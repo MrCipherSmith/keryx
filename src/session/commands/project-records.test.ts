@@ -62,3 +62,20 @@ test("record writes are workspace-class runs; the origin summary is a read", () 
   for (const name of ["projectctx.set", "flow.origin.set"]) expect(entries[name]).toMatchObject({ mutationClass: "workspace", busyPolicy: "reject", confirmation: "none", availability: "available", states: ["idle"] });
   expect(entries["flow.origins"]).toMatchObject({ mutationClass: "read", busyPolicy: "read-only", availability: "available" });
 });
+
+test("ref add, list and remove change linked-projects.json as /ref does, each change one owned write of exactly that file", async () => {
+  const base = await checkout(); const cwd = path.join(base, "home"); await mkdir(cwd); await mkdir(path.join(base, "backend"));
+  const mutations: { kind: string; paths: readonly string[] }[] = [];
+  expect(await executeProjectRecord({ cwd }, "add-ref", { target: "../backend" })).toMatchObject({ ok: false, error: { code: "not-admitted" } });
+  const added = await executeProjectRecord({ cwd, effect: effect(mutations) }, "ref", { action: "add", target: "../backend", name: "be", note: "The API" });
+  expect(added).toMatchObject({ ok: true, data: { projects: [{ name: "be", path: "../backend", exists: true }] } });
+  expect(mutations).toEqual([{ kind: "project-record", paths: [".metaproject/linked-projects.json"] }]);
+  expect(await executeProjectRecord({ cwd }, "ref-list", {})).toMatchObject({ ok: true, data: { projects: [{ name: "be" }] } });
+  expect(await executeProjectRecord({ cwd, effect: effect(mutations) }, "add-ref", { target: "../missing" })).toMatchObject({ ok: false, error: { code: "refused" } });
+  expect(await executeProjectRecord({ cwd, effect: effect(mutations) }, "ref-remove", { target: "nope" })).toMatchObject({ ok: false, error: { code: "not-found" } });
+  expect(await executeProjectRecord({ cwd, effect: effect(mutations) }, "ref-remove", { target: "be" })).toMatchObject({ ok: true, data: { projects: [] } });
+  expect(JSON.parse(await readFile(path.join(cwd, ".metaproject", "linked-projects.json"), "utf8"))).toEqual({ version: 1, projects: [] });
+  expect(projectRecordCommands().filter((c) => c.entry.commandName.includes("ref")).map((c) => [c.entry.commandName, c.entry.mutationClass])).toEqual([
+    ["ref", "workspace"], ["ref-list", "read"], ["add-ref", "workspace"], ["ref-remove", "workspace"],
+  ]);
+});

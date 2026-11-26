@@ -4,6 +4,7 @@ import { Dialog, Spinner } from "../components/ui";
 import { errMessage } from "../lib/format";
 import { invoke } from "../platform/backend";
 import { bindProjectGitHubAccount, listGitHubAccounts, type GitHubAccount, type ProjectGitHubAccount } from "../platform/githubAccounts";
+import { LinkedProjectsSettings } from "./LinkedProjects";
 
 export function ProjectGitHubAccountButton({ account, onOpen }: { account: ProjectGitHubAccount; onOpen?: () => void }) {
   const label = `GitHub · ${account.login ? `@${account.login}` : account.configured ? "Not connected" : "Active account in gh"}`;
@@ -174,6 +175,7 @@ export function ProjectGitHubSettings({ cwd, account, accountError, onRetryAccou
       ) : account === null ? (
         <div className="loading-row"><Spinner /> Loading project settings…</div>
       ) : <p className="settings-row-help">This project has no GitHub.com remote.</p>}
+      {onboarding ? null : <LinkedProjectsSettings cwd={cwd} />}
     </Dialog>
   );
 }

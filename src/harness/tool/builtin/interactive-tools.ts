@@ -15,6 +15,7 @@ import { readdir } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { lstatSync, realpathSync } from "node:fs";
 import type { NormalizedToolDefinition } from "../../provider/types";
+import type { AgentDeps, AgentIO } from "../../../commands/agent";
 import { resolveSpillReadable } from "../output-spill";
 
 /** The content-returning result of an interactive tool invocation. */
@@ -80,6 +81,15 @@ export interface InteractiveToolContext {
    * Absent in `keryx shell`; every other tool ignores it.
    */
   toolCallId?: string;
+  /**
+   * `spawn_subagent` only: the parent turn's own gate — its approver, permission mode, plan posture and
+   * auto-approval notice, read live. A `general` child answers its mutating calls through exactly these,
+   * so it has the parent's permissions and no more. Every other tool ignores it.
+   */
+  parentGate?: Pick<AgentIO, "requestApproval" | "permissionMode" | "readOnly" | "onAutoApproved" | "beforeMutation"> & {
+    /** The parent's publish-lease view, so a child's `git push` meets the same floor as the parent's. */
+    busLeases?: AgentDeps["busLeases"];
+  };
 }
 
 /** A tool the interactive agent can offer to the model and execute for content. */

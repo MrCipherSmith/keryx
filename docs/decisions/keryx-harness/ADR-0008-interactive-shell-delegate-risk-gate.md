@@ -91,6 +91,33 @@ Given those three, an unapproved `delegate` grants the model a read-only child
 that can neither mutate through a shell nor widen the tree. Requiring approval
 for it would add a prompt without removing an authority.
 
+### Amendment (2026-11): a `general` child under the parent's gate
+
+Facts 1-3 now hold for every child **except one**: a `general` child spawned
+while the parent session has an approver (`inheritsGate` in
+`spawn-subagent-tool.ts`) gets `shell_exec` and `apply_patch`, and its calls go
+to the parent's own approver. The decision above is unchanged, because that case
+needs the approver this ADR's auto-allow path lacks: with no approver present
+there is no parent gate to inherit, and the child stays read-only exactly as
+facts 1-3 describe.
+
+Under the inherited gate a child is still no stronger than the parent:
+
+- every mutating call is asked through the parent's approver, under the
+  parent's permission mode and plan posture, and starting a `general` child
+  asks in `ask` mode;
+- a call asked after the child was abandoned (deadline, abort) is refused
+  unseen, and an answer that arrives after that is ignored;
+- a parent that already read untrusted content hands the child that taint, so
+  its calls are asked as untrusted-origin calls;
+- the child meets the parent's publish-lease floor and `/rewind` checkpoint;
+- a call in a linked project's folder carries `foreignRoot`: no saved or
+  session shell rule answers it, and the answer is never remembered;
+- the time spent waiting on an approval does not count against the child's
+  deadline.
+
+The `read_only` branch, and any child given its own tool list, keep facts 1-3.
+
 ---
 
 ## Consequences and residual risk

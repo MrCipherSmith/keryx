@@ -57,6 +57,8 @@ export type ShellApprovalEval = {
   hcLaunch?: string;
   hookAsk: boolean;
   untrustedOrigin: boolean;
+  /** `ApprovalMeta.foreignRoot`: a subagent's call in another folder. No saved rule answers it; never remembered. */
+  foreignRoot?: string;
   autoApprove: boolean;
   rejected: readonly PatternRejection[];
   tampered: boolean;
@@ -94,6 +96,7 @@ export function evaluateShellApproval(input: {
   const hookAsk = input.meta?.hookAsk === true;
   const hcLaunch = input.meta?.hcLaunch;
   const untrustedOrigin = input.meta?.untrustedOrigin === true;
+  const foreignRoot = input.meta?.foreignRoot;
   const audit = io.loadAudit();
   // The saved list is read on every call. What it held last time is remembered per set, so a rule
   // taken back (`/permissions`, `keryx permissions remove`) stops approving in a running session on
@@ -118,6 +121,7 @@ export function evaluateShellApproval(input: {
     hcLaunch === undefined &&
     !hookAsk &&
     !untrustedOrigin &&
+    foreignRoot === undefined &&
     isShellCommandAllowed(command, [...input.sessionAllow]);
   return {
     command,
@@ -129,6 +133,7 @@ export function evaluateShellApproval(input: {
     ...(hcLaunch !== undefined ? { hcLaunch } : {}),
     hookAsk,
     untrustedOrigin,
+    ...(foreignRoot !== undefined ? { foreignRoot } : {}),
     autoApprove,
     rejected: audit.rejected,
     tampered,
@@ -175,6 +180,9 @@ export function rememberExactShellGrant(
 
 export function formatShellApprovalHints(evaled: ShellApprovalEval): string[] {
   const lines: string[] = [];
+  if (evaled.foreignRoot !== undefined) {
+    lines.push(`a subagent's command in ${evaled.foreignRoot} (a linked project) — no saved rule answers it; will not be remembered`);
+  }
   if (evaled.destructive) {
     lines.push("destructive command — will not be remembered");
   }

@@ -698,6 +698,13 @@ button { font: inherit; }
 .settings-row .segmented { flex-wrap: wrap; max-width: 100%; }
 .settings-row-title { font-weight: 600; }
 .settings-row-help { color: var(--fg-muted); font-size: var(--fs-sm); }
+.session-item-fork { color: var(--fg-muted); flex: none; margin-right: 4px; }
+.linked-projects { display: flex; flex-direction: column; gap: 6px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.linked-project-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.linked-project-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; }
+.linked-project-row > .icon { color: var(--fg-muted); margin-top: 2px; flex: none; }
+.linked-project-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.linked-project-text .dim { color: var(--fg-muted); font-size: var(--fs-sm); }
 .field-row { display: flex; align-items: flex-end; gap: var(--sp-2); }
 .field-row .field { margin: 0; }
 .settings-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--sp-3); }

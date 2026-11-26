@@ -122,6 +122,10 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/route` | Opt-in routing classifier: each request runs on its routing category's model — /route [on\|off]. |
 | `/editguard` | Jev EDIT GUARD status, threshold and recent flags for the Claude Code PostToolUse hook, with a toggle. |
 | `/projectctx` | Project rules for implementation: the last resolve, the context cap, warn/block enforcement and conditional references — /projectctx [warn\|block\|refs]. |
+| `/ref` | Linked projects: list, add and remove the folders this project organises — /ref [list\|add <folder>\|remove <name>]. |
+| `/ref-list` | List the linked projects with a summary of each. |
+| `/add-ref` | Link a folder (usually a sibling repository) to this project. |
+| `/ref-remove` | Unlink a linked project; the folder itself is not touched. |
 | `/jevprofile` | Every review.jev.* setting next to its measured verdict; toggle one or apply the recommended profile. |
 | `/plan` | Toggle read-only mode — /plan [on\|off]. |
 | `/goal` | Deterministically start a goal — /goal <text> [--workspace <id>] [--auto [N]]. |
@@ -205,6 +209,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx sandbox` | Report OS sandbox launcher availability and the per-capability containment matrix. |
 | `keryx modules` | View and toggle Metaproject modules (interactive). |
 | `keryx projects` | Inspect the user-global registry of initialized projects. |
+| `keryx ref` | Linked projects: list, add and remove the folders this project organises. |
 | `keryx serve` | Loopback-bound authenticated HTTP entry (off by default; read-only routes). |
 | `keryx rules` | Sync root AGENTS.md/CLAUDE.md into high-priority project rules. |
 | `keryx harness` | Run a single provider turn (harness run) and print structured events. |
