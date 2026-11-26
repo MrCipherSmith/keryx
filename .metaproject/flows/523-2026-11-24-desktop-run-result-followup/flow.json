@@ -11,7 +11,7 @@
   "title": "Desktop Run button: the agent follows the command it asked the user to run",
   "status": "in-progress",
   "createdAt": "2026-11-24T20:53:10.991Z",
-  "updatedAt": "2026-11-25T21:17:49.671Z",
+  "updatedAt": "2026-11-26T06:04:08.417Z",
   "source": {
     "type": "description",
     "ref": null
@@ -280,7 +280,7 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed",
-      "dispositionReason": "dup"
+      "dispositionReason": "14 server findings fixed (R2-SC-003 orphan-END span bounded to the key body, R2-HL3-001 head counted against the budget with a fits search, R2-SC-002 head-line digests, R2-AR-003 src/session/terminal-note.ts grammar, R2-DG-004 history boundary, R2-LG-004 client cut line kept, R2-HL-002 runId dedupe, R2-HL-003, R2-PC-001, tests); red at HEAD or under named mutants; src/acp 537/0, session+guards 724/0, focused 163/0 + 103/0, typecheck 0, eslint 0; src/security 8 environmental failures in untouched read-source.test.ts (local git template hook); result results/T13.json"
     },
     {
       "id": "T14",
@@ -325,6 +325,72 @@
       "budget": {},
       "disposition": "completed",
       "dispositionReason": "docs fix round 2: spec 0.3.2 §3.9.5b and §4.4, plan matrix, cli-reference Discovery; AC9 and AC2 rewritten via flow ac update; AC8 holds; AC12 exit 0"
+    },
+    {
+      "id": "T16",
+      "title": "Fix round 3: keryx server findings (R3-SC-001 escape walk, R3-SC-003 line prefixes, R3-LG-005/006 at-most-once, R3-LG-004 under-tail cut, R3-AR-003/004, tests)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-26T05:21:22.567Z",
+            "outcome": "started",
+            "detail": "523-T16 fix round 3 server (brief dispatch/T16-brief.md)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "11 server findings fixed (R3-SC-001 every JSON escape whole on the END line, R3-SC-003 lines above an orphan END read by the END line's own prefix shape, R3-AR-004 shared ctx rg item formatter in src/lib, R3-TP-003/006, R3-LG-004 under-tail cut when the request does not fit, R3-TP-001/002, R3-LG-005 all-duplicate resend whose notes end the history runs the follow-up turn, R3-LG-006 dedupe by run id and kind, R3-AR-003 one note grammar source); red on the unfixed source or under named mutants; focused 189/0, compaction callers 83/0, private-key/ctx 169/1 (environmental git template hook), typecheck 0, eslint 0; result results/T16.json"
+    },
+    {
+      "id": "T17",
+      "title": "Fix round 3: desktop findings (R3-UX-001 long-line notice, R2-UX-001 not-sent is final, R3-FE-001 card stays in place, R3-LG-001, R3-AR-001 cut-line drift test, R3-DG-001, R3-FE-002)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-26T05:21:23.144Z",
+            "outcome": "started",
+            "detail": "523-T17 fix round 3 desktop (brief dispatch/T17-brief.md)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "8 desktop findings fixed (R3-UX-001 nothing-whole line, R2-UX-001 not-sent final and dropped on reload, R3-FE-001 replayed card stays in place, R3-LG-001 queued resume before Run results, R3-AR-001 + R2-AR-001 cut-line drift check, R3-DG-001 manager-level ring test, R3-FE-002 fixture refuses unknown scenarios); red before green per fix; focused desktop tests 157/0, cargo pty 20/0, tsc 0, clippy -D warnings 0; concern: a compaction replay drops conv.telegramTurn so the arbiter may not wake (pre-existing, follow-up); result results/T17.json"
+    },
+    {
+      "id": "T18",
+      "title": "Fix round 3: spec 0.3.2, PR body, AC and flow docs for T16/T17 (R3-PC-002, R3-PC-003, R3-PC-004, Known limits)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-11-26T05:57:58.744Z",
+            "outcome": "started",
+            "detail": "523-T18 fix round 3 docs (brief dispatch/T18-brief.md)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "spec 0.3.2 3.9.5b/4.3/4.4, plan.md and PR body follow fix round 3 (R3-PC-002 BEGIN pairing, R3-PC-004 operatorCards, R3-PC-003 confirmed fixed); no AC text wrong; AC12 check exit 0"
     }
   ],
   "history": [
@@ -575,6 +641,56 @@
       "at": "2026-11-25T21:17:49.671Z",
       "event": "task-done",
       "detail": "T15: Fix round 2: spec, AC8/AC9, PR body and flow docs findings (R2-PC-003, R2-PC-004, R2-SC-001, R2-FE-004, R2-PC-002, R2-DG-003, PC-006, PC3-002, PC-007)"
+    },
+    {
+      "at": "2026-11-25T21:40:58.626Z",
+      "event": "task-done",
+      "detail": "T13: Fix round 2: keryx server findings (R2-SC-003 orphan-END span, R2-HL3-001 compaction pin budget, R2-HL-002 runId dedupe, R2-LG-004, R2-SC-002, R2-AR-003, R2-DG-004, tests)"
+    },
+    {
+      "at": "2026-11-26T05:20:12.380Z",
+      "event": "task-added",
+      "detail": "T16: Fix round 3: keryx server findings (R3-SC-001 escape walk, R3-SC-003 line prefixes, R3-LG-005/006 at-most-once, R3-LG-004 under-tail cut, R3-AR-003/004, tests)"
+    },
+    {
+      "at": "2026-11-26T05:20:12.975Z",
+      "event": "task-added",
+      "detail": "T17: Fix round 3: desktop findings (R3-UX-001 long-line notice, R2-UX-001 not-sent is final, R3-FE-001 card stays in place, R3-LG-001, R3-AR-001 cut-line drift test, R3-DG-001, R3-FE-002)"
+    },
+    {
+      "at": "2026-11-26T05:21:22.567Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 523-T16 fix round 3 server (brief dispatch/T16-brief.md)"
+    },
+    {
+      "at": "2026-11-26T05:21:23.144Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 523-T17 fix round 3 desktop (brief dispatch/T17-brief.md)"
+    },
+    {
+      "at": "2026-11-26T05:29:15.852Z",
+      "event": "task-done",
+      "detail": "T17: Fix round 3: desktop findings (R3-UX-001 long-line notice, R2-UX-001 not-sent is final, R3-FE-001 card stays in place, R3-LG-001, R3-AR-001 cut-line drift test, R3-DG-001, R3-FE-002)"
+    },
+    {
+      "at": "2026-11-26T05:57:33.022Z",
+      "event": "task-done",
+      "detail": "T16: Fix round 3: keryx server findings (R3-SC-001 escape walk, R3-SC-003 line prefixes, R3-LG-005/006 at-most-once, R3-LG-004 under-tail cut, R3-AR-003/004, tests)"
+    },
+    {
+      "at": "2026-11-26T05:57:33.606Z",
+      "event": "task-added",
+      "detail": "T18: Fix round 3: spec 0.3.2, PR body, AC and flow docs for T16/T17 (R3-PC-002, R3-PC-003, R3-PC-004, Known limits)"
+    },
+    {
+      "at": "2026-11-26T05:57:58.744Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — 523-T18 fix round 3 docs (brief dispatch/T18-brief.md)"
+    },
+    {
+      "at": "2026-11-26T06:04:08.417Z",
+      "event": "task-done",
+      "detail": "T18: Fix round 3: spec 0.3.2, PR body, AC and flow docs for T16/T17 (R3-PC-002, R3-PC-003, R3-PC-004, Known limits)"
     }
   ],
   "origin": {

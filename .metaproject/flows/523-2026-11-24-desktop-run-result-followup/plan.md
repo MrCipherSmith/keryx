@@ -83,11 +83,18 @@ waiting → one prompt (AC4).
 
 A results prompt on its way that gets no answer (the connection closed or broke under it, or a keryx
 restart replaced the connection) goes back to `waiting` and is sent again once the session is held
-again; keryx stores a result at most once per run id and answers an all-duplicate prompt with
-`stored: 0` and no turn, which the desktop counts as delivered (review R2-HL-002). A session reload
-inside the window (`/compact`, `/rewind`, a released session, a keryx restart) keeps a live card only
-where its note is replayed or its run can still change (not final, or its tab open); a final card
-whose tab is closed is dropped (review R2-UX-001).
+again; keryx stores a result at most once per run id and kind (a running snapshot, a final result:
+a final result after a stored snapshot is stored and gets its turn, so one session can hold two
+notes for one run) and answers an all-duplicate prompt with `stored: 0`, which the desktop counts
+as delivered (review R2-HL-002, R3-LG-006). The all-duplicate prompt starts no turn, except when
+its stored notes are the last messages of the history: then it runs the follow-up turn on them,
+storing nothing again (R3-LG-005); a turn keryx's own stop cancelled after it was persisted with
+keryx's continuation line is not re-run. A session reload inside the window (`/compact`,
+`/rewind`, a released session, a keryx restart) keeps a live card only where its note is replayed
+(the newest note's place when keryx replays two for one run) or its run can still change (not
+final, or its tab open; a "not sent" card is final whatever its tab does); any other final card
+is dropped (reviews R2-UX-001, R3-FE-001). A byte cut that keeps no whole line sends the cut line
+and `[the last line is longer than 16 KiB and was not sent]` (R3-UX-001).
 
 ### Tasks (see tasks.md for ids)
 

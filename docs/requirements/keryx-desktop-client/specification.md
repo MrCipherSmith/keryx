@@ -616,15 +616,29 @@ compaction and the run-id check below all use.
   with `issueLaunchId` or `resumeIssueQuestions`. Every refusal, including the
   usual pre-turn ones (unknown session `-32002`, busy, opening, shutting down,
   no provider), leaves nothing stored and starts no turn.
-- At most once per run id (review R2-HL-002): once those checks pass, an
-  entry whose `runId` already has a stored note in the session's history or
-  its archive (a note compaction removed still counts) is skipped, and only
-  the other entries are stored. A prompt whose every entry is such a
-  duplicate stores nothing, starts no turn, makes no model call and is
-  answered `{ stopReason: "end_turn", _meta: { keryx: { terminalResults: {
-  stored: 0, duplicates: [<runId>, …] } } } }`; a prompt with some new
-  entries is answered like any prompt, with no such meta. So a client may
-  send a result again when its prompt got no answer.
+- At most once per run id and kind (reviews R2-HL-002, R3-LG-006): once those
+  checks pass, an entry is a duplicate when the session's history or its
+  archive (a note compaction removed still counts) already holds a note of
+  the same run and the same kind, the kind being read from keryx's own head
+  line: a running snapshot, or a final result (exit or signal). A final
+  result after a stored "still running" snapshot of the same run is not a
+  duplicate: it is stored as its own note and gets its turn, so one session
+  can hold two notes for one run id. A second snapshot, or anything after a
+  stored final result, is a duplicate. Duplicates are skipped and only the
+  other entries are stored. A prompt with some new entries is answered like
+  any prompt, with no extra meta. A prompt whose every entry is a duplicate
+  stores nothing and is answered `{ stopReason, _meta: { keryx: {
+  terminalResults: { stored: 0, duplicates: [<runId>, …] } } } }`
+  (`duplicates` stays a list of run ids). It starts a turn only when the
+  stored notes it names are the last messages of the session's history (no
+  keryx line, reply or other message after them: the earlier prompt was
+  stored and its turn never ran): then it runs the follow-up turn on those
+  notes (one model call, nothing stored again; `/rewind` of that turn takes
+  the notes out with it) (review R3-LG-005). Any other all-duplicate prompt
+  starts no turn and makes no model call. So a client may send a result
+  again when its prompt got no answer. Not re-run: a follow-up turn that
+  keryx's own stop cancelled after it was persisted with keryx's
+  continuation line.
 - The prompt's own text blocks are the client's display text; keryx never
   reads them, not even as a slash command.
 - Notes: for each entry keryx appends one user-role note to the session's
@@ -649,18 +663,36 @@ compaction and the run-id check below all use.
   - A private key cut by a tail fails closed: an `-----END … PRIVATE
     KEY-----` line with no header before it masks the END line and the key
     body directly above it, never further back than the end of the previous
-    key block. On the END's own line that is the run of base64 and
-    `\n`/`\r` escapes before the marker (a key serialized into one line, as
-    JSON does), which stops at a quote or any other character, so a JSON
-    string stays whole. When that run fills its line (after a line prefix),
-    the lines above that look like key body are masked too: base64 lines
-    (also behind a `cat -n`, `grep -n`/`rg -n` or `keryx ctx rg`
-    line-number prefix, or indented), PEM header fields, and blank lines
-    between them, up to the first line that is none of these (the desktop's
-    cut line, a frame, any other record). A header with no END line still
-    masks to the end of the input. This is the shared detector
+    key block. On the END's own line that is the run of base64 and JSON
+    escapes before the marker (a key serialized into one line, as JSON
+    does): every JSON escape is taken whole (`\n`, `\r`, `\t`, `\b`, `\f`,
+    `\/`, `\\`, `\uXXXX`), and the run stops at a quote (`\"` included) or any
+    other character, so redacted JSON still parses (review R3-SC-001). The
+    lines above are masked when they carry the END line's own prefix: only
+    digit runs, the padding spaces before a number and a `:` or `-` beside a
+    number (or ending the prefix) may differ. That covers grep/rg with or
+    without a file name and line number (`rg --column` included), `cat -n`
+    and `nl` at any digit width, `git show`/`git log -p` (`-`/`+`), `diff`
+    (`< `/`> `), `docker compose logs`, timestamped lines, `> `-quoted lines,
+    `keryx ctx rg` items and indentation, and also blank lines and PEM
+    header fields between them, up to the first line with any other prefix
+    (the desktop's cut line, a frame, another file's lines, a different
+    indentation, any other record). The mask is narrower than in fix round 2
+    in two cases: an END line without a prefix no longer masks numbered or
+    indented lines above it, and a prefixed END line no longer masks lines
+    with a different prefix; when no line above is masked, the END line's own
+    prefix (its line number) stays visible and only the run and the marker
+    are masked (review R3-SC-003). A header with no END line masks to
+    the end of the input when no END line follows it; a header that has an
+    END line later in the input is paired with the nearest END line after it,
+    wherever that END line is, and everything between them is masked. In a
+    listing of several records (several files' lines in one output) a header
+    paired with an END line from another record therefore masks the records
+    between them (review R3-PC-002). This is the shared detector
     (`src/security/detect/secrets.ts`, review R2-SC-003): every consumer of
-    it masks this way, not only Run results.
+    it masks this way, not only Run results. The `keryx ctx rg` summary item
+    is rendered by `src/lib/rg-summary-item.ts`, below both the command and
+    the detector, and a test masks a key tail in such items whole.
   - Then the output keeps its last 16 KiB (`capResultText` with `keep:
     "tail"`, never starting inside a UTF-8 character): an output keryx cuts
     starts with the line `[… N earlier bytes not kept]`. When the output
@@ -724,11 +756,15 @@ compaction and the run-id check below all use.
   fit the share; the older notes are removed and named in the summary, and
   then nothing older than the head is kept verbatim. `compactWithFallback`
   checks that the in-turn cut fits: when it does not, it halves the tail
-  budget, down to 1,000 tokens, and takes the largest tail that fits, or the
-  smallest one tried when none fits; when no context can fit (`fits([])` is
-  false: the overflow retry with no known limit) it keeps the cut at the
-  full tail, as before. This changes every in-turn cut, also in sessions
-  with no Run result. A compaction summary names the Run results it removed
+  budget, down to 1,000 tokens, skips a budget whose cut removes nothing,
+  and takes the largest tail that fits, else the smallest cut that removed
+  anything, else the noop; when no context can fit (`fits([])` is false: the
+  overflow retry with no known limit) it keeps the cut at the full tail, as
+  before. This cuts inside every turn whose request does not fit, also a turn
+  under the 20K-token tail (review R3-LG-004), and changes every in-turn cut,
+  also in sessions with no Run result. The head line a compaction reads from
+  a carried item is read by `readTerminalNoteHeadLine`
+  (`src/session/terminal-note.ts`), the same parts that write it. A compaction summary names the Run results it removed
   under "Run results removed from the active context (terminal-result
   notes):", one line each, `- [terminal run <runId> result: <outcome>]`:
   keryx's head line rebuilt from the run id and outcome only, never the
@@ -764,7 +800,7 @@ compaction and the run-id check below all use.
     result of a command run from the Run button." (or "The results of N
     commands run from the Run button."); no user bubble is drawn, and the
     delivered cards move to the end of the transcript so the agent's reply
-    follows them. Sending counts the follow-up turn at once; when keryx then
+    follows them (a card a replay put in its note's place stays there, §4.4). Sending counts the follow-up turn at once; when keryx then
     refuses the prompt (any refusal below) or it gets no answer, the desktop
     takes that count back (`terminalUnsent`). The all-duplicate answer
     (`stored: 0`, above) counts as delivered, and the count stays.
@@ -774,8 +810,9 @@ compaction and the run-id check below all use.
     (`resumeIssueQuestions`) and a turn the load's caller starts as soon as
     it resolves (a session review) take the slot first. An issue-question
     resume refused because a turn or a Telegram turn holds the slot is
-    queued behind it; opening an issue session fails when the resume was
-    neither sent nor queued.
+    queued behind it, and when that turn ends the queued resume goes before
+    that session's waiting results (review R3-LG-001); opening an issue
+    session fails when the resume was neither sent nor queued.
   - A busy refusal (`data.condition: "session-busy"`) puts the results back
     to waiting. The session is asked again when a pause ends, or at the first
     turn end after it: 1 s after the first busy refusal, doubling with each
@@ -796,7 +833,8 @@ compaction and the run-id check below all use.
   - Any other refusal before storing (invalid request such as opening or no
     provider; method not found; invalid params; unknown session for a session
     the window still holds) marks them "not sent: <error>" without retry, as
-    does a command over 4096 characters, before any send.
+    does a command over 4096 characters, before any send. A "not sent" card
+    is final whatever its tab does (§4.4).
     A follow-up turn that keryx answers with any other error after the notes
     were stored is shown like any failed turn; its results count as sent.
   - A "Send output now" snapshot still waiting, or whose tail is still being
@@ -969,10 +1007,11 @@ version checks and the flows parsers and argv builder.
 ### 4.3 Client capabilities sent at `initialize`
 
 `{ fs: { readTextFile: true, writeTextFile: false }, terminal: false,
-  _meta: { keryx: { askUser: true, prepareReview: true, terminal: true,
-  telegramSession: true, terminalResults: true } } }`
+  _meta: { keryx: { askUser: true, prepareReview: true, operatorCards: true,
+  terminal: true, telegramSession: true, terminalResults: true } } }`
 
-The last three `_meta.keryx` fields are sent by the app only (not the browser
+`askUser`, `prepareReview` and `operatorCards` are sent by every build. The
+last three `_meta.keryx` fields are sent by the app only (not the browser
 dev bridge, which has no terminal panel): `terminal` for `/delegate` in the
 terminal (D-14, §3.9.5a), `telegramSession` for the Telegram binding, and
 `terminalResults` because this build tracks Runs and returns their results
@@ -1066,8 +1105,12 @@ Web view:
   or byte cap dropped earlier output or the host reported `truncated`. A
   byte cut never starts inside a line: the output starts at the next whole
   line and the partial one is left out (keryx redacts only what it is sent,
-  so no fragment of a secret's line reaches it, §3.9.5b); a last line longer
-  than the byte cap leaves only the cut line. A tail that cannot be read is sent
+  so no fragment of a secret's line reaches it, §3.9.5b); when the cut keeps
+  no whole line (the last line alone is longer than the byte cap, or the host
+  ring kept only part of one line), the output is the cut line and a second
+  line `[the last line is longer than 16 KiB and was not sent]`
+  (`RUN_OUTPUT_NOTHING_WHOLE`; owner decision on R3-UX-001), and no fragment
+  of that line is sent. A tail that cannot be read is sent
   with the exit code as `[the output could not be read: <error>]`. An exit
   reported before the tab id is known is kept (up to 32) and applied when
   the tab opens. Closing the tab while its result or an asked-for snapshot
@@ -1075,24 +1118,33 @@ Web view:
   (§3.9.5b). Delivery follows the waiting rule of §3.9.5b. A run that can no
   longer change (a final state, its tab closed, its process's end seen,
   nothing read or sent for it in flight) leaves the store; its card stays.
+  A "not sent" run leaves the store once its process's end was seen, though
+  its tab may still be open (Show tab and the exit stay wired until then).
   The store's wire limits are copies of keryx's (`src/acp/terminal-result.ts`):
   `terminalRuns.test.ts` loads keryx's module and fails when a limit differs
   or a batch the store builds fails keryx's validator, and the desktop check
   (`.github/workflows/desktop-check.yml`) runs for a change under
   `apps/desktop/**`, `src/acp/terminal-result.ts` or
-  `src/session/terminal-note.ts` (review R2-AR-001). The cut line
-  (`RUN_OUTPUT_CUT`, equal to keryx's `TERMINAL_OUTPUT_CUT_LINE`), the
-  replayed note's shape (`reducer.ts`) and keryx's refusal conditions
+  `src/session/terminal-note.ts` (review R2-AR-001). The same test compares the cut line (`RUN_OUTPUT_CUT`)
+  with keryx's `TERMINAL_OUTPUT_CUT_LINE` (review R3-AR-001); the replayed
+  note's shape (`reducer.ts`) and keryx's refusal conditions
   (`useAcpSession.ts`) are copies no test compares.
 - Session reload (`reducer.ts`, `keepLiveRuns`): a `session/load` of a
   session the window already has a transcript for (after `/compact` or
   `/rewind`, a return to a released session, a keryx restart) keeps the live
   run cards (those not drawn from a replayed note) where they still apply
   (review R2-UX-001). A replayed note of a live run shows the live card in
-  the note's place. A live run with no replayed note keeps its card at the
-  end of the transcript only while it can still change (`runCanChange`:
-  starting, running, waiting, or any state while its tab is open, since its
-  exit and Show tab still change it). Any other card is dropped: a run that
+  the note's place; when keryx replays two notes for one run (its snapshot,
+  then its exit), the live card takes the newest note's place and the older
+  note stays a replayed card, and a store update or a re-send touches only
+  the live card, never a replayed note. A card a replay put in its note's
+  place stays there when its result is sent again, so the agent's reply
+  follows it (review R3-FE-001). A live run with no replayed note keeps its
+  card at the end of the transcript only while it can still change
+  (`runCanChange`: starting, running, waiting, or any state but "not sent"
+  while its tab is open, since its exit and Show tab still change it; a "not
+  sent" card is final whatever its tab does, owner decision on R2-UX-001, so a
+  reload drops it and a late exit never draws it again). Any other card is dropped: a run that
   ended without reaching the agent (closed, could not start, not sent) with
   its tab closed has no note and is not drawn again below newer messages,
   and a delivered run's card that keryx no longer replays (for example
@@ -1135,6 +1187,16 @@ Web view:
   code). The output of a command that exits very quickly can occasionally be
   short or missing in the tail under load (suspected: output not yet drained
   from the PTY when the process closes it).
+- Run-result limits (flow 523 follow-ups, not fixed): a follow-up turn that
+  keryx's own stop cancelled after it was persisted with keryx's
+  continuation line is not run again (§3.9.5b). A private-key tail
+  serialized into one JSON string with line prefixes inside it (`\n     4\t…`)
+  masks only the run on the END line, and a space-joined key body masks
+  only its last chunk; neither is masked as a body. A compaction replay
+  replaces the window's conversation and drops its copy of a running
+  Telegram turn, so when that turn ends no window state changes and a prompt
+  queued behind it can wait until the next window change (pre-existing; the
+  arbiter does not depend on the turn registry).
 - `/delegate` runs (D-14): `pty_open_run(cwd, argv, title, cols, rows)` opens a
   tab whose process is `argv` itself (no shell), with the same login-shell
   environment and the same SIGHUP-then-SIGKILL close as a shell tab; a program
