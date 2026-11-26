@@ -5,6 +5,14 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.60] - 2026-11-26
+
+**Keryx Desktop 0.2.23** bundles Keryx 0.4.60. Desktop itself is unchanged.
+
+### Fixed
+
+- `/decisions` in `keryx shell`, and a click on the decisions row of the sidebar, no longer fail with `TextBuffer is destroyed` when the sidebar is closed while the journal is still being read. Of two opens started back to back, only the later one draws its window. (#1327)
+
 ## [0.4.59] - 2026-11-26
 
 **Keryx Desktop 0.2.22** bundles Keryx 0.4.59. Use the bundled Keryx, or 0.4.59 or newer, to answer operator cards in Desktop: an older Keryx does not offer them to a Desktop session.
