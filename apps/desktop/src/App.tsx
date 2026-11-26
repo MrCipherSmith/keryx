@@ -50,7 +50,7 @@ import { AskUserDialog, FatalDialog, PermissionDialog } from "./session/Approval
 import type { ComposerHandle } from "./session/Composer";
 import { ProvidersDialog, useProvidersDialog, type ProvidersApi } from "./session/ProvidersDialog";
 import { SessionView } from "./session/SessionView";
-import { modelOption, useAcpSession } from "./session/useAcpSession";
+import { modelOption, reviewSessionMode, useAcpSession } from "./session/useAcpSession";
 import { ProjectMenu } from "./project/ProjectMenu";
 import { GitHubIntegrations, ProjectGitHubSettings } from "./project/GitHubSettings";
 import { TelegramServeSettings } from "./project/TelegramServeSettings";
@@ -644,6 +644,10 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
       }, subject, "latest", "");
       if (!opened) throw new Error("Could not open the review session.");
       sessionId = opened.sessionId;
+      // A session Desktop opened for the review runs unattended: Auto review mode → Auto permission mode, Manual → at
+      // least Trust. A session the user typed `/review` in (`owner`) keeps the mode the user chose. A failed switch
+      // leaves the session's mode as it was and shows a notice; the review is still sent.
+      await session.raiseMode(sessionId, reviewSessionMode(options?.mode));
     }
     // A typed `/review [target]` is the command that opened the dialog, not a request: its target is already resolved.
     const request = prompt && !/^\/review(\s|$)/.test(prompt.trim()) ? prompt : undefined;
