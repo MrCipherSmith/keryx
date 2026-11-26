@@ -1059,6 +1059,15 @@ export function useAcpSession(cwd: string) {
       const sessionId = live.current.reg.shown;
       if (sessionId) dispatch({ t: "queueRemove", sessionId, index });
     },
+    /** The queued prompt becomes the next one sent; a running turn is stopped, and the queue then sends it (as `/queue force N`). */
+    forceQueued: (index: number) => {
+      const sessionId = live.current.reg.shown;
+      if (!sessionId) return;
+      const conv = winRef.current.convs[sessionId];
+      if (!conv?.queue[index]) return;
+      dispatch({ t: "queueFront", sessionId, index });
+      if (conv.busy || conv.telegramTurn) cancel();
+    },
     cancel,
     newSession,
     loadSession,
