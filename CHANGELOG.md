@@ -5,6 +5,30 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.61] - 2026-11-26
+
+**Keryx Desktop 0.2.24** bundles Keryx 0.4.61. The review projects use the reviewer, premise and orchestrator skills they have installed: run `keryx skills install` (or update) in a project to get this release's review instructions there.
+
+### Added
+
+- Issues in Desktop: the Author and Assignee filters are lists of the people on the loaded issues, with checkboxes, instead of typed logins. A **My issues** button keeps the issues assigned to you; press it again to show all. Both filter the loaded pages. (#1330)
+- A message you queue in a Desktop session while a turn runs is a row in a queue panel, as in `keryx shell`: **Send now** stops the turn and sends it next, **Edit** moves it back into the message box, and the cross deletes it. (#1330)
+
+### Changed
+
+- A review asks you about a finding only when the premise judge gives a reason it can cite: a line of the PR, the code or a commit, or a named rule. An owner decision without one is not held, and the finding stays as reported. The judge writes the question and the answers you choose from; the review keeps them word for word. (#1332)
+- A posted review no longer carries keryx's machine data: the `keryx:findings` and similar blocks stay in the review package. The findings still waiting for your answer, and the ones you answered, are listed from the package when the review is posted, so the posted text matches your answers. The token spend says it covers the reviewer runs only. (#1332)
+- Running a review again on a revision whose review is already published starts a new round in Desktop instead of reusing the published one. (#1332)
+- A Desktop review session runs in Auto permission mode (Manual: at least Trust), so it does not stop on every approval. A session where you typed `/review` keeps the mode you chose. (#1329)
+
+### Fixed
+
+- A reviewer's result that carries its status only on the `STATUS:` line is read. Before, every such reply was refused and the review stalled until the orchestrator repaired the files. (#1332)
+- A review started from the session shows on the Reviews tab while it runs and when it finishes. (#1329)
+- Looking something up with `keryx review` (`pr-context`, `board`, `reviews`, `accounts`, `--help`) no longer makes a session wait for a review to be completed. (#1331)
+- In Desktop, the ids, people, dates and comments in the detail panels and list tables of issues, pull requests and flows can be selected and copied. (#1330)
+- `keryx review state` no longer waits on the project's GitHub account, which it does not use. (#1332)
+
 ## [0.4.60] - 2026-11-26
 
 **Keryx Desktop 0.2.23** bundles Keryx 0.4.60. Desktop itself is unchanged.
