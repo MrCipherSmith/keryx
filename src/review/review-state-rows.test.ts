@@ -82,4 +82,12 @@ describe("review.json rounds join the Reviews list", () => {
     const [row] = mergeReviewStateRows([], [record([round({ state: "ready" })], { state: "closed", updatedAt: "2026-11-26T11:00:00.000Z" })], "gid", "me");
     expect(row!.closedAt).toBe("2026-11-26T11:00:00.000Z");
   });
+
+  test("an attempt started after the record closed keeps the Review open and is its latest attempt", () => {
+    const update = v2Attempt({ id: "run-update", round: 2, state: "running", headSha: sha("c"), reviewed: null, createdAt: "2026-11-26T12:00:00.000Z", finishedAt: null });
+    const closed = record([round({ state: "ready" })], { state: "closed", updatedAt: "2026-11-26T11:00:00.000Z" });
+    const [row] = mergeReviewStateRows([v2Row([update])], [closed], "gid", "me");
+    expect(row!.closedAt).toBeNull();
+    expect(summarizeReview(row!, null).state).toBe("running");
+  });
 });

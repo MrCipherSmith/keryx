@@ -67,3 +67,12 @@ test("the newest of several outdated results wins", () => {
   expect(localBadge([run(old, "completed", { source: "existing" }), run(older, "partial")], current).outdated)
     .toEqual({ headSha: older.headSha, state: "partial" });
 });
+
+test("a published review of the current range carries its verdict; a newer run or another range drops it", () => {
+  expect(localBadge([run(current, "completed", { publication: "published", publishedVerdict: "changes" })], current).published)
+    .toEqual({ verdict: "changes" });
+  expect(localBadge([run(current, "completed", { publication: "published" })], current).published).toEqual({});
+  expect(localBadge([run(current, "running"), run(current, "completed", { publication: "published", publishedVerdict: "approve" })], current).published)
+    .toBeUndefined();
+  expect(localBadge([run(old, "completed", { publication: "published", publishedVerdict: "approve" })], current).published).toBeUndefined();
+});

@@ -80,7 +80,8 @@
 .review-usage-scroll { max-height: min(18rem, 40vh); overflow: auto; overscroll-behavior: contain; }
 .review-usage table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
 .review-usage th, .review-usage td { padding: var(--sp-1) var(--sp-2); text-align: right; white-space: nowrap; }
-.review-usage th:first-child { padding-left: 0; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+/* break-word, not anywhere: "anywhere" lets the agent column shrink to one letter beside the nowrap number columns. */
+.review-usage th:first-child { min-inline-size: 8rem; padding-left: 0; text-align: left; white-space: normal; overflow-wrap: break-word; }
 .review-usage thead th, .review-usage small { color: var(--fg-muted); }
 .review-usage thead th { position: sticky; top: 0; background: var(--bg-surface); }
 .review-usage tfoot th, .review-usage tfoot td { position: sticky; bottom: 0; background: var(--bg-surface); }

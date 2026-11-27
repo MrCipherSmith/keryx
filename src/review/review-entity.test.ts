@@ -199,3 +199,18 @@ describe("summarizeReview", () => {
     expect(reviewNeedsViewer(summary)).toBe(false);
   });
 });
+
+describe("an imported copy of a result does not replace it", () => {
+  test("the Review's state and publication come from its own attempt, not a later existing import of the same range", () => {
+    const own = attempt({ source: "session", publication: "published", createdAt: "2026-11-27T16:07:00.000Z" });
+    const copy = attempt({ source: "existing", state: "partial", coverage: null, publication: null, createdAt: "2026-11-27T16:08:00.000Z" });
+    const summary = summarizeReview(row([own, copy]), card());
+    expect(summary.state).toBe("published");
+    expect(summary.publication).toBe("published");
+    expect(summary.source).toBe("session");
+  });
+  test("an import is still the state when no own attempt reviewed its range", () => {
+    const summary = summarizeReview(row([attempt({ source: "existing", state: "partial", publication: null })]), card());
+    expect(summary.source).toBe("existing");
+  });
+});

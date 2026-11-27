@@ -8,7 +8,7 @@ import type { ReviewBoardSnapshot } from "./board-types";
 import { ensureKeryxConfigDir, keryxDataDir, readConfigFile } from "../lib/config-dir";
 import { processPresence, type ProcessIdentity } from "../lib/hub-machine/process-identity";
 import { deskOptionsKey, parseDeskReviewOptions, type DeskReviewOptions } from "./desk-run-options";
-import { PUBLICATION_RECEIPT, PUBLICATION_SKIPPED, type PublicationOutcome } from "./desk-publication-types";
+import { PUBLICATION_RECEIPT, PUBLICATION_SKIPPED, type PublicationOutcome, type PublicationVerdict } from "./desk-publication-types";
 import { canContinueDeskRun, DESK_RUN_SCOPE, type DeskReviewAction } from "./desk-run-types";
 import { summarizeReviewerAssignments } from "./reviewer-activity";
 import type { ReviewAttemptSummary, ReviewOnHeadMove, ReviewRow, ReviewSource } from "./review-entity";
@@ -485,6 +485,16 @@ export class DeskRunStore {
     return state === "completed" && coverage === "complete" ? "pending" : undefined;
   }
 
+  /** The verdict of a published attempt: the publication draft is saved with the exact settings right before the post. */
+  private publishedVerdict(id: string): PublicationVerdict | undefined {
+    const draft = readConfigFile(path.join(this.directory(id), "publication-draft.json"));
+    if (!draft.ok) return undefined;
+    try {
+      const verdict: unknown = JSON.parse(draft.text)?.settings?.verdict;
+      return verdict === "approve" || verdict === "suggestions" || verdict === "changes" || verdict === "comment" ? verdict : undefined;
+    } catch { return undefined; }
+  }
+
   history(key: DeskRunKey, id?: string): DeskRunSnapshot {
     // Keep periodic IPC responses bounded. The database retains full reports.
     // Return small recent reports inline and load the rest by attempt id.
@@ -527,6 +537,10 @@ export class DeskRunStore {
         const publication = run.result.reviewed && run.source !== "existing" && run.decision?.action !== "archive" &&
           this.publication(run.id, run.state, run.result.coverage);
         if (publication) run.publication = publication;
+        if (publication === "published") {
+          const verdict = this.publishedVerdict(run.id);
+          if (verdict) run.publishedVerdict = verdict;
+        }
         run.result.report = row.report;
         if (id === undefined && row.bytes > 0 && !row.report) run.result.reportDeferred = true;
         if (id !== undefined && row.chars > 524288) {
@@ -640,6 +654,7 @@ export class DeskRunStore {
           this.publication(row.id, row.state, row.coverage);
         runs.push({ ...row, awaitingAnswer: !!row.awaitingAnswer,
           ...(publication && { publication }),
+          ...(publication === "published" && (() => { const verdict = this.publishedVerdict(row.id); return verdict ? { publishedVerdict: verdict } : {}; })()),
           lastActivityAt: row.state === "running" ? this.transcriptUpdatedAt(row.id) : undefined,
           result: row.base && row.head ? { reviewed: { baseSha: row.base, headSha: row.head } } : null,
           reviewerProgress: row.finished === null ? undefined : { planned: row.planned, finished: row.finished, wave: row.wave,

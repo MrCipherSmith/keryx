@@ -140,6 +140,8 @@ export interface DeskRun extends DeskRevision {
   sessionId?: string;
   continuation?: { previousId: string; guidance?: string };
   publication?: import("./desk-publication-types").PublicationOutcome;
+  /** The verdict the attempt was published with; present only with `publication: "published"`. */
+  publishedVerdict?: import("./desk-publication-types").PublicationVerdict;
   decision?: DeskReviewDecision;
   closure?: "completed" | "closed";
   /** Public events are projected on demand for the selected attempt. */

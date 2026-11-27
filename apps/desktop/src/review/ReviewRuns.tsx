@@ -200,8 +200,12 @@ interface Props extends ReportProps {
 
 /** The attempt the Latest review section shows for the card's range. */
 export function latestAttempt(runs: readonly DeskRun[], card: DeskRevision) {
+  // An imported package (`existing`) over the range of a completed attempt of this PR is a copy of that result: the
+  // section shows the attempt itself, as "View review result" does, not the copy's "Partial".
+  const copied = (run: DeskRun) => run.source === "existing" && runs.some(other =>
+    other.source !== "existing" && other.state === "completed" && !reviewIsArchived(other) && sameRange(other, run));
   return runs.find(run => runActive(run) && sameRange(run, card)) ??
-    runs.find(runActive) ?? runs.find(run => !reviewIsArchived(run));
+    runs.find(runActive) ?? runs.find(run => !reviewIsArchived(run) && !copied(run)) ?? runs.find(run => !reviewIsArchived(run));
 }
 
 export function ReviewRuns({ activity, card, runs, error, loaded, working, onCancel, onRefresh, loadAttempt, onAccessLost, onOpenSession, onAnswer, onLifecycle, publication, headingRef }: Props) {

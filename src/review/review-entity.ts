@@ -134,7 +134,13 @@ function newest(attempts: ReviewAttemptSummary[], wanted: (attempt: ReviewAttemp
 /** The attempts the Review's state, findings and publication come from: the unarchived ones, or all when every one is archived. */
 function stateAttempts(row: ReviewRow): ReviewAttemptSummary[] {
   const kept = row.attempts.filter(attempt => !attempt.archived);
-  return kept.length ? kept : row.attempts;
+  const visible = kept.length ? kept : row.attempts;
+  // An imported package (`existing`) over a range one of this Review's own attempts already reviewed is a copy of that
+  // result: it must not become the Review's state ("Partial", "Not published") beside the attempt it copies.
+  const copied = (attempt: ReviewAttemptSummary) => attempt.source === "existing" && visible.some(other =>
+    other.source !== "existing" && reviewedResult(other) && other.baseSha === attempt.baseSha && other.headSha === attempt.headSha);
+  const own = visible.filter(attempt => !copied(attempt));
+  return own.length ? own : visible;
 }
 
 /** The head a Review last checked: the newest reviewed result, else the newest requested range. */

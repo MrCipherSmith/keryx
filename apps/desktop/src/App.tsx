@@ -31,6 +31,7 @@ import { SessionReviewActivity, type ReviewCardMemory } from "./review/SessionRe
 import { reviewCardAnchors, reviewCardGroup, splitReviewCards, withReviewActive } from "./review/reviewPlacement";
 import { loadSessionReviewTargets, readSessionReviewLinks, reviewFlowId, reviewSessionTitle, type SessionReviewLink } from "./review/sessionReview";
 import { reviewRun } from "./platform/reviewRuns";
+import { advanceRequest, reviewedAttempt } from "../../../src/review/review-advance";
 import { reviewContinueTurn, reviewPullRequestUrl, reviewStartTurn } from "./review/reviewTurn";
 import { modelChoices, providerOf } from "./session/Composer";
 import type { IssueOriginRequest } from "./issues/IssueOriginDetail";
@@ -646,9 +647,22 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
   }, [cwd, openSubject]);
   const continueSessionReview = useCallback((link: SessionReviewLink, note: string) =>
     acp.current.sendPrompt(reviewContinueTurn({ key: link.key, note, attemptId: link.id, revision: link.revision, sessionId: link.sessionId }), link.sessionId), []);
+  /**
+   * "Update review" on a moved head is the next round of the same Review, so it is a session turn like a start, not a
+   * detached worker (which ran with nothing in the session and left the card on a stale state). The checks are the ones
+   * `keryx review advance` makes; the panel offers the update only on an open PR, and the turn's skill checks the range.
+   */
+  const advanceSessionReview = useCallback(async (key: DeskRunKey, revision: DeskRevision, id: string): Promise<DeskRunSnapshot> => {
+    const history = await reviewRun(cwd, key, { kind: "status" });
+    const reviewed = reviewedAttempt(history.runs, id);
+    const { options } = advanceRequest({ reviewed, runs: history.runs, current: revision, prState: "OPEN" });
+    return startSessionReview(key, revision, options);
+  }, [cwd, startSessionReview]);
   const boardReviewRun = useCallback<typeof reviewRun>((project, key, action) => {
-    return action.kind === "start" ? startSessionReview(key, action, action.options) : reviewRun(project, key, action);
-  }, [startSessionReview]);
+    if (action.kind === "start") return startSessionReview(key, action, action.options);
+    if (action.kind === "advance") return advanceSessionReview(key, { baseSha: action.baseSha, headSha: action.headSha }, action.id);
+    return reviewRun(project, key, action);
+  }, [startSessionReview, advanceSessionReview]);
 
   const draftReview = s.reviewDraftRequest;
   const [routingSession, setRoutingSession] = useState<string | null>(null);

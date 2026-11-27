@@ -128,6 +128,7 @@ function RepositoryReviews({ cwd, expectedViewer, active, onIndicatorChange, rel
   const q = useDeferredValue(query);
   const [showClosed, setShowClosed] = useState(false);
   const [view, setView] = useState<"board" | "list">("board");
+  const [panelWidth, setPanelWidth] = useState(560);
   const [selected, setSelected] = useState<{ id: string; intent?: ReviewIntent | undefined } | null>(null);
   const [notice, setNotice] = useState("");
   const search = useRef<HTMLInputElement>(null);
@@ -366,7 +367,7 @@ function RepositoryReviews({ cwd, expectedViewer, active, onIndicatorChange, rel
     {active && review && target && <ReviewPanel key={review.id} cwd={cwd} target={target} review={review} reviewIntent={selected?.intent} onIntentConsumed={consumeIntent}
       flows={flows} reviewModels={reviewModels} runCommand={runCommand} publishCommand={publishCommand} onRunSnapshot={observeRuns}
       onAccessLost={accessLost} onOpenReviewSession={onOpenReviewSession} onOpenFlow={onOpenFlow} onFixFindings={fixFindings} onRefresh={refresh}
-      onClose={() => setSelected(null)} />}
+      width={panelWidth} onResize={setPanelWidth} onClose={() => setSelected(null)} />}
   </div>;
 }
 
