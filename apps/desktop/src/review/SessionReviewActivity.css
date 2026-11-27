@@ -1,13 +1,27 @@
 .session-review-activity { display: grid; gap: var(--sp-2); margin-block: var(--sp-3); min-width: 0; }
-.session-review-item { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); width: 100%; padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg-surface); }
-.session-review-item > header { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
-.session-review-item > header > strong { min-inline-size: 0; overflow-wrap: anywhere; }
-.session-review-item summary { cursor: pointer; color: var(--accent); }
-.session-review-request { margin: 0; padding-inline-start: var(--sp-2); border-inline-start: 2px solid var(--border); white-space: pre-wrap; overflow-wrap: anywhere; }
-.session-review-message { color: var(--fg-muted); white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
-.session-review-message[role="alert"] { display: block; }
-.session-review-summary { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); color: var(--fg-muted); min-width: 0; }
-.session-review-summary > span { min-inline-size: 0; overflow-wrap: anywhere; }
-.session-review-toggle { flex: none; }
+.session-review-item { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); width: 100%; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg-surface); }
+/* One header row: number, state pill and the round's compact line on the left, the actions on the right. */
+.session-review-item > header { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.session-review-heading { display: flex; flex: 1; flex-wrap: wrap; align-items: center; gap: 2px var(--sp-2); min-width: 0; }
+.session-review-heading > strong { display: inline-flex; align-items: center; gap: var(--sp-2); min-inline-size: 0; font-size: var(--fs-md); font-weight: 600; overflow-wrap: anywhere; }
+.session-review-state { padding: 1px var(--sp-2); border-radius: var(--r-pill); background: var(--bg-sunken); color: var(--fg-muted); font-size: var(--fs-xs); font-weight: 600; white-space: nowrap; }
+.session-review-state[data-tone="active"] { background: var(--accent-soft); color: var(--accent-text); }
+.session-review-state[data-tone="active"]::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-inline-end: 5px; border-radius: 50%; vertical-align: 1px; background: currentColor; animation: review-pulse 1.8s ease-in-out infinite alternate; }
+.session-review-state[data-tone="ok"] { background: var(--ok-soft); color: var(--ok); }
+.session-review-state[data-tone="warn"] { background: var(--warn-soft); color: var(--warn); }
+.session-review-state[data-tone="danger"] { background: var(--danger-soft); color: var(--danger); }
+.session-review-summary { min-inline-size: 0; color: var(--fg-muted); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.session-review-toggle { flex: none; display: inline-flex; align-items: center; gap: var(--sp-1); }
+.session-review-item .review-icon-action { inline-size: 24px; }
+/* Details sit under a hairline, so the expanded card reads as a header and a body rather than one run of text. */
+.session-review-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); min-width: 0; padding-top: var(--sp-3); border-top: 1px solid var(--border); }
+.session-review-body > .review-progress { margin-block: 0; }
+.session-review-item summary { cursor: pointer; color: var(--accent-text); }
+.session-review-request { margin: 0; padding-inline-start: var(--sp-2); border-inline-start: 2px solid var(--border); color: var(--fg-muted); font-size: var(--fs-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
+.session-review-message { margin: 0; color: var(--fg-muted); font-size: var(--fs-sm); white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
+.session-review-message[role="alert"] { display: block; color: var(--danger); }
+@media (prefers-reduced-motion: reduce) {
+  .session-review-state[data-tone="active"]::before { animation: none; }
+}
 /* Pinned above the composer while a round runs or waits: compact, and never taller than a third of the view. */
 .session-review-pinned { margin-block: 0 var(--sp-2); max-block-size: 33vh; overflow-y: auto; }

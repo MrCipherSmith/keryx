@@ -95,6 +95,28 @@ describe("conversation: batched updates", () => {
   });
 });
 
+describe("conversation: plan", () => {
+  const plan = (...statuses: string[]) =>
+    u({ sessionUpdate: "plan", entries: statuses.map((status, i) => ({ content: `step ${i}`, priority: "medium", status })) });
+
+  test("the plan's clock starts when a plan arrives and moves only when the plan changes", () => {
+    expect(conv.planUpdatedAt).toBeNull();
+    const first = applyUpdates(conv, [{ update: plan("in_progress", "pending"), at: 100 }]);
+    expect(first.planUpdatedAt).toBe(100);
+    // keryx re-sends the unchanged plan when the session loads: not progress.
+    const resent = applyUpdates(first, [{ update: plan("in_progress", "pending"), at: 500 }]);
+    expect(resent.planUpdatedAt).toBe(100);
+    const moved = applyUpdates(resent, [{ update: plan("completed", "in_progress"), at: 900 }]);
+    expect(moved.planUpdatedAt).toBe(900);
+    expect(moved.plan.map((entry) => entry.status)).toEqual(["completed", "in_progress"]);
+  });
+
+  test("the shown view carries the plan's clock", () => {
+    const shown = run(twoHeld, { t: "updates", updates: [routed("s1", plan("in_progress"), 42)] });
+    expect(shownView(shown).planUpdatedAt).toBe(42);
+  });
+});
+
 describe("conversation: tools", () => {
   test("findTool finds the most recent call with that id", () => {
     const t = (id: number, toolCallId: string): Item => ({

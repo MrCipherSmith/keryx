@@ -1,5 +1,6 @@
 import type { DeskReviewerProgress, DeskRun, DeskRunState } from "../../../../src/review/desk-run-types";
 import type { ReviewCard } from "./types";
+import "./ReviewPlanSummary.css";
 
 export interface ReviewPlanSummaryFile {
   path: string;
@@ -82,26 +83,60 @@ function readableStage(stage: string | undefined, runState?: DeskRunState, progr
   return value;
 }
 
+const DIFF_BLOCKS = 5;
+
+/**
+ * GitHub's five-square diffstat for one file: squares in proportion to additions (green) and deletions (red), grey for
+ * the rest. Under five changed lines each line is one square, so a one-line change does not read as a rewrite.
+ */
+export function diffBlocks(additions = 0, deletions = 0): Array<"add" | "del" | "neutral"> {
+  const total = additions + deletions;
+  const added = total === 0 ? 0 : total < DIFF_BLOCKS ? additions : Math.round(DIFF_BLOCKS * additions / total);
+  const deleted = total === 0 ? 0 : total < DIFF_BLOCKS ? deletions : DIFF_BLOCKS - added;
+  return [...Array<"add">(added).fill("add"), ...Array<"del">(deleted).fill("del"),
+    ...Array<"neutral">(DIFF_BLOCKS - added - deleted).fill("neutral")];
+}
+
+function lineChanges(additions: number | undefined, deletions: number | undefined) {
+  return [additions !== undefined && `${additions.toLocaleString()} additions`, deletions !== undefined && `${deletions.toLocaleString()} deletions`]
+    .filter(Boolean).join(", ");
+}
+
+/** The directory part of a path is quiet and the file name carries the row, as GitHub's file list does. */
+function FilePath({ path }: { path: string }) {
+  const cut = path.lastIndexOf("/") + 1;
+  return <code className="review-file-path">
+    {cut > 0 && <span className="review-file-dir">{path.slice(0, cut)}</span>}
+    <span className="review-file-name">{path.slice(cut)}</span>
+  </code>;
+}
+
 /** A compact explanation of the actual input range, plan assignments, and the next operator action. */
 export function ReviewPlanSummary({ data }: { data: ReviewPlanSummaryData }) {
   return <section className="review-plan-summary" aria-label="Review scope and plan" data-head-sha={data.headSha}>
     <header>
       <h3>{data.title}</h3>
-      {data.changeStats && <p className="review-plan-summary-stats">
-        <span>{data.changeStats.files.toLocaleString()} {data.changeStats.files === 1 ? "file changed" : "files changed"}</span>
-        <span aria-label={`${data.changeStats.additions.toLocaleString()} additions`}>+{data.changeStats.additions.toLocaleString()}</span>
-        <span aria-label={`${data.changeStats.deletions.toLocaleString()} deletions`}>−{data.changeStats.deletions.toLocaleString()}</span>
-      </p>}
-      <p className="review-plan-summary-revision">Reviewing <code>{data.headSha.slice(0, 12)}</code></p>
+      <p className="review-plan-summary-meta">
+        {data.changeStats && <span className="review-plan-summary-stats">
+          <span>{data.changeStats.files.toLocaleString()} {data.changeStats.files === 1 ? "file changed" : "files changed"}</span>
+          <span className="review-added" aria-label={`${data.changeStats.additions.toLocaleString()} additions`}>+{data.changeStats.additions.toLocaleString()}</span>
+          <span className="review-deleted" aria-label={`${data.changeStats.deletions.toLocaleString()} deletions`}>−{data.changeStats.deletions.toLocaleString()}</span>
+        </span>}
+        <span className="review-plan-summary-revision">Reviewing <code>{data.headSha.slice(0, 12)}</code></span>
+      </p>
     </header>
     <section aria-label="Changed files">
       <h4>Changed files</h4>
-      {data.files ? <ul>{data.files.map(file => <li key={file.path}>
-        <code>{file.path}</code>
-        {(file.additions !== undefined || file.deletions !== undefined) && <span aria-label="Line changes">
-          {file.additions === undefined ? "" : ` +${file.additions.toLocaleString()}`}
-          {file.deletions === undefined ? "" : ` −${file.deletions.toLocaleString()}`}
-        </span>}
+      {data.files ? <ul className="review-file-list">{data.files.map(file => <li key={file.path} title={file.path}>
+        <FilePath path={file.path} />
+        {(file.additions !== undefined || file.deletions !== undefined) &&
+          <span className="review-file-stat" aria-label={`Line changes: ${lineChanges(file.additions, file.deletions)}`}>
+            {file.additions !== undefined && <span className="review-added">+{file.additions.toLocaleString()}</span>}
+            {file.deletions !== undefined && <span className="review-deleted">−{file.deletions.toLocaleString()}</span>}
+            <span className="review-diff-blocks" aria-hidden="true">
+              {diffBlocks(file.additions, file.deletions).map((kind, index) => <span key={index} data-kind={kind} />)}
+            </span>
+          </span>}
       </li>)}</ul> : <p className="field-hint">File list is not available yet.</p>}
       {data.files && !data.filesComplete && <p className="field-hint">File list is partial or unavailable.</p>}
     </section>

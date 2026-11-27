@@ -46,6 +46,19 @@ export function compactSummary(run: DeskRun): string {
   return parts.join(" · ");
 }
 
+/** The colour of a round's state pill: live, needs the user, finished well, finished short, failed, or quiet. */
+export function statusTone(run: DeskRun | null, awaitingAnswer: boolean): "active" | "warn" | "ok" | "danger" | "neutral" {
+  if (!run || run.decision?.action === "archive" || run.closure === "closed") return "neutral";
+  if (awaitingAnswer) return "warn";
+  switch (run.state) {
+    case "queued": case "running": case "cancelling": return "active";
+    case "completed": return "ok";
+    case "partial": case "blocked": case "budget": return "warn";
+    case "failed": return "danger";
+    default: return "neutral";
+  }
+}
+
 /**
  * What a round's card keeps when it moves between the pinned slot and the timeline (a move mounts it anew): whether it
  * is expanded, its open dialog, the unsent Continue note and the last run it read. Keyed `sessionId:id`; the caller
@@ -249,7 +262,7 @@ function FollowedReview({ cwd, link, visible, canContinue, onContinueTurn, onAct
     return snapshot;
   }, [cwd, link, reviewRun]);
 
-  const prefix = `[Review #${link.key.number}]`;
+  const prefix = `Review #${link.key.number}`;
   const status = run ? runStatusLabel(run) : "Checking review status…";
   const questions = run ? pendingManualQuestions(run) : [];
   const awaitAnswer = questions.length > 0;
@@ -296,59 +309,64 @@ function FollowedReview({ cwd, link, visible, canContinue, onContinueTurn, onAct
   }
 
   return <>
-    <article className="session-review-item">
+    <article className={`session-review-item${expanded ? " is-expanded" : ""}`}>
       <header>
-        <strong role="status">{prefix} {status}</strong>
+        <div className="session-review-heading">
+          <strong role="status"><span className="session-review-number">{prefix}</span> <span className="session-review-state"
+            data-tone={statusTone(run, awaitAnswer)}>{status}</span></strong>
+          {run && <span className="session-review-summary">{compactSummary(run)}</span>}
+        </div>
         {(needsPublication || canResume || awaitAnswer) && <span className="badge review-publication-pending">Action required</span>}
         {run && <div className="review-action-row">
-          <button className="btn review-icon-action" type="button" aria-label={sessionLabel} title={sessionLabel}
-            aria-haspopup="dialog" onClick={() => setOpen(true)}><Icon name={terminal ? "file" : "chat"} /></button>
+          <button className="btn btn-sm session-review-toggle" type="button" aria-expanded={expanded}
+            aria-label={`${expanded ? "Hide" : "Show"} details of review #${link.key.number}${run.round ? ` round ${run.round}` : ""}`}
+            onClick={() => setExpanded(value => !value)}>
+            {expanded ? "Hide details" : "Show details"}<Icon name={expanded ? "chevronUp" : "chevronDown"} size={12} />
+          </button>
+          <button className="btn btn-sm review-icon-action" type="button" aria-label={sessionLabel} title={sessionLabel}
+            aria-haspopup="dialog" onClick={() => setOpen(true)}><Icon name={terminal ? "file" : "chat"} size={14} /></button>
         </div>}
       </header>
-      {run && <div className="session-review-summary">
-        <span>{compactSummary(run)}</span>
-        <button className="btn btn-sm session-review-toggle" type="button" aria-expanded={expanded}
-          aria-label={`${expanded ? "Hide" : "Show"} details of review #${link.key.number}${run.round ? ` round ${run.round}` : ""}`}
-          onClick={() => setExpanded(value => !value)}>{expanded ? "Hide details" : "Show details"}</button>
-      </div>}
-      {error && <div className="session-review-message" role="alert">{prefix} {error} <button className="btn btn-sm" onClick={() => void refresh()}>Retry status</button></div>}
+      {error && <div className="session-review-message" role="alert">{error} <button className="btn btn-sm" onClick={() => void refresh()}>Retry status</button></div>}
       {awaitAnswer && <p className="session-review-message">{questions.length} {questions.length === 1 ? "question is" : "questions are"} waiting for a reply.</p>}
-      {expanded && link.prompt && <blockquote className="session-review-request">{link.prompt}</blockquote>}
-      {run && expanded && <>
-        <ReviewPlanSummary data={{
-          title: run.pullRequestTitle ?? `${link.key.repo} #${link.key.number}`,
-          headSha: run.headSha,
-          ...reviewPlanEvidence(run.reviewerProgress?.planSummary, run.pullRequestScope),
-          ...(run.options?.orchestrator === false && { singleReviewer: true }),
-          stage: run.phase,
-          runState: run.state,
-          ...(run.reviewerProgress && { assignmentProgress: run.reviewerProgress }),
-          ...(needsPublication ? { operatorStep: "Choose whether to publish on GitHub." }
-            : awaitAnswer ? { operatorStep: run.reason || "Reply to the requested review context." } : {}),
-        }} />
-        {run.options?.orchestrator !== false && <ReviewProgress state={run.state} progress={run.reviewerProgress} />}
-        {terminal && <ReviewOutcome run={run} />}
-        {canResume && <form className="review-question" onSubmit={event => {
-          event.preventDefault();
-          void continueReview(guidance);
-        }}>
-          <label>Context for the coordinator<textarea maxLength={2000} value={guidance}
-            onChange={event => setGuidance(event.target.value)} rows={2} /></label>
-          <button type="submit" className="btn btn-sm" disabled={working}>Continue review</button>
-        </form>}
-        {(events.length > 0 || before !== undefined) && <details>
-          <summary>Review activity</summary>
-          {before !== undefined && <button className="btn btn-sm" type="button" disabled={historyLoading} onClick={() => void loadEarlier()}>
-            {historyLoading ? "Loading activity…" : "Load earlier activity"}
-          </button>}
-          {history && <button className="btn btn-sm" type="button" disabled={historyLoading} onClick={() => {
-            setHistory(undefined);
-            setHistoryError("");
-          }}>Back to latest activity</button>}
-          {historyError && <p role="alert">{historyError}</p>}
-          <ReviewTranscript actor="Coordinator" events={events} loading={false} error={error} followLatest={!history} />
-        </details>}
-      </>}
+      {expanded && (link.prompt || run) && <div className="session-review-body">
+        {link.prompt && <blockquote className="session-review-request">{link.prompt}</blockquote>}
+        {run && <>
+          <ReviewPlanSummary data={{
+            title: run.pullRequestTitle ?? `${link.key.repo} #${link.key.number}`,
+            headSha: run.headSha,
+            ...reviewPlanEvidence(run.reviewerProgress?.planSummary, run.pullRequestScope),
+            ...(run.options?.orchestrator === false && { singleReviewer: true }),
+            stage: run.phase,
+            runState: run.state,
+            ...(run.reviewerProgress && { assignmentProgress: run.reviewerProgress }),
+            ...(needsPublication ? { operatorStep: "Choose whether to publish on GitHub." }
+              : awaitAnswer ? { operatorStep: run.reason || "Reply to the requested review context." } : {}),
+          }} />
+          {run.options?.orchestrator !== false && <ReviewProgress state={run.state} progress={run.reviewerProgress} />}
+          {terminal && <ReviewOutcome run={run} />}
+          {canResume && <form className="review-question" onSubmit={event => {
+            event.preventDefault();
+            void continueReview(guidance);
+          }}>
+            <label>Context for the coordinator<textarea maxLength={2000} value={guidance}
+              onChange={event => setGuidance(event.target.value)} rows={2} /></label>
+            <button type="submit" className="btn btn-sm" disabled={working}>Continue review</button>
+          </form>}
+          {(events.length > 0 || before !== undefined) && <details>
+            <summary>Review activity</summary>
+            {before !== undefined && <button className="btn btn-sm" type="button" disabled={historyLoading} onClick={() => void loadEarlier()}>
+              {historyLoading ? "Loading activity…" : "Load earlier activity"}
+            </button>}
+            {history && <button className="btn btn-sm" type="button" disabled={historyLoading} onClick={() => {
+              setHistory(undefined);
+              setHistoryError("");
+            }}>Back to latest activity</button>}
+            {historyError && <p role="alert">{historyError}</p>}
+            <ReviewTranscript actor="Coordinator" events={events} loading={false} error={error} followLatest={!history} />
+          </details>}
+        </>}
+      </div>}
     </article>
     {questions.map(question => <ReviewQuestion key={question.id} question={question} working={working}
       legend={question.reviewer ?? "Review coordinator"}

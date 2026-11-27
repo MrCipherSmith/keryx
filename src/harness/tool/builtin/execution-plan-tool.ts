@@ -2,8 +2,9 @@ import {
   EXECUTION_PLAN_STATUSES,
   getExecutionPlan,
   setExecutionPlan,
-  updateExecutionPlan,
+  updateExecutionPlanItems,
   type ExecutionPlanItem,
+  type ExecutionPlanItemUpdate,
   type ExecutionPlanStatus,
 } from "../../../session/execution-plan";
 import type { InteractiveTool } from "./interactive-tools";
@@ -78,15 +79,27 @@ export function executionPlanTools(getSessionDir: () => string | undefined): Int
   const update: InteractiveTool = {
     definition: {
       name: "plan_update",
-      description: "Update one execution-plan item's status using optimistic revision control.",
+      description:
+        "Update execution-plan item statuses using optimistic revision control: one item with `itemId` and `status`, " +
+        "or several at once with `updates` (all applied in one revision, e.g. finish one step and start the next).",
       inputSchema: {
         type: "object",
         properties: {
           expectedRevision: { type: "integer", minimum: 0 },
           itemId: { type: "string", minLength: 1 },
           status: statusSchema,
+          updates: {
+            type: "array",
+            minItems: 1,
+            items: {
+              type: "object",
+              properties: { itemId: { type: "string", minLength: 1 }, status: statusSchema },
+              required: ["itemId", "status"],
+              additionalProperties: false,
+            },
+          },
         },
-        required: ["expectedRevision", "itemId", "status"],
+        required: ["expectedRevision"],
         additionalProperties: false,
       },
       risk: "read",
@@ -94,11 +107,17 @@ export function executionPlanTools(getSessionDir: () => string | undefined): Int
     invoke: async (input) => {
       const dir = getSessionDir();
       if (dir === undefined) return noSession("plan_update");
+      const single = input.itemId !== undefined || input.status !== undefined;
+      const batch = input.updates !== undefined;
+      if (single === batch || (single && (input.itemId === undefined || input.status === undefined))) {
+        return { output: "plan_update: give exactly one form, `itemId` with `status` or an `updates` list", isError: true };
+      }
       try {
-        const plan = await updateExecutionPlan(dir, {
+        const plan = await updateExecutionPlanItems(dir, {
           expectedRevision: input.expectedRevision as number,
-          itemId: input.itemId as string,
-          status: input.status as ExecutionPlanStatus,
+          updates: batch
+            ? (input.updates as ExecutionPlanItemUpdate[])
+            : [{ itemId: input.itemId as string, status: input.status as ExecutionPlanStatus }],
         });
         return { output: JSON.stringify(plan, null, 2), isError: false };
       } catch (cause) {

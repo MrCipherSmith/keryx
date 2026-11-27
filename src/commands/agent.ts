@@ -127,8 +127,10 @@ import { executeWaves, planWaves, WaveExecutionError, type ChildTask } from "../
 import { anchorsAnnouncement } from "../session/anchors-announce";
 import type { Slate, SlateAnchors, SlateCourse } from "../session/slate";
 import {
+  EXECUTION_PLAN_STALE_NOTE,
   getExecutionPlan,
   executionPlanApprovalItems,
+  executionPlanStaleness,
   hasActionableExecutionPlanItems,
   renderExecutionPlanSnapshot,
   type ExecutionPlan,
@@ -2114,7 +2116,8 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "for any check covered by a read tool above, use that tool instead of shelling out to the equivalent `keryx …` " +
     "CLI command.\n" +
     "- For multi-step work, use **plan_set** to publish a structured plan, **plan_update** after each real status " +
-    "change, and **plan_get** before resolving a revision conflict. Keep stable item ids, at most one " +
+    "change (its `updates` list moves several items in one call: finish one step and start the next together), " +
+    "and **plan_get** before resolving a revision conflict. Keep stable item ids, at most one " +
     "`in_progress` item, and do not mark work complete before verification. These tools update session metadata " +
     "only; `/plan` remains the operator's separate read-only permission mode.\n" +
     "- When the user names a skill (\"use review-orchestrator\", \"по скиллу X\"), your FIRST tool call is " +
@@ -3448,6 +3451,9 @@ async function runAgentTurnCore(
    * the same loop.
    */
   const roundState = { round: 0, maxRounds };
+  // A plan the model published and then stopped moving is what the operator saw frozen at "0/16" for a whole review:
+  // after a few unchanged rounds the snapshot asks the model to catch it up.
+  const planStale = executionPlanStaleness();
   const invocationBudget = { invoked: 0, maxCalls: maxToolCalls, blocked: false, reached: false };
   const hasInvocationCapacity = (): boolean => {
     const hasCapacity =
@@ -3753,7 +3759,9 @@ async function runAgentTurnCore(
         io.onSystem?.(`execution plan read failed (ignored): ${cause instanceof Error ? cause.message : String(cause)}\n`);
       }
     }
-    const planSnapshot = renderExecutionPlanSnapshot(currentPlan);
+    const snapshot = renderExecutionPlanSnapshot(currentPlan);
+    const planSnapshot =
+      snapshot !== undefined && planStale(currentPlan, roundState.round) ? `${snapshot}\n${EXECUTION_PLAN_STALE_NOTE}` : snapshot;
     const roundSystemInstruction =
       planSnapshot === undefined ? deps.systemInstruction : `${deps.systemInstruction}\n\n${planSnapshot}`;
     // Flow 267: compact BEFORE building the request, not after — once the

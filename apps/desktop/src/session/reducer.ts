@@ -216,6 +216,8 @@ export interface ConvState {
   modes: SessionModeState | null;
   configOptions: ConfigOption[];
   plan: PlanEntry[];
+  /** When the plan last changed (ms), as this window received it; null before any plan. */
+  planUpdatedAt: number | null;
   usage: Usage | null;
   title: string | null;
   /** Prompts waiting for the running turn to end. Client-side only. */
@@ -256,6 +258,7 @@ export function newConv(
     modes: opts.modes ?? null,
     configOptions: opts.configOptions ?? [],
     plan: [],
+    planUpdatedAt: null,
     usage: null,
     title: null,
     queue: [],
@@ -488,6 +491,10 @@ function tokenPair(v: unknown): TokenPair | null {
  * Apply one update to the draft. False only when the update certainly changed nothing; the branches
  * that replace a whole field (plan, commands, config options, usage) report true without comparing.
  */
+function samePlan(a: readonly PlanEntry[], b: readonly PlanEntry[]): boolean {
+  return a.length === b.length && a.every((entry, i) => entry.content === b[i]!.content && entry.status === b[i]!.status);
+}
+
 function applyUpdate(d: ConvState, u: SessionUpdate, at: number): boolean {
   switch (u.sessionUpdate) {
     case TELEGRAM_SESSION: {
@@ -544,9 +551,13 @@ function applyUpdate(d: ConvState, u: SessionUpdate, at: number): boolean {
       return upsertTool(d, u as ToolCallFields, true, at);
     case "tool_call_update":
       return upsertTool(d, u as ToolCallFields, false, at);
-    case "plan":
-      d.plan = (u as { entries?: PlanEntry[] }).entries ?? [];
+    case "plan": {
+      const entries = (u as { entries?: PlanEntry[] }).entries ?? [];
+      // keryx re-sends an unchanged plan when a session loads: that is not progress, so the clock keeps running.
+      if (!samePlan(d.plan, entries)) d.planUpdatedAt = at;
+      d.plan = entries;
       return true;
+    }
     case "available_commands_update":
       d.commands = (u as { availableCommands?: AvailableCommand[] }).availableCommands ?? [];
       return true;
@@ -1001,6 +1012,7 @@ export interface SessionState {
   modes: SessionModeState | null;
   configOptions: ConfigOption[];
   plan: PlanEntry[];
+  planUpdatedAt: number | null;
   usage: Usage | null;
   title: string | null;
   queue: QueuedPrompt[];
@@ -1040,6 +1052,7 @@ export function shownView(w: WindowState): SessionState {
     modes: c?.modes ?? null,
     configOptions: c?.configOptions ?? NO_CONFIG,
     plan: c?.plan ?? NO_PLAN,
+    planUpdatedAt: c?.planUpdatedAt ?? null,
     usage: c?.usage ?? null,
     title: c?.title ?? null,
     queue: c?.queue ?? NO_QUEUE,

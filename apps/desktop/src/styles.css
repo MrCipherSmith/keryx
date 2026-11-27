@@ -406,8 +406,9 @@ button { font: inherit; }
 .plan-head > .icon:first-child { color: var(--accent-text); }
 .plan-title { font-weight: 600; }
 .plan-count { font-size: var(--fs-sm); color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.plan-stale { flex: none; font-size: var(--fs-xs); font-weight: 600; color: var(--warn); white-space: nowrap; }
 .plan-current { color: var(--fg-muted); font-size: var(--fs-sm); max-width: 50%; }
-.plan-list { list-style: none; margin: 0; padding: 2px var(--sp-3) var(--sp-2); display: grid; gap: 4px; max-height: 160px; overflow-y: auto; }
+.plan-list { position: relative; list-style: none; margin: 0; padding: 2px var(--sp-3) var(--sp-2); display: grid; gap: 4px; max-height: 160px; overflow-y: auto; }
 .plan-item { display: flex; align-items: flex-start; gap: var(--sp-2); line-height: 1.45; }
 .plan-item .icon { margin-top: 2px; color: var(--fg-subtle); }
 .plan-in_progress { font-weight: 600; }

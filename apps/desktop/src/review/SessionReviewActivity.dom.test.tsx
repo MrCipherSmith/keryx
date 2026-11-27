@@ -135,6 +135,8 @@ test("a round's card is compact by default: round, verdict and findings, with de
   const reports: Array<[string, boolean]> = [];
   await render(harness(true, reviewed), (id, active) => reports.push([id, active]));
   expect(host.querySelector(".session-review-summary")?.textContent).toContain("Round 2 · verdict request-changes · 2 major, 1 minor");
+  expect(host.querySelector('[role="status"]')?.textContent).toBe("Review #12 Completed");
+  expect(host.querySelector(".session-review-state")?.getAttribute("data-tone")).toBe("ok");
   expect(host.querySelector(".review-plan-summary")).toBeNull();
   expect(host.querySelector(".review-session-outcome")).toBeNull();
   const toggle = [...host.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === "Show details")!;
@@ -153,6 +155,7 @@ test("a running round reports itself active, so the caller pins its card above t
   const reports: Array<[string, boolean]> = [];
   await render(harness(true, { ...partial, state: "running", finishedAt: null }), (id, active) => reports.push([id, active]));
   expect(reports).toEqual([["run-1", true]]);
+  expect(host.querySelector(".session-review-state")?.getAttribute("data-tone")).toBe("active");
 });
 
 test("a card moving from the pinned slot to the timeline keeps its expansion and unsent note", async () => {

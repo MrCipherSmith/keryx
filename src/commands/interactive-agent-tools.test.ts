@@ -241,6 +241,22 @@ test("plan metadata tools are typed, main-factory scoped, and preserve /plan rea
   const result = await get?.invoke({});
   expect(result?.isError).toBe(false);
   expect(JSON.parse(result?.output ?? "null").items[0].status).toBe("completed");
+
+  // Several items in one call, and exactly one of the two input forms.
+  expect((await set?.invoke({ expectedRevision: 2, items: [
+    { id: "a", title: "A", status: "in_progress" },
+    { id: "b", title: "B", status: "pending" },
+  ] }))?.isError).toBe(false);
+  const both = await update?.invoke({ expectedRevision: 3, itemId: "a", status: "completed", updates: [{ itemId: "b", status: "in_progress" }] });
+  expect(both?.isError).toBe(true);
+  expect((await update?.invoke({ expectedRevision: 3 }))?.isError).toBe(true);
+  expect((await update?.invoke({ expectedRevision: 3, itemId: "a" }))?.isError).toBe(true);
+  const batch = await update?.invoke({ expectedRevision: 3, updates: [
+    { itemId: "a", status: "completed" },
+    { itemId: "b", status: "in_progress" },
+  ] });
+  expect(batch?.isError).toBe(false);
+  expect(JSON.parse(batch?.output ?? "null")).toMatchObject({ revision: 4, items: [{ status: "completed" }, { status: "in_progress" }] });
 });
 
 // --- SLATE-3a: slate_read / slate_write_seed wiring (flow 161, AC5) ------

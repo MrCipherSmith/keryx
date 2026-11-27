@@ -10,8 +10,10 @@ import {
   getExecutionPlan,
   hasActionableExecutionPlanItems,
   renderExecutionPlanSnapshot,
+  executionPlanStaleness,
   setExecutionPlan,
   updateExecutionPlan,
+  updateExecutionPlanItems,
   type ExecutionPlan,
   type ExecutionPlanItem,
 } from "./execution-plan";
@@ -285,4 +287,53 @@ test("renderExecutionPlanSnapshot: maxItems still caps only the listed (non-fini
 test("renderExecutionPlanSnapshot returns undefined for no plan or an empty plan", () => {
   expect(renderExecutionPlanSnapshot(undefined)).toBeUndefined();
   expect(renderExecutionPlanSnapshot({ revision: 1, items: [] })).toBeUndefined();
+});
+
+test("updateExecutionPlanItems finishes one step and starts the next in one revision", async () => {
+  const dir = await bareDir();
+  await setExecutionPlan(dir, { expectedRevision: 0, items });
+  const moved = await updateExecutionPlanItems(dir, {
+    expectedRevision: 1,
+    updates: [{ itemId: "implement", status: "completed" }, { itemId: "verify", status: "in_progress" }],
+  });
+  expect(moved.revision).toBe(2);
+  expect(moved.items.map((item) => item.status)).toEqual(["completed", "completed", "in_progress"]);
+  // Each move alone in the other order would break the one-in_progress rule; the batch is checked on its result.
+  await expect(updateExecutionPlan(dir, { expectedRevision: 2, itemId: "implement", status: "in_progress" })).rejects.toThrow(
+    "at most one item may be in_progress",
+  );
+});
+
+test("updateExecutionPlanItems applies all updates or none", async () => {
+  const dir = await bareDir();
+  await setExecutionPlan(dir, { expectedRevision: 0, items });
+  await expect(
+    updateExecutionPlanItems(dir, {
+      expectedRevision: 1,
+      updates: [{ itemId: "implement", status: "completed" }, { itemId: "missing", status: "completed" }],
+    }),
+  ).rejects.toThrow("unknown item id: missing");
+  await expect(
+    updateExecutionPlanItems(dir, {
+      expectedRevision: 1,
+      updates: [{ itemId: "verify", status: "completed" }, { itemId: "verify", status: "pending" }],
+    }),
+  ).rejects.toThrow("item verify is updated twice");
+  await expect(updateExecutionPlanItems(dir, { expectedRevision: 1, updates: [] })).rejects.toThrow("no item updates given");
+  const unchanged = await getExecutionPlan(dir);
+  expect(unchanged?.revision).toBe(1);
+  expect(unchanged?.items).toEqual(items);
+});
+
+test("executionPlanStaleness: baseline on the first round, stale after the window, restarted by any revision change", () => {
+  const open: ExecutionPlan = { revision: 1, items };
+  const stale = executionPlanStaleness(3);
+  expect([1, 2, 3].map((round) => stale(open, round))).toEqual([false, false, false]);
+  expect(stale(open, 4)).toBe(true);
+  expect(stale({ ...open, revision: 2 }, 5)).toBe(false);
+  expect(stale({ ...open, revision: 2 }, 7)).toBe(false);
+  expect(stale({ ...open, revision: 2 }, 8)).toBe(true);
+  const finished: ExecutionPlan = { revision: 2, items: items.map((item) => ({ ...item, status: "completed" })) };
+  expect(stale(finished, 20)).toBe(false);
+  expect(executionPlanStaleness(3)(undefined, 10)).toBe(false);
 });
