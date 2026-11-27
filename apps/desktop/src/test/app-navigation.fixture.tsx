@@ -398,7 +398,7 @@ try {
   await waitFor("the running round's card is pinned above the composer", () => !!host.querySelector(".composer-dock .session-review-pinned .session-review-item"));
   assert.equal(host.querySelector(".transcript .session-review-item"), null, "A running round is not in the transcript");
   assert.equal([...host.querySelectorAll("summary")].find(summary => summary.textContent === "Review activity"), undefined, "Compact by default");
-  await React.act(() => namedButton("Show details").click());
+  await React.act(() => host.querySelector<HTMLButtonElement>('.session-review-toggle[aria-expanded="false"]')!.click());
   const activity = [...host.querySelectorAll("summary")].find(summary => summary.textContent === "Review activity");
   assert.ok(activity);
   await React.act(() => activity.click());

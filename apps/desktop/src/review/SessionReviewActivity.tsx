@@ -297,20 +297,23 @@ function FollowedReview({ cwd, link, visible, canContinue, onContinueTurn, onAct
 
   return <>
     <article className="session-review-item">
-      <header>
+      {/* Like the Plan card: the header folds the card, with a chevron at its right end. The chevron is the keyboard
+          control; a click anywhere else on the header (outside its buttons) is the same toggle for the pointer. */}
+      <header className={run ? "is-toggle" : undefined} onClick={run ? event => {
+        if (!(event.target as Element).closest("button")) setExpanded(value => !value);
+      } : undefined}>
         <strong role="status">{prefix} {status}</strong>
         {(needsPublication || canResume || awaitAnswer) && <span className="badge review-publication-pending">Action required</span>}
         {run && <div className="review-action-row">
           <button className="btn review-icon-action" type="button" aria-label={sessionLabel} title={sessionLabel}
             aria-haspopup="dialog" onClick={() => setOpen(true)}><Icon name={terminal ? "file" : "chat"} /></button>
+          <button className="btn review-icon-action session-review-toggle" type="button" aria-expanded={expanded}
+            aria-label={`${expanded ? "Hide" : "Show"} details of review #${link.key.number}${run.round ? ` round ${run.round}` : ""}`}
+            title={expanded ? "Hide details" : "Show details"}
+            onClick={() => setExpanded(value => !value)}><Icon name={expanded ? "chevronDown" : "chevronUp"} size={13} /></button>
         </div>}
       </header>
-      {run && <div className="session-review-summary">
-        <span>{compactSummary(run)}</span>
-        <button className="btn btn-sm session-review-toggle" type="button" aria-expanded={expanded}
-          aria-label={`${expanded ? "Hide" : "Show"} details of review #${link.key.number}${run.round ? ` round ${run.round}` : ""}`}
-          onClick={() => setExpanded(value => !value)}>{expanded ? "Hide details" : "Show details"}</button>
-      </div>}
+      {run && <div className="session-review-summary"><span>{compactSummary(run)}</span></div>}
       {error && <div className="session-review-message" role="alert">{prefix} {error} <button className="btn btn-sm" onClick={() => void refresh()}>Retry status</button></div>}
       {awaitAnswer && <p className="session-review-message">{questions.length} {questions.length === 1 ? "question is" : "questions are"} waiting for a reply.</p>}
       {expanded && link.prompt && <blockquote className="session-review-request">{link.prompt}</blockquote>}
