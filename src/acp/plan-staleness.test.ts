@@ -6,8 +6,10 @@ import { expect, test } from "bun:test";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import type { NormalizedEvent, NormalizedRequest, ProviderPort, StreamOptions } from "../harness/provider/types";
-import { EXECUTION_PLAN_STALE_NOTE, EXECUTION_PLAN_STALE_ROUNDS } from "../session/execution-plan";
-import { driveTurn, shellHarness, textRound, toolRound, type Round } from "./shell-profile.test-helpers";
+import { createSession, persistHistory } from "../session";
+import { EXECUTION_PLAN_STALE_NOTE, EXECUTION_PLAN_STALE_ROUNDS, setExecutionPlan } from "../session/execution-plan";
+import { ACP_AGENT_METHODS } from "./protocol";
+import { driveTurn, shellHarness, textRound, toolRound, updates, type Round } from "./shell-profile.test-helpers";
 
 const READS = EXECUTION_PLAN_STALE_ROUNDS + 2;
 
@@ -74,4 +76,37 @@ test("an ordinary ACP turn sees its plan and, once the plan stalls, the stale-pl
   const firstStale = 1 + EXECUTION_PLAN_STALE_ROUNDS;
   expect(systems.slice(0, firstStale).some((system) => system.includes(EXECUTION_PLAN_STALE_NOTE))).toBe(false);
   expect(systems.slice(firstStale).every((system) => system.endsWith(EXECUTION_PLAN_STALE_NOTE))).toBe(true);
+}, 60_000);
+
+test("an editor-profile turn on a loaded session that holds a plan reads none of it", async () => {
+  const { provider, systems } = recordingProvider([toolRound("r0", "read_file", { path: "f0.txt" }), textRound("done")]);
+  const h = shellHarness({ profile: "editor", serverOptions: { provider } });
+  try {
+    writeFileSync(path.join(h.projectDir, "f0.txt"), "file 0\n", "utf8");
+    await h.initialize();
+    // A session a shell-profile client left with an open plan, in the store the editor profile lists and loads too.
+    const handle = createSession({ cwd: h.projectDir, provider: "test", model: "test-model", dataDir: path.join(h.projectDir, "data") });
+    persistHistory(handle, [{ role: "user", content: "earlier" }, { role: "assistant", content: "ok" }], { provider: "test", model: "test-model" });
+    await setExecutionPlan(handle.dir, {
+      expectedRevision: 0,
+      items: [
+        { id: "review", title: "Run the review", status: "in_progress" },
+        { id: "report", title: "Write the report", status: "pending" },
+      ],
+    });
+    const sessionId = handle.summary.id;
+    const loadId = h.request(ACP_AGENT_METHODS.sessionLoad, { sessionId, cwd: h.projectDir, mcpServers: [] });
+    expect((await h.waitFor((f) => f.id === loadId)).error).toBeUndefined();
+
+    const { reply } = await driveTurn(h, sessionId, "Look at f0.txt");
+    expect(reply.result?.["stopReason"]).toBe("end_turn");
+    expect(systems).toHaveLength(2);
+    // The editor profile has no plan tools: its turns are given no plan to keep, and no `[plan]` notes about it.
+    expect(systems.some((system) => system.includes("Current execution plan"))).toBe(false);
+    const replyText = updates(h.frames, "agent_message_chunk").map((u) => u.content?.text ?? "").join("");
+    expect(replyText).toContain("done");
+    expect(replyText).not.toContain("[plan]");
+  } finally {
+    await h.end();
+  }
 }, 60_000);

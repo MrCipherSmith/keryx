@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import type { Root } from "react-dom/client";
 import type { PlanEntry } from "../acp/types";
 import { registerDom, unregisterDom } from "../test/dom";
@@ -50,12 +50,20 @@ test("a fresh plan, or one whose agent is idle, shows no staleness", async () =>
 });
 
 test("a plan left from the previous turn is not stale the moment the next turn starts", async () => {
-  // Last written 20 minutes ago; the operator sent the next prompt a minute ago.
-  await show(Date.now() - 20 * 60_000, true, Date.now() - 60_000);
-  expect(host.querySelector(".plan-count")?.textContent).toBe("1/3");
-  expect(host.querySelector(".plan-stale")).toBeNull();
-  await show(Date.now() - 20 * 60_000, true, Date.now() - 4 * 60_000);
-  expect(host.querySelector(".plan-stale")?.textContent).toBe("not updated for 4 min");
+  // One instant for the card's clock and the fixtures: the card reads its `now` when it mounts, so a millisecond
+  // between that read and a fixture's `Date.now()` would floor an exact 4 minutes to 3.
+  const now = Date.now();
+  setSystemTime(new Date(now));
+  try {
+    // Last written 20 minutes ago; the operator sent the next prompt a minute ago.
+    await show(now - 20 * 60_000, true, now - 60_000);
+    expect(host.querySelector(".plan-count")?.textContent).toBe("1/3");
+    expect(host.querySelector(".plan-stale")).toBeNull();
+    await show(now - 20 * 60_000, true, now - 4 * 60_000);
+    expect(host.querySelector(".plan-stale")?.textContent).toBe("not updated for 4 min");
+  } finally {
+    setSystemTime();
+  }
 });
 
 test("the list keeps the step in progress in view, with the step before it only while both fit", async () => {

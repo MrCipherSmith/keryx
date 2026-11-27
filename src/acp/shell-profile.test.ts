@@ -241,6 +241,31 @@ describe("AC4 — plan, usage_update, session_info_update, current_mode_update",
     }
   }, TIMEOUT_MS);
 
+  test("session/load of a session whose plan was emptied sends an empty plan", async () => {
+    const h = shellHarness({
+      rounds: [
+        toolRound("p1", "plan_set", { expectedRevision: 0, items: [{ id: "a", title: "Only step", status: "pending" }] }),
+        textRound("one"),
+        toolRound("p2", "plan_set", { expectedRevision: 1, items: [] }),
+        textRound("two"),
+      ],
+    });
+    try {
+      await h.initialize();
+      const { sessionId } = await h.newSession();
+      await driveTurn(h, sessionId, "first");
+      await driveTurn(h, sessionId, "second");
+
+      // A client that kept the plan it held across the reload hears that it is gone.
+      const loadId = h.request("session/load", { sessionId, cwd: h.projectDir, mcpServers: [] });
+      await h.waitFor((f) => f.id === loadId);
+      const resent = await h.waitFor((f) => isUpdate("plan")(f) && h.frames.indexOf(f) > h.frames.findIndex((g) => g.id === loadId));
+      expect(updateOf(resent)["entries"]).toEqual([]);
+    } finally {
+      await h.end();
+    }
+  }, TIMEOUT_MS);
+
   test("current_mode_update follows session/set_mode", async () => {
     const h = shellHarness();
     try {
