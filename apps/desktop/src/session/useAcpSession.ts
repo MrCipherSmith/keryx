@@ -430,7 +430,7 @@ export function useAcpSession(cwd: string) {
   const runTurn = useCallback(
     (client: AcpClient, sessionId: string, params: Record<string, unknown>, onFailed: (e: unknown) => void, onLost?: (e: unknown) => void): Promise<void> => {
       const l = live.current;
-      dispatch({ t: "busy", sessionId, busy: true });
+      dispatch({ t: "busy", sessionId, busy: true, at: Date.now() });
       const turn = { client } as Turn;
       l.reg.turns.set(sessionId, turn);
       // The slot is taken: a hold a load's caller placed for its own turn ends here (that turn, or one that came

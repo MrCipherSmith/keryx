@@ -16,6 +16,7 @@ import type {
 import type { TaskInfo } from "../acp/providers";
 import { applySubagentEvent, isActiveSubagent, mergeArchivedSubagents, replaySpawn, MAX_SUBAGENT_RESULT_CHARS, runningSubagents, type Subagent } from "./activity";
 import { isLegacySystemText, isSystemMeta, parseSystemNote } from "./systemNote";
+import { keryxPlanStatus } from "./planStaleness";
 import { readTelegramAttachment, readTelegramTurn, TELEGRAM_SESSION, TELEGRAM_TURN, type TelegramAttachment, type TelegramTurn } from "./telegramSession";
 
 export type Item =
@@ -218,6 +219,8 @@ export interface ConvState {
   plan: PlanEntry[];
   /** When the plan last changed (ms), as this window received it; null before any plan. */
   planUpdatedAt: number | null;
+  /** When the current (or last) turn started (ms): the plan's staleness is counted from here at the earliest. */
+  turnStartedAt: number | null;
   usage: Usage | null;
   title: string | null;
   /** Prompts waiting for the running turn to end. Client-side only. */
@@ -259,6 +262,7 @@ export function newConv(
     configOptions: opts.configOptions ?? [],
     plan: [],
     planUpdatedAt: null,
+    turnStartedAt: null,
     usage: null,
     title: null,
     queue: [],
@@ -488,13 +492,22 @@ function tokenPair(v: unknown): TokenPair | null {
 }
 
 /**
- * Apply one update to the draft. False only when the update certainly changed nothing; the branches
- * that replace a whole field (plan, commands, config options, usage) report true without comparing.
+ * Whether two plans are the same as keryx wrote them: titles, keryx's own item ids and statuses. The ACP status folds
+ * proposed/blocked into pending and skipped into completed, so comparing it alone would miss those writes.
  */
 function samePlan(a: readonly PlanEntry[], b: readonly PlanEntry[]): boolean {
-  return a.length === b.length && a.every((entry, i) => entry.content === b[i]!.content && entry.status === b[i]!.status);
+  return a.length === b.length && a.every((entry, i) => {
+    const other = b[i]!;
+    return entry.content === other.content && keryxPlanStatus(entry) === keryxPlanStatus(other) &&
+      entry._meta?.keryx?.id === other._meta?.keryx?.id;
+  });
 }
 
+/**
+ * Apply one update to the draft. False only when the update certainly changed nothing; the branches
+ * that replace a whole field (commands, config options, usage) report true without comparing. The plan branch
+ * replaces the plan too and also reports true, but compares it to decide whether the plan's clock moves.
+ */
 function applyUpdate(d: ConvState, u: SessionUpdate, at: number): boolean {
   switch (u.sessionUpdate) {
     case TELEGRAM_SESSION: {
@@ -509,6 +522,7 @@ function applyUpdate(d: ConvState, u: SessionUpdate, at: number): boolean {
       if (turn.phase === "started") {
         if (d.telegramTurn) return false;
         d.telegramTurn = { generation: turn.generation, updateId: turn.updateId };
+        d.turnStartedAt = at;
         return true;
       }
       if (d.telegramTurn?.generation !== turn.generation || d.telegramTurn.updateId !== turn.updateId) return false;
@@ -660,7 +674,7 @@ export type Action =
   /** session/prompt was rejected: flags the optimistic user item (`itemId`, default the last user item) as failed. */
   | { t: "userSendFailed"; sessionId: string; itemId?: number; sendId?: number; busyRefusal?: boolean }
   | { t: "notice"; sessionId: string; level: "info" | "warn" | "error"; text: string }
-  | { t: "busy"; sessionId: string; busy: boolean }
+  | { t: "busy"; sessionId: string; busy: boolean; /** When the turn started (ms); stamps `turnStartedAt`. */ at?: number }
   | { t: "telegramStatus"; sessionId: string; previous: TelegramAttachment | null; value: TelegramAttachment }
   /** A command card; with `replaceId` it takes the place of that card (a view acting on itself). */
   /** `_keryx/delegate_result`: a terminal run's turn answer, shown in the session it was delegated from. */
@@ -885,7 +899,8 @@ export function reducer(state: WindowState, a: Action): WindowState {
     case "tasks":
       return withConv(state, a.sessionId, (c) => ({ ...c, tasks: a.tasks }));
     case "busy":
-      return withConv(state, a.sessionId, (c) => (c.busy === a.busy ? c : { ...c, busy: a.busy }));
+      return withConv(state, a.sessionId, (c) => (c.busy === a.busy ? c
+        : { ...c, busy: a.busy, ...(a.busy && a.at !== undefined ? { turnStartedAt: a.at } : {}) }));
     case "telegramStatus":
       return withConv(state, a.sessionId, (c) => c.held && (c.telegram ?? null) === a.previous ? { ...c, telegram: a.value } : c);
     case "config":
@@ -896,8 +911,14 @@ export function reducer(state: WindowState, a: Action): WindowState {
       const conv = newConv(a.sessionId, { replaying: false, modes: a.modes, configOptions: a.configOptions });
       return { ...state, convs: { ...state.convs, [a.sessionId]: conv }, shownId: a.show ? a.sessionId : state.shownId };
     }
-    case "loadStart":
-      return { ...state, loading: { ...state.loading, [a.sessionId]: newConv(a.sessionId, { replaying: true }) } };
+    case "loadStart": {
+      // A reload (after /compact or /rewind, or of a session the window held) starts from the plan the window
+      // already shows, so keryx's re-send of that plan after the load compares equal and its clock keeps running.
+      const held = state.convs[a.sessionId];
+      const fresh = newConv(a.sessionId, { replaying: true });
+      const conv = held ? { ...fresh, plan: held.plan, planUpdatedAt: held.planUpdatedAt, turnStartedAt: held.turnStartedAt } : fresh;
+      return { ...state, loading: { ...state.loading, [a.sessionId]: conv } };
+    }
     case "loadDone": {
       const replayed = state.loading[a.sessionId];
       if (!replayed) return state;
@@ -1013,6 +1034,7 @@ export interface SessionState {
   configOptions: ConfigOption[];
   plan: PlanEntry[];
   planUpdatedAt: number | null;
+  turnStartedAt: number | null;
   usage: Usage | null;
   title: string | null;
   queue: QueuedPrompt[];
@@ -1053,6 +1075,7 @@ export function shownView(w: WindowState): SessionState {
     configOptions: c?.configOptions ?? NO_CONFIG,
     plan: c?.plan ?? NO_PLAN,
     planUpdatedAt: c?.planUpdatedAt ?? null,
+    turnStartedAt: c?.turnStartedAt ?? null,
     usage: c?.usage ?? null,
     title: c?.title ?? null,
     queue: c?.queue ?? NO_QUEUE,

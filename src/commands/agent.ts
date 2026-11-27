@@ -1019,6 +1019,14 @@ export interface RunAgentTurnOptions {
    */
   slateSession?: SlateSessionRef;
   /**
+   * The session dir whose `plan.json` the turn reads, for a host that holds no slate ref: the ACP shell profile
+   * opens a slate only after `/goal`, and without this its turns never saw the plan, the stale-plan note or the
+   * end-of-turn plan handling the shells get. A getter, so the host's lease check runs on every read and returns
+   * `undefined` once another instance holds the session, as `slateSessionDir` does for a detached ref.
+   * Ignored when `slateSession` is set.
+   */
+  planDir?: () => string | undefined;
+  /**
    * Flow 387 review r1 F-001: the host's promise that it keeps the ORIGINAL messages
    * (an archive synced before every history change, written next to a live session
    * dir). Pruning and collapsing rewrite `history` into placeholders, so they run
@@ -3750,8 +3758,9 @@ async function runAgentTurnCore(
     // old gate that silently stopped feeding the plan back to both the model and
     // the sidebar at the worst possible moment. A DETACHED ref still reads
     // nothing: `slateSessionDir` is the lease-loss-aware accessor (flow 271
-    // R3-1), so a displaced shell never picks up the new holder's plan.
-    const planDir = options.slateSession === undefined ? undefined : slateSessionDir(options.slateSession);
+    // R3-1), so a displaced shell never picks up the new holder's plan. A host
+    // with no slate ref names the dir through `planDir`, with its own lease check.
+    const planDir = options.slateSession !== undefined ? slateSessionDir(options.slateSession) : options.planDir?.();
     if (planDir !== undefined) {
       try {
         currentPlan = await getExecutionPlan(planDir);

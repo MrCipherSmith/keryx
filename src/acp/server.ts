@@ -2880,6 +2880,9 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         ...(rendered.untrusted ? { untrustedPrompt: true, operatorText: rendered.trustedText } : {}),
         ...(telegram === undefined ? {} : { source: "telegram", automaticReview: false }),
         ...(slate !== undefined ? { slateSession: slate.ref, ...(goalTurn ? { skipCloseTrigger: true } : {}) } : {}),
+        // The plan tools write `plan.json` into the session dir on every turn, slate or not: the turn reads it from
+        // there too, so the model sees the plan and the stale-plan note. Nothing once another instance took the lease.
+        planDir: () => (registry.canPersist(sessionId) ? state.handle.dir : undefined),
       });
       syncAcpArchive(archive, state.history);
       if (!registry.canPersist(sessionId)) {

@@ -458,7 +458,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
 
         <div className="composer-dock">
           {pinnedReviews}
-          {state.plan.length > 0 ? <PlanCard plan={state.plan} updatedAt={state.planUpdatedAt} busy={state.busy} /> : null}
+          {state.plan.length > 0 ? <PlanCard plan={state.plan} updatedAt={state.planUpdatedAt} turnStartedAt={state.turnStartedAt} busy={state.busy} /> : null}
           <QueuePanel
             queue={state.queue}
             busy={state.busy}
