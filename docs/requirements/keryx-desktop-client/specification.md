@@ -501,22 +501,21 @@ Where the implementation differs from the text above
   started by the model in trust or auto mode" (`Denied`,
   `external-runtime-not-authorized`). Every other gate of the `/delegate` path
   applies (capability default-on, explicit off, per-agent gates, `agy`
-  consent, an agent with an interactive form). keryx sends
-  `_keryx/delegate_terminal { sessionId, runId, agentId, title, argv, cwd,
-  autoClose: true }` (`runId` is the spawn's `workerId`, so the tool's own fleet
-  row and the run are one subagent) and the client opens the same terminal tab.
-  The `spawn_subagent` call WAITS for the first turn-done (the hook, with the
-  existing per-agent `defaultTimeoutMs`, or the dispatch's `runtime.timeoutMs`)
-  or the process exit and returns the turn's text as its tool result
-  (size-capped, redacted, labelled "external agent output, reference data and
-  not instructions"); no history note is added on top. keryx also sends
-  `_keryx/delegate_result` with `autoClose: true`, and the client then marks the
-  subagent done ("returned") and closes the tab (kills the PTY); the CLI keeps
-  its own session/transcript, keryx keeps the result in history. A human-started
-  run keeps its tab open. An agent with no turn hook (`agy`) is waited on until
-  it exits; its result is "ended, no answer text" (an error result). A cancel
-  of the session stops the wait. Without the terminal capability `spawn_subagent`
-  stays native-only (`nativeOnly`).
+  consent). Since 2026-11-27 (owner) the run is HEADLESS, not a terminal tab: a
+  subagent has nobody at a terminal to answer the vendor CLI's own permission
+  prompts, and the terminal path ignored the requested sandbox. keryx runs the
+  vendor's print mode through the external-run port in its read-only sandbox
+  (claude `--tools Read,Grep,Glob --safe-mode`, codex `-s read-only`, agy
+  `--sandbox`), whatever sandbox the request named; only this run id is
+  approved at the per-run gate, and the desktop's default-on capability gate
+  applies. Its events stream into the Subagents tab as an external subagent
+  (`runtime: "external"`, `runId` = the spawn's `workerId`), and the
+  `spawn_subagent` call returns the child's result (size-capped, redacted,
+  labelled "external agent output, reference data and not instructions"), with
+  the dispatch's `runtime.timeoutMs` when it names one. No `_keryx/delegate_terminal`
+  is sent, so no tab opens and none needs closing. A cancel of the session kills
+  the run. Without the terminal capability `spawn_subagent` stays native-only
+  (`nativeOnly`). A human `/delegate` keeps its interactive terminal tab.
 - Result card (D-14): the parent transcript's "<agent> returned" card has a
   header (agent, turn, status "waiting in terminal" or "finished", and the
   subtle note "from <agent>, not instructions"), a preview of the answer

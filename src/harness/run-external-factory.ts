@@ -191,6 +191,8 @@ export interface CreateRunExternalOptions {
   readonly config?: ExternalAgentsConfig;
   /** Shell-config directory override (tests). */
   readonly configDir?: string;
+  /** An `externalAgents.enabled` never written counts as on (the desktop's default, D-14). */
+  readonly defaultOn?: boolean;
   /** Where disposable worktrees are created. Defaults to a keryx directory under the OS temp dir. */
   readonly worktreesDir?: string;
   /** Process spawn seam. Defaults to the real `Bun.spawn`-backed port. */
@@ -339,6 +341,7 @@ export async function createRunExternal(
     ...(options.transport === undefined ? {} : { transport: options.transport }),
     ...(options.config === undefined ? {} : { config: options.config }),
     ...(options.configDir === undefined ? {} : { configDir: options.configDir }),
+    ...(options.defaultOn === true ? { defaultOn: true } : {}),
   });
   if (!gate.ok) {
     options.onUnavailable?.(gate.reason);

@@ -1,3 +1,4 @@
+import { ExternalBadge } from "./ExternalBadge";
 import { useEffect, useRef, useState } from "react";
 import { TASKS_KILL, TASKS_OUTPUT, isRunning, supportsTasks, type TaskInfo, type TaskOutputResult } from "../acp/providers";
 import { Icon } from "../components/Icon";
@@ -128,19 +129,18 @@ function SubagentsTab({ subagents, selected, onSelect }: { subagents: readonly S
     <ul className="activity-list">
       {recent.map((a) => (
         <li key={a.id}>
-          <button className="activity-row" onClick={() => onSelect(a.id)} data-subagent={a.id}>
+          <button className={"activity-row" + (a.runtime === "external" ? " is-external" : "")} onClick={() => onSelect(a.id)} data-subagent={a.id}>
             <span className={`activity-status status-${a.status}`} title={statusLabel(a.status)}>
               <StatusDot status={a.status} />
             </span>
             <span className="activity-main">
               <span className="activity-label truncate">
-                {a.runtime === "external" ? "⤳ " : ""}
                 {a.label}
               </span>
               {a.detail ? <span className="activity-detail truncate">{a.detail}</span> : null}
             </span>
             {a.model ? <span className="badge badge-neutral truncate activity-model">{a.model}</span> : null}
-            {a.runtime === "external" ? <span className="badge badge-neutral activity-runtime" title="A vendor CLI run by /delegate">external</span> : null}
+            {a.runtime === "external" ? <ExternalBadge /> : null}
           </button>
         </li>
       ))}
@@ -158,6 +158,7 @@ export function SubagentDetail({ agent }: { agent: Subagent }) {
         </span>
         <strong className="truncate">{agent.label}</strong>
         <span className="badge badge-neutral">{statusLabel(agent.status)}</span>
+        {agent.runtime === "external" ? <ExternalBadge /> : null}
       </div>
       {agent.model || agent.runtime ? (
         <div className="field-hint">

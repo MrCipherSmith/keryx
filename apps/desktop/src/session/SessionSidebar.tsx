@@ -1,3 +1,4 @@
+import { ExternalBadge } from "./ExternalBadge";
 import { memo, useCallback, useMemo, useState } from "react";
 import { sessionFlags, type SessionInfo } from "../acp/types";
 import { absoluteTime, relativeTime } from "../lib/format";
@@ -370,7 +371,7 @@ export const SessionSidebar = memo(function SessionSidebar({
                           {kids.map((a) => (
                             <li key={a.id}>
                               <button
-                                className="session-child"
+                                className={"session-child" + (a.runtime === "external" ? " is-external" : "")}
                                 title={a.task ?? a.detail ?? a.label}
                                 onClick={() => onShowSubagent(s.sessionId, a.id)}
                               >
@@ -384,7 +385,7 @@ export const SessionSidebar = memo(function SessionSidebar({
                                   {a.label}
                                 </span>
                                 {a.runtime === "external" ? (
-                                  <span className="badge badge-neutral">external</span>
+                                  <ExternalBadge />
                                 ) : null}
                                 {a.model ? (
                                   <span className="session-child-model truncate">

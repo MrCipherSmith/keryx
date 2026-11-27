@@ -269,7 +269,15 @@ Chosen:
   mode and then starts without a question; in ask mode it is refused with
   "external agents may only be started by the model in trust or auto mode".
   The capability gate, per-agent gates and the `agy` consent still apply.
-- **Auto-close for model-started runs.** The tool call waits for the first
+- **Model-started runs are headless (owner 2026-11-27).** Supersedes the terminal
+  launch and auto-close below for runs the MODEL starts. A subagent's terminal
+  tab had nobody to answer the vendor CLI's own permission prompts (codex waited
+  there until the timeout), and the interactive argv carried no sandbox, so a
+  read-only reviewer ran with write access in the project root. The run now goes
+  through the external-run port in keryx's read-only sandbox, streams into the
+  Subagents tab, and returns its result as the tool result. A human `/delegate`
+  keeps its terminal tab.
+- **Auto-close for model-started runs.** (Superseded 2026-11-27, above.) The tool call waits for the first
   turn-done (or the exit; `agy` has no hook, so it waits for the exit) and
   returns the text as the tool result; the client then marks the subagent done
   and closes the tab (kills the PTY). The vendor keeps its own session; keryx
