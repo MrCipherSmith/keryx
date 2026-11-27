@@ -235,9 +235,13 @@ test("a /delegate run (runtime external, no parent tool call) is marked as exter
   await renderPanel({ tab: "subagents", subagents: [external] });
   const row = document.querySelector('[data-subagent="ext:1"]')!;
   expect(row.querySelector(".activity-label")!.textContent).toContain("Claude");
-  expect(row.querySelector(".activity-runtime")!.textContent).toBe("external");
+  // A tinted, outlined badge with a terminal glyph and an accent edge on the row, apart from the grey model badge.
+  expect(row.querySelector(".badge-external")!.textContent).toBe("external");
+  expect(row.querySelector(".badge-external svg")).not.toBeNull();
+  expect(row.classList.contains("is-external")).toBe(true);
   await click(row);
   expect(document.querySelector('[data-subagent-detail="ext:1"] .field-hint')!.textContent).toBe("external");
+  expect(document.querySelector('[data-subagent-detail="ext:1"] .subagent-title .badge-external')).not.toBeNull();
 });
 
 test("the Show subagent link on a spawn_subagent tool card opens the subagent whose parentToolCallId matches", async () => {

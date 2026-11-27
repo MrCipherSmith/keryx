@@ -107,6 +107,9 @@ input, select, textarea { font: inherit; color: var(--fg); }
 .badge-ok { color: var(--ok); background: var(--ok-soft); }
 .badge-info { color: var(--info); background: var(--info-soft); }
 .badge-neutral { color: var(--fg-muted); background: var(--bg-sunken); }
+/* A subagent run by a vendor CLI: tinted and outlined so it reads apart from the grey model and status badges. */
+.badge-external { gap: 3px; color: var(--accent-text); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.activity-row.is-external, .session-child.is-external { box-shadow: inset 2px 0 0 var(--accent); }
 .pill {
   display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 8px; flex: none;
   font: 600 11px/1 var(--font); border-radius: var(--r-pill); color: var(--fg-muted); background: var(--bg-sunken);
