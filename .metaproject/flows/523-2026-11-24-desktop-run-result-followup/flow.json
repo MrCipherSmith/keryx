@@ -9,9 +9,9 @@
   "id": "523",
   "slug": "desktop-run-result-followup",
   "title": "Desktop Run button: the agent follows the command it asked the user to run",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-11-24T20:53:10.991Z",
-  "updatedAt": "2026-11-26T13:09:15.230Z",
+  "updatedAt": "2026-11-26T13:31:20.042Z",
   "source": {
     "type": "description",
     "ref": null
@@ -19,7 +19,7 @@
   "acChecksum": "sha256:b4e746f1d8259c3fd3000314ff626303d04e9ca231479c58807be0aa5a3a3541",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/1316"
   },
   "baseBranch": "main",
   "outcomeAuthor": "agent",
@@ -965,6 +965,11 @@
       "at": "2026-11-26T13:09:15.230Z",
       "event": "task-done",
       "detail": "T25: Review round 6 docs: narrow the slot-hold, Telegram, resend and give-up claims to the code; round 6 in the PR body (R6-HL-001 docs half, R6-PC-001/002, R6-LG-001, R6-AR-001, R6-TP-003 docs half)"
+    },
+    {
+      "at": "2026-11-26T13:31:20.042Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/1316 (warning: PR is not a draft)"
     }
   ],
   "origin": {
