@@ -650,7 +650,7 @@ try {
   assert.ok(loaded.slice(beforeColdLoad).every(id => id === boardOrigin) && loaded.at(-1) === boardOrigin, "The original session is the one shown");
   assert.match(host.textContent ?? "", /How is the review going\?/);
   assert.equal(localStorage.getItem("keryx.session-reviews.v1:" + cwd), null);
-  await waitFor("the reopened session shows its registered review", () => /\[Review #14\]/.test(host.querySelector(".session-review-activity")?.textContent ?? ""));
+  await waitFor("the reopened session shows its registered review", () => /^Review #14 /.test(host.querySelector('.session-review-activity [role="status"]')?.textContent ?? ""));
   await go("Sessions");
   await React.act(() => host.querySelector<HTMLButtonElement>(".project-switcher")!.click());
   const projectSettings = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent?.trim() === "Project Settings");
