@@ -31,7 +31,7 @@ import { SessionReviewActivity, type ReviewCardMemory } from "./review/SessionRe
 import { reviewCardAnchors, reviewCardGroup, splitReviewCards, withReviewActive } from "./review/reviewPlacement";
 import { loadSessionReviewTargets, readSessionReviewLinks, reviewFlowId, reviewSessionTitle, type SessionReviewLink } from "./review/sessionReview";
 import { reviewRun } from "./platform/reviewRuns";
-import { advanceRequest, reviewedAttempt } from "../../../src/review/review-advance";
+import { updateRoundTurn, type UpdateRoundTurn } from "./review/updateRound";
 import { reviewContinueTurn, reviewPullRequestUrl, reviewStartTurn } from "./review/reviewTurn";
 import { modelChoices, providerOf } from "./session/Composer";
 import type { IssueOriginRequest } from "./issues/IssueOriginDetail";
@@ -629,17 +629,18 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
    * a new session bound to the PR. A busy session gets no turn and nothing is queued: the caller shows the error.
    * Resolves the PR's current attempt history (empty when it cannot be read) with the session the turn went into.
    */
-  const startSessionReview = useCallback(async (key: DeskRunKey, revision: DeskRevision, options?: DeskReviewOptions, owner?: string, prompt?: string): Promise<DeskRunSnapshot> => {
+  const startSessionReview = useCallback(async (key: DeskRunKey, revision: DeskRevision, options?: DeskReviewOptions, owner?: string, prompt?: string,
+    update?: Pick<UpdateRoundTurn, "mode" | "reopen">): Promise<DeskRunSnapshot> => {
     // A typed `/review [target]` is the command that opened the dialog, not a request: its target is already resolved.
     const request = prompt && !/^\/review(\s|$)/.test(prompt.trim()) ? prompt : undefined;
     // A session the user typed `/review` in (`owner`) keeps the mode the user chose; one Desktop opens is raised.
     const target: ReviewTurnTarget = owner ? { owner } : {
       subject: prSubject({ number: key.number, url: reviewPullRequestUrl(key) }, key.repo, key.repositoryId),
-      mode: reviewSessionMode(options?.mode),
+      mode: update?.mode ?? reviewSessionMode(options?.mode),
       sessions: () => subjectSessionsRef.current,
       open: openSubject,
     };
-    const sessionId = await sendReviewTurn(acp.current, target, id => reviewStartTurn({ key, revision, sessionId: id, options, request }));
+    const sessionId = await sendReviewTurn(acp.current, target, id => reviewStartTurn({ key, revision, sessionId: id, options, request, ...(update?.reopen && { reopen: true }) }));
     if (!owner) setView("session");
     // The turn is already running: a failed history read must not report the start as failed, so it shows no attempts.
     const history = await reviewRun(cwd, key, { kind: "status" }).catch((): DeskRunSnapshot => ({ version: 1, runs: [] }));
@@ -649,14 +650,13 @@ function ProjectWindow({ cwd, onOpenProject, onCloseProject }: { cwd: string; on
     acp.current.sendPrompt(reviewContinueTurn({ key: link.key, note, attemptId: link.id, revision: link.revision, sessionId: link.sessionId }), link.sessionId), []);
   /**
    * "Update review" on a moved head is the next round of the same Review, so it is a session turn like a start, not a
-   * detached worker (which ran with nothing in the session and left the card on a stale state). The checks are the ones
-   * `keryx review advance` makes; the panel offers the update only on an open PR, and the turn's skill checks the range.
+   * detached worker (which ran with nothing in the session and left the card on a stale state). What may start and how:
+   * review/updateRound.ts.
    */
   const advanceSessionReview = useCallback(async (key: DeskRunKey, revision: DeskRevision, id: string): Promise<DeskRunSnapshot> => {
     const history = await reviewRun(cwd, key, { kind: "status" });
-    const reviewed = reviewedAttempt(history.runs, id);
-    const { options } = advanceRequest({ reviewed, runs: history.runs, current: revision, prState: "OPEN" });
-    return startSessionReview(key, revision, options);
+    const { options, ...update } = updateRoundTurn(history.runs, id, revision);
+    return startSessionReview(key, revision, options, undefined, undefined, update);
   }, [cwd, startSessionReview]);
   const boardReviewRun = useCallback<typeof reviewRun>((project, key, action) => {
     if (action.kind === "start") return startSessionReview(key, action, action.options);

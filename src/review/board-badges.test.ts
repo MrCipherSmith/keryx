@@ -76,3 +76,9 @@ test("a published review of the current range carries its verdict; a newer run o
     .toBeUndefined();
   expect(localBadge([run(old, "completed", { publication: "published", publishedVerdict: "approve" })], current).published).toBeUndefined();
 });
+
+test("a run active on another range drops the published tag of the current range", () => {
+  const published = run(current, "completed", { publication: "published", publishedVerdict: "approve" });
+  expect(localBadge([run(old, "running"), published], current).published).toBeUndefined();
+  expect(localBadge([published, run(old, "completed")], current).published).toEqual({ verdict: "approve" });
+});

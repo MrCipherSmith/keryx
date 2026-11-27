@@ -1,6 +1,7 @@
 .review-workspace { display: flex; min-width: 0; min-height: 0; height: 100%; container-type: inline-size; }
 .review-workspace[hidden] { display: none; }
 .review-board { flex: 1; min-width: 0; }
+/* 360 and 280 are PANEL_MIN_WIDTH and PANEL_LIST_MIN_WIDTH in PanelResizer.tsx: change both together. */
 .review-detail-panel { flex: none; min-width: 360px; max-width: calc(100% - 280px); }
 .review-detail-panel .sheet-head-row .flow-id { min-width: 0; overflow-wrap: anywhere; }
 .review-detail-panel .tabs { flex-wrap: wrap; flex-shrink: 0; }

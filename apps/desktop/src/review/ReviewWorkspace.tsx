@@ -150,9 +150,9 @@ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow
   }, [focusLatest]);
   /**
    * "Update review" in a head-moved publish dialog: the next round of the same Review on the PR's current range, with
-   * the reviewed attempt's settings except automatic publication. The panel stays open and shows the new attempt; a
-   * board that has not seen the push is re-read once the start succeeded, or when the head already has an attempt,
-   * so the panel follows the new range.
+   * the reviewed attempt's settings except automatic publication. In the app the round goes to the PR's session as a
+   * turn and the view switches to that session; a board that has not seen the push is re-read once the start
+   * succeeded, or when the head already has an attempt, so the panel follows the new range.
    */
   const updateReview = useCallback((reviewed: DeskRun, revision: DeskRevision) => {
     const boardBehind = !sameRange(card, revision);
@@ -168,8 +168,8 @@ export function ReviewWorkspace({ cwd, subject: target, card, reviewIntent, flow
       return;
     }
     setSessionId(null);
-    // `keryx review advance` (flow 521): the same command an agent session runs; it keeps the reviewed attempt's settings
-    // without automatic publication (src/review/review-advance.ts) and refuses when a later round already exists.
+    // The runner (App: review/updateRound.ts) keeps the reviewed attempt's settings without automatic publication and
+    // refuses when a later round already exists, as `keryx review advance` does (src/review/review-advance.ts).
     void local.request({ kind: "advance", id: reviewed.id, ...revision })
       .then(outcome => {
         if (outcome === "done" && mounted.current) setFocusLatest(n => n + 1);

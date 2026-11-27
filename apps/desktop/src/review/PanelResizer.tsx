@@ -1,6 +1,9 @@
 import { useRef, type RefObject } from "react";
 
+// Mirrored in ReviewDetail.css (.review-detail-panel min-width and max-width): change both together.
 export const PANEL_MIN_WIDTH = 360;
+/** The width the panel always leaves to the list beside it. */
+export const PANEL_LIST_MIN_WIDTH = 280;
 
 /**
  * The drag/keyboard handle on the left edge of a review side panel (pull request details, a Review).
@@ -15,7 +18,7 @@ export function PanelResizer({ panel, panelId, width, label, onResize }: {
 }) {
   const drag = useRef<{ pointerId: number; x: number; width: number } | null>(null);
   const currentWidth = () => panel.current?.offsetWidth || width;
-  const maxWidth = () => Math.max(PANEL_MIN_WIDTH, (panel.current?.parentElement?.clientWidth || window.innerWidth) - 280);
+  const maxWidth = () => Math.max(PANEL_MIN_WIDTH, (panel.current?.parentElement?.clientWidth || window.innerWidth) - PANEL_LIST_MIN_WIDTH);
   const resize = (next: number) => onResize(Math.min(maxWidth(), Math.max(PANEL_MIN_WIDTH, next)));
   return <div className="side-resize review-detail-resize" role="separator" tabIndex={0}
     aria-orientation="vertical" aria-label={label} aria-controls={panelId}

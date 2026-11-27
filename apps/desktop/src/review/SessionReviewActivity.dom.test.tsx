@@ -176,3 +176,17 @@ test("a pinned round whose attempt can no longer be found reports itself inactiv
   await render(rig, (id, active) => reports.push([id, active]));
   expect(reports).toEqual([["run-1", false]]);
 });
+
+test("a click on the card header toggles it like the Plan card; a click on a header button does not", async () => {
+  await act(() => root.render(null));
+  await render(harness(true));
+  const header = host.querySelector<HTMLElement>(".session-review-item > header")!;
+  const toggle = () => host.querySelector<HTMLButtonElement>(".session-review-toggle")!;
+  expect(toggle().getAttribute("aria-expanded")).toBe("false");
+  await act(() => header.querySelector("strong")!.click());
+  expect(toggle().getAttribute("aria-expanded")).toBe("true");
+  await act(() => header.querySelector("strong")!.click());
+  expect(toggle().getAttribute("aria-expanded")).toBe("false");
+  await act(() => header.querySelector<HTMLButtonElement>(".review-icon-action:not(.session-review-toggle)")!.click());
+  expect(toggle().getAttribute("aria-expanded")).toBe("false");
+});

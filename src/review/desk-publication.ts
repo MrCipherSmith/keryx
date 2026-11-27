@@ -6,7 +6,7 @@ import { parseDiffHunks, type ReviewComment } from "./bot/post";
 import { screenCommentBody } from "./bot/redaction";
 import { verifyDeskSubject } from "./desk-run-service";
 import { DeskRunStore } from "./desk-run-store";
-import { PUBLICATION_RECEIPT, PUBLICATION_REQUEST_LIMIT, PUBLICATION_SKIPPED, type PublicationAnswer, type PublicationOptionId, type PublicationRequest, type PublicationSettings, type PublicationState } from "./desk-publication-types";
+import { PUBLICATION_DRAFT, PUBLICATION_RECEIPT, PUBLICATION_REQUEST_LIMIT, PUBLICATION_SKIPPED, type PublicationAnswer, type PublicationOptionId, type PublicationRequest, type PublicationSettings, type PublicationState } from "./desk-publication-types";
 import type { DeskRunKey } from "./desk-run-types";
 import { applyReviewOverlay, DESK_TEMPLATE_SELECTION, deskReportEvidence, deskReportFinding, deskReportRecommendation, projectReportSlots, projectReviewOverlay, renderDeskFinding,
   renderDeskReviewReport, reportFindingMetadata, reportTemplateFingerprint, scopedFile, type DeskReportFinding } from "./desk-review-report";
@@ -116,7 +116,7 @@ async function reviewedHeadInPull(cwd: string, key: DeskRunKey, auth: GithubConn
 async function earlierAnswers(directories: readonly string[]): Promise<Record<string, unknown> | undefined> {
   for (const directory of directories) {
     // An unreadable earlier draft only means nothing is pre-selected from it; the current draft does not depend on it.
-    const earlier = await json<Draft>(directory, "publication-draft.json", draftLimit).catch(() => undefined);
+    const earlier = await json<Draft>(directory, PUBLICATION_DRAFT, draftLimit).catch(() => undefined);
     if (earlier) return object(object(object(earlier)?.settings)?.answers);
   }
 }
@@ -141,7 +141,7 @@ async function prepare(input: {
   }
   const [recorded, verdict, draft, receipt, skipped, { overlay, overlayWarning }, readiness, report] = await Promise.all([
     premiseRecords(packageDir), computeVerdict(packageDir),
-    json<Draft>(directory, "publication-draft.json", draftLimit),
+    json<Draft>(directory, PUBLICATION_DRAFT, draftLimit),
     json<Receipt>(directory, PUBLICATION_RECEIPT, 4096),
     scopedFile(directory, PUBLICATION_SKIPPED, 64),
     projectReviewOverlay(cwd), computeReadiness(packageDir), scopedFile(directory, "package/report.md", 2 * 1024 * 1024),
@@ -402,8 +402,10 @@ async function publication(cwd: string, key: DeskRunKey, request: Operation,
     const draft: Draft = { settings: state.settings, savedAt };
     const encoded = JSON.stringify(draft);
     if (Buffer.byteLength(encoded) > draftLimit) throw new Error("configuration: The review settings are too large to save. Split the review.");
-    const save = () => writeFileAtomic(path.join(directory, "publication-draft.json"), encoded, { mode: 0o600 });
+    const save = () => writeFileAtomic(path.join(directory, PUBLICATION_DRAFT), encoded, { mode: 0o600 });
     if (request.kind === "save") {
+      // A posted review's settings are its record: a later save would change the verdict the board shows for it.
+      if (state.publishedUrl) throw new Error("configuration: This review has already been published.");
       verifyGithubBindingUnchanged(connection);
       await save();
       return { ...state, savedAt };
@@ -467,7 +469,7 @@ async function publication(cwd: string, key: DeskRunKey, request: Operation,
     if (!publishedUrl) {
       throw new Error("unavailable: Submission could not be confirmed. Check the pull request before sending another review.");
     }
-    await confirmPublicationReceipt(directory, publishedUrl);
+    await confirmPublicationReceipt(directory, publishedUrl, { event: outbound.event, verdict: state.settings.verdict });
     const { skipped: _skipped, ...published } = state;
     return { ...published, savedAt, publishedUrl, canSubmit: false, blockedReason: "This review has already been published." };
   });

@@ -1645,3 +1645,23 @@ test("a shown card is never dropped because its lane was ruled out by the filter
   await click(button("Mine"));
   expect(laneNumbers("Requested from me")).toEqual(["#101"]);
 });
+
+test("a PR whose current range's Keryx review is published shows a Reviewed tag with the posted verdict", async () => {
+  const badge = (published: NonNullable<ReviewCard["localReview"]>["published"]) =>
+    ({ active: false, ready: true, runState: "completed" as const, ...(published && { published }) });
+  const cards = [
+    { ...pr, number: 201, localReview: badge({ verdict: "changes" }) },
+    { ...pr, number: 202, localReview: badge({ verdict: "approve" }) },
+    { ...pr, number: 203, localReview: badge({}) },
+    { ...pr, number: 204, localReview: badge(undefined) },
+  ];
+  await render(async () => snapshot(cards), "/project", ++renderKey);
+  const tag = (number: number) => [...document.body.querySelectorAll(".flow-card")]
+    .find(card => card.querySelector(".flow-id")?.textContent === "#" + number)?.querySelector(".keryx-reviewed");
+  expect(tag(201)?.textContent).toBe("Reviewed · Changes requested");
+  expect(tag(201)?.classList.contains("pr-changes_requested")).toBe(true);
+  expect(tag(202)?.textContent).toBe("Reviewed · Approved");
+  expect(tag(202)?.classList.contains("pr-approved")).toBe(true);
+  expect(tag(203)?.textContent).toBe("Reviewed");
+  expect(tag(204) ?? null).toBeNull();
+});

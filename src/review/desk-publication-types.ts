@@ -48,4 +48,24 @@ export interface PublicationState {
 
 export type PublicationOutcome = "pending" | "published" | "skipped";
 export const PUBLICATION_RECEIPT = "publication-receipt.json";
+/** Desktop's saved publication settings for one attempt (written by desk-publication). */
+export const PUBLICATION_DRAFT = "publication-draft.json";
+
+/** The GitHub review event a publication posted; the receipt keeps it so the board can show the verdict. */
+export type PublishedEvent = "COMMENT" | "REQUEST_CHANGES" | "APPROVE";
+export const isPublicationVerdict = (value: unknown): value is PublicationVerdict =>
+  value === "approve" || value === "suggestions" || value === "changes" || value === "comment";
+const EVENT_VERDICT: Readonly<Record<PublishedEvent, PublicationVerdict>> = { APPROVE: "approve", REQUEST_CHANGES: "changes", COMMENT: "comment" };
+
+/**
+ * The verdict a confirmed receipt records: Desktop's own verdict when it posted, else the GitHub event any publisher
+ * posted (`keryx review publish` included). Undefined for a receipt written before the event was kept.
+ */
+export function receiptVerdict(receipt: unknown): PublicationVerdict | undefined {
+  if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return undefined;
+  const record = receipt as Record<string, unknown>;
+  if (isPublicationVerdict(record.verdict)) return record.verdict;
+  return typeof record.event === "string" && Object.hasOwn(EVENT_VERDICT, record.event)
+    ? EVENT_VERDICT[record.event as PublishedEvent] : undefined;
+}
 export const PUBLICATION_SKIPPED = "publication-skipped.json";

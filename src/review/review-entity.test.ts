@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ReviewCard } from "./board-types";
-import { freshness, headComparison, reviewNeedsViewer, reviewState, summarizeReview, type ReviewAttemptSummary, type ReviewRow } from "./review-entity";
+import { freshness, headComparison, isImportedCopy, reviewNeedsViewer, reviewState, summarizeReview, type ReviewAttemptSummary, type ReviewRow } from "./review-entity";
 
 const sha = (c: string) => c.repeat(40);
 let seq = 0;
@@ -212,5 +212,19 @@ describe("an imported copy of a result does not replace it", () => {
   test("an import is still the state when no own attempt reviewed its range", () => {
     const summary = summarizeReview(row([attempt({ source: "existing", state: "partial", publication: null })]), card());
     expect(summary.source).toBe("existing");
+  });
+});
+
+describe("isImportedCopy tells its clauses apart", () => {
+  const own = attempt({ source: "session", state: "budget", coverage: "partial" });
+  const copy = attempt({ source: "existing", state: "partial", publication: null });
+  test("an own budget or partial result is copied too, as long as it reviewed the range", () => {
+    expect(isImportedCopy(copy, [own, copy], a => a.reviewed !== null)).toBe(true);
+    expect(isImportedCopy(copy, [attempt({ source: "session", reviewed: null, state: "running" }), copy], a => a.reviewed !== null)).toBe(false);
+  });
+  test("another range or another import is not a copy", () => {
+    expect(isImportedCopy(copy, [attempt({ source: "session", headSha: sha("c") }), copy], () => true)).toBe(false);
+    expect(isImportedCopy(copy, [attempt({ source: "existing" }), copy], () => true)).toBe(false);
+    expect(isImportedCopy(own, [own, copy], () => true)).toBe(false);
   });
 });

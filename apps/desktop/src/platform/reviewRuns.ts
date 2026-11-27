@@ -10,7 +10,8 @@ let mutationVersion = 0;
 export type ReviewRunAction =
   | { kind: "status"; id?: string; activityId?: string; activityBefore?: number }
   | { kind: "start"; sessionId?: string; baseSha: string; headSha: string; options?: DeskReviewOptions }
-  /** The update round of the attempt's Review on this range: `keryx review advance`, the command sessions also use. */
+  /** The update round of the attempt's Review on this range. In the app, App's board runner sends it to the PR's
+   * session as a turn (review/updateRound.ts); calling `reviewRun` with it runs `keryx review advance`. */
   | { kind: "advance"; id: string; baseSha: string; headSha: string }
   | { kind: "continue"; id: string; guidance?: string }
   | { kind: "cancel"; id: string }

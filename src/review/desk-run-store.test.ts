@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { readProcessIdentity } from "../lib/hub-machine/process-identity";
 import { deskOptionsKey, type DeskReviewOptions } from "./desk-run-options";
-import { PUBLICATION_RECEIPT, PUBLICATION_SKIPPED } from "./desk-publication-types";
+import { PUBLICATION_DRAFT, PUBLICATION_RECEIPT, PUBLICATION_SKIPPED } from "./desk-publication-types";
 import { DeskRunStore, scheduledRunOutcomes } from "./desk-run-store";
 import type { DeskFinish } from "./desk-run-types";
 import { applyDeskLifecycle } from "./desk-run-lifecycle";
@@ -1039,6 +1039,25 @@ test("reviewRows reads a publication outcome for every finished reviewed attempt
   ]);
   // The attempt history reads the same outcome.
   expect(store.history(key).runs.find(run => run.id === published)?.publication).toBe("published");
+});
+
+test("a published attempt's verdict comes from its receipt; only a receipt without an event falls back to the draft", () => {
+  const publish = (head: string, receipt: object, draft?: string) => {
+    const rev = { ...revision, headSha: head.repeat(40) };
+    const id = store.atomic(() => store.request("/project", key, rev))!;
+    store.end(store.byId(id)!, { ...finish, state: "completed", result: { ...finish.result!, reviewed: rev, coverage: "complete" } });
+    mkdirSync(store.directory(id), { recursive: true });
+    writeFileSync(path.join(store.directory(id), PUBLICATION_RECEIPT), JSON.stringify({ url: "https://github.com/org/repo/pull/12#r", ...receipt }));
+    if (draft) writeFileSync(path.join(store.directory(id), PUBLICATION_DRAFT), JSON.stringify({ settings: { verdict: draft }, savedAt: "now" }));
+    return id;
+  };
+  const session = publish("1", { event: "REQUEST_CHANGES" });
+  const desktop = publish("2", { event: "APPROVE", verdict: "suggestions" });
+  const legacy = publish("3", {}, "approve");
+  const stale = publish("4", { event: "COMMENT" }, "approve");
+  const garbage = publish("5", { event: "MERGE" }, "nonsense");
+  const verdicts = new Map(store.history(key).runs.map(run => [run.id, run.publishedVerdict]));
+  expect([session, desktop, legacy, stale, garbage].map(id => verdicts.get(id))).toEqual(["changes", "suggestions", "approve", "comment", undefined]);
 });
 
 test("a Review whose attempts are all archived is still listed; an interrupted attempt reads as failed", () => {

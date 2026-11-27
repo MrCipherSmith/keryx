@@ -64,8 +64,8 @@ export function useReviewRuns(
       const message = errMessage(cause);
       if (action.kind === "status") setReadError(message);
       else if (action.kind === "answer") setActionError({ kind: "answer", id: action.id, questionId: action.questionId, message });
-      // An update round's refusal shows where a start's does. Only its "revision has changed" refusal is a moved range;
-      // the others (a later round exists, the attempt was withdrawn, the PR closed) are not about the range.
+      // An update round's refusal shows where a start's does. Only `keryx review advance`'s "revision has changed" refusal
+      // is a moved range; the session runner (review/updateRound.ts) does not re-read the head, so it never sends it.
       else setActionError({ kind: action.kind, message });
       if (/^(access|configuration):/i.test(message)) {
         setSnapshot(null);

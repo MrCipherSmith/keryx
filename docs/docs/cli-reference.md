@@ -5262,8 +5262,9 @@ round of the pull request's Review on its current head: the next round of the sa
 with the reviewed attempt's settings except automatic publication. `--id` names the attempt
 to update from (the Review's latest round by default); `--base`/`--head` refuse the request
 when the pull request has moved again since the caller read it, and `--repository-id` and
-`--viewer` when the account or repository changed. Desktop's "Update review" and the
-review-orchestrator skill's "Head moved" procedure both call it. It refuses an attempt a
+`--viewer` when the account or repository changed. The review-orchestrator skill's "Head
+moved" procedure calls it. Desktop's "Update review" makes the same attempt checks
+(`src/review/review-advance.ts`) and sends the round to the pull request's session as a turn. It refuses an attempt a
 later round already follows, a closed pull request, and a round already on the current head.
 
 A pull request review package a session finishes with `keryx review complete` or publishes
