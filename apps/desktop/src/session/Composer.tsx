@@ -598,7 +598,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         ) : null}
         <div className="grow" />
         {onCompact && onDetails ? <ContextMeter usage={usage} busy={busy} onCompact={onCompact} onDetails={onDetails} /> : null}
-        <span className="composer-hint truncate" title={disabled ? undefined : sendHint}>{disabled ? (text ? disabledReason : "") : busy ? "esc to stop" : sendHint}</span>
+        <span className="composer-hint truncate" title={disabled ? undefined : sendHint}>{disabled ? (text ? disabledReason : "") : busy ? "" : sendHint}</span>
         {busy ? (
           <button className="send-btn is-stop" onClick={onStop} title="Stop the current turn (Esc)" aria-label="Stop">
             {/* The glyph is a 10/24 square of the icon box: 24 gives a 10px square in the 30px button. */}

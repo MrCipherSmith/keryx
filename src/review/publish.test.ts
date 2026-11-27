@@ -372,7 +372,8 @@ describe("publishReview: the publication guard shared with Desktop", () => {
     expect(io.posts[0]!.commitId).toBe(REVIEWED);
     expect(io.posts[0]!.body.trimEnd().endsWith(publicationMarker("pr7932-r1#r1"))).toBe(true);
     expect(result.url).toBe(`${PR}#pullrequestreview-1`);
-    expect(JSON.parse(readFileSync(receipt(), "utf8"))).toEqual({ url: `${PR}#pullrequestreview-1` });
+    // The receipt records the event posted, so the board can show the verdict of a session publication too.
+    expect(JSON.parse(readFileSync(receipt(), "utf8"))).toEqual({ url: `${PR}#pullrequestreview-1`, event: io.posts[0]!.event });
     expect(JSON.parse(readFileSync(path.join(pkg, "published.json"), "utf8"))).toMatchObject({ url: `${PR}#pullrequestreview-1` });
   });
 
@@ -576,7 +577,7 @@ describe("publishReview: round-3 fixes of the shared publication guard", () => {
   test("without GitHub's URL the receipt names the pull request, so Desktop counts the review as published", async () => {
     withHead();
     await publishReview(pkg, { post: posting().post, confirm: async () => true });
-    expect(JSON.parse(readFileSync(path.join(pkg, "publication-receipt.json"), "utf8"))).toEqual({ url: PR });
+    expect(JSON.parse(readFileSync(path.join(pkg, "publication-receipt.json"), "utf8"))).toMatchObject({ url: PR });
   });
 
   test("the receipt is written to the Attempt and to the package: losing the Attempt's copy does not allow a second post", async () => {
@@ -586,7 +587,7 @@ describe("publishReview: round-3 fixes of the shared publication guard", () => {
     const publication = { directory: attempt, id: "0b0c1d2e-0000-4000-8000-000000000001" };
     const url = "https://github.com/x/y/pull/1#pullrequestreview-7";
     await publishReview(pkg, { post: posting(url).post, confirm: async () => true, publication });
-    for (const dir of [attempt, pkg]) expect(JSON.parse(readFileSync(path.join(dir, "publication-receipt.json"), "utf8"))).toEqual({ url });
+    for (const dir of [attempt, pkg]) expect(JSON.parse(readFileSync(path.join(dir, "publication-receipt.json"), "utf8"))).toMatchObject({ url });
     rmSync(path.join(attempt, "publication-receipt.json"));
     const again = posting("u");
     await expect(publishReview(pkg, { post: again.post, confirm: async () => true, publication })).rejects.toThrow(/already been published/);

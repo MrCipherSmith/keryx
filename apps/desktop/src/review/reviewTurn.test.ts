@@ -74,3 +74,9 @@ test("the continue turn of a viewer-less key uses the id without an account and 
   expect(text).toContain("keryx review state show --review org-project-12`");
   expect(text.split("\n")).toHaveLength(2);
 });
+
+test("an update round's state open reopens a closed Review; a start does not", () => {
+  expect(reviewStateOpenCommand({ key, revision, sessionId: "s1", reopen: true })).toMatch(/ --source desktop --reopen$/);
+  expect(reviewStateOpenCommand({ key, revision, sessionId: "s1" })).not.toContain("--reopen");
+  expect(reviewStartTurn({ key, revision, sessionId: "s1", reopen: true })).toContain("--reopen");
+});

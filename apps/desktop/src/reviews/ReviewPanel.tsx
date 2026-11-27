@@ -7,6 +7,7 @@ import { absoluteTime, errMessage, relativeTime } from "../lib/format";
 import type { FlowCard, openExternal } from "../platform/commands";
 import type { reviewRun } from "../platform/reviewRuns";
 import { openReviewLink, ReviewBrowserLink } from "../review/ReviewBrowserLink";
+import { PanelResizer } from "../review/PanelResizer";
 import type { ReviewLaunchModel } from "../review/ReviewLaunchDialog";
 import type { reviewPublish } from "../review/ReviewPublishDialog";
 import type { ReviewCard } from "../review/types";
@@ -75,12 +76,16 @@ interface Props {
   /** The board action's intent was taken by the review interface. */
   onIntentConsumed?: (() => void) | undefined;
   onClose: () => void;
+  /** The panel width, which the left-edge handle changes through `onResize`. */
+  width?: number | undefined;
+  onResize?: ((width: number) => void) | undefined;
   /** Opens the PR outside the app; defaults to the system browser. */
   openBrowser?: typeof openExternal | undefined;
 }
 
 /** One Review: its state, rounds timeline and the review interface of the PR's current range. */
-export function ReviewPanel({ cwd, target, review, reviewIntent, flows, reviewModels, runCommand, publishCommand, onRunSnapshot, onAccessLost, onOpenReviewSession, onOpenFlow, onFixFindings, onRefresh, onIntentConsumed, onClose, openBrowser = openReviewLink }: Props) {
+export function ReviewPanel({ cwd, target, review, reviewIntent, flows, reviewModels, runCommand, publishCommand, onRunSnapshot, onAccessLost, onOpenReviewSession, onOpenFlow, onFixFindings, onRefresh, onIntentConsumed, onClose, width = 560, onResize, openBrowser = openReviewLink }: Props) {
+  const panelId = useId();
   const toast = useToast();
   const panel = useRef<HTMLElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -108,13 +113,14 @@ export function ReviewPanel({ cwd, target, review, reviewIntent, flows, reviewMo
   const publication = publicationLabel(review);
   const freshness = freshnessLabel(review.freshness);
   const fix = onFixFindings ? fixFindingsTarget(review, target.viewer) : null;
-  return <aside ref={panel} className="side-panel review-detail-panel review-panel" style={{ width: 560 }} aria-label={`Review of pull request #${review.number}`}
+  return <aside ref={panel} id={panelId} className="side-panel review-detail-panel review-panel" style={{ width }} aria-label={`Review of pull request #${review.number}`}
     onKeyDown={event => {
       if (event.key === "Escape" && !event.defaultPrevented && !event.nativeEvent.isComposing && !(event.target as Element).closest('[role="dialog"]')) {
         event.preventDefault();
         onClose();
       }
     }}>
+    {onResize && <PanelResizer panel={panel} panelId={panelId} width={width} label="Resize review details" onResize={onResize} />}
     <header className="sheet-head">
       <div className="sheet-head-row">
         <span className="flow-id">{target.repo} #{review.number}</span>

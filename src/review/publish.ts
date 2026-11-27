@@ -353,7 +353,7 @@ export async function publishReview(packageDir: string, options: PublishOptions)
     }
     // Desktop counts a receipt as published only with a URL: without GitHub's, the pull request's own stands in.
     const posted = result.url ?? (/^https:\/\/github\.com\//.test(ref) ? ref : undefined);
-    await each((dir) => confirmPublicationReceipt(dir, posted));
+    await each((dir) => confirmPublicationReceipt(dir, posted, { event }));
     return posted ?? "";
   });
   if (url === null) return { readiness, body, event, partial, posted: false };

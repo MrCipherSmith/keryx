@@ -23,7 +23,25 @@ function ReviewTags({ card }: { card: ReviewCard }) {
     {prState(card) === "draft" && <span className="badge">Draft</span>}
     {card.decision && <span className={`badge pr-${card.decision.toLowerCase()}`}>{DECISION_LABEL[card.decision]}</span>}
     {card.reviewers.length > 0 && <span className="badge pr-review_requested" title={card.reviewers.join(", ")}>Review requested</span>}
+    <KeryxReviewTag card={card} />
   </span>;
+}
+
+const PUBLISHED_TAG = {
+  approve: { icon: "check", tone: "pr-approved", label: "Approved" },
+  suggestions: { icon: "check", tone: "pr-approved", label: "Approved with suggestions" },
+  changes: { icon: "x", tone: "pr-changes_requested", label: "Changes requested" },
+  comment: { icon: "chat", tone: "", label: "Commented" },
+} as const;
+
+/** The current range's Keryx review is published and nothing newer runs: the PR needs no new round. */
+function KeryxReviewTag({ card }: { card: ReviewCard }) {
+  const published = card.localReview?.published;
+  if (!published) return null;
+  const tag = published.verdict ? PUBLISHED_TAG[published.verdict] : undefined;
+  const text = `Reviewed${tag ? ` · ${tag.label}` : ""}`;
+  return <span className={`badge keryx-reviewed ${tag?.tone ?? ""}`.trim()} title={`Keryx review published on GitHub${tag ? `: ${tag.label}` : ""}`}>
+    <Icon name={tag?.icon ?? "check"} size={11} />{text}</span>;
 }
 
 /** The card's own actions, each with visible text; the Keryx work (review, Flow, session) is the work row. */

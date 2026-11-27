@@ -5,7 +5,7 @@
 import { readFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { writeFileAtomic } from "../lib/fs";
-import { PUBLICATION_RECEIPT } from "./desk-publication-types";
+import { PUBLICATION_RECEIPT, type PublicationVerdict, type PublishedEvent } from "./desk-publication-types";
 
 /**
  * The hidden marker at the end of a posted review body. A lost response is resolved by finding it among the PR's
@@ -58,9 +58,14 @@ export const receiptPublished = (receipt: PublicationReceipt | undefined): boole
 export const beginPublicationReceipt = (directory: string): Promise<void> =>
   writeFileAtomic(receiptPath(directory), "{}", { mode: 0o600 });
 
-/** GitHub accepted the review; `url` when it said where. */
-export const confirmPublicationReceipt = (directory: string, url: string | undefined): Promise<void> =>
-  writeFileAtomic(receiptPath(directory), JSON.stringify(url === undefined ? { posted: true } : { url }), { mode: 0o600 });
+/** GitHub accepted the review; `url` when it said where, and what it posted when the publisher knows it. */
+export const confirmPublicationReceipt = (directory: string, url: string | undefined,
+  posted?: { event?: PublishedEvent; verdict?: PublicationVerdict }): Promise<void> =>
+  writeFileAtomic(receiptPath(directory), JSON.stringify({
+    ...(url === undefined ? { posted: true } : { url }),
+    ...(posted?.event && { event: posted.event }),
+    ...(posted?.verdict && { verdict: posted.verdict }),
+  }), { mode: 0o600 });
 
 /** GitHub certainly did not take the review: the receipt goes, so a retry is allowed. */
 export async function dropPublicationReceipt(directory: string): Promise<void> {

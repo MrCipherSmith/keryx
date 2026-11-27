@@ -8,7 +8,7 @@ import type { ReviewBoardSnapshot } from "./board-types";
 import { ensureKeryxConfigDir, keryxDataDir, readConfigFile } from "../lib/config-dir";
 import { processPresence, type ProcessIdentity } from "../lib/hub-machine/process-identity";
 import { deskOptionsKey, parseDeskReviewOptions, type DeskReviewOptions } from "./desk-run-options";
-import { PUBLICATION_RECEIPT, PUBLICATION_SKIPPED, type PublicationOutcome } from "./desk-publication-types";
+import { isPublicationVerdict, PUBLICATION_DRAFT, PUBLICATION_RECEIPT, PUBLICATION_SKIPPED, receiptVerdict, type PublicationOutcome, type PublicationVerdict } from "./desk-publication-types";
 import { canContinueDeskRun, DESK_RUN_SCOPE, type DeskReviewAction } from "./desk-run-types";
 import { summarizeReviewerAssignments } from "./reviewer-activity";
 import type { ReviewAttemptSummary, ReviewOnHeadMove, ReviewRow, ReviewSource } from "./review-entity";
@@ -485,6 +485,24 @@ export class DeskRunStore {
     return state === "completed" && coverage === "complete" ? "pending" : undefined;
   }
 
+  /**
+   * The verdict of a published attempt, from its receipt: every publisher records what it posted there. A receipt
+   * written before that falls back to Desktop's draft, which Desktop saves with the exact settings right before a post.
+   */
+  private publishedVerdict(id: string): PublicationVerdict | undefined {
+    const parse = (file: string): unknown => {
+      const read = readConfigFile(path.join(this.directory(id), file));
+      if (!read.ok) return undefined;
+      try { return JSON.parse(read.text) as unknown; } catch { return undefined; }
+    };
+    const receipt = parse(PUBLICATION_RECEIPT);
+    const recorded = receiptVerdict(receipt);
+    if (recorded) return recorded;
+    const legacy = receipt && typeof receipt === "object" && !("event" in receipt);
+    const draft = legacy ? (parse(PUBLICATION_DRAFT) as { settings?: { verdict?: unknown } } | undefined)?.settings?.verdict : undefined;
+    return isPublicationVerdict(draft) ? draft : undefined;
+  }
+
   history(key: DeskRunKey, id?: string): DeskRunSnapshot {
     // Keep periodic IPC responses bounded. The database retains full reports.
     // Return small recent reports inline and load the rest by attempt id.
@@ -527,6 +545,10 @@ export class DeskRunStore {
         const publication = run.result.reviewed && run.source !== "existing" && run.decision?.action !== "archive" &&
           this.publication(run.id, run.state, run.result.coverage);
         if (publication) run.publication = publication;
+        if (publication === "published") {
+          const verdict = this.publishedVerdict(run.id);
+          if (verdict) run.publishedVerdict = verdict;
+        }
         run.result.report = row.report;
         if (id === undefined && row.bytes > 0 && !row.report) run.result.reportDeferred = true;
         if (id !== undefined && row.chars > 524288) {
@@ -640,6 +662,7 @@ export class DeskRunStore {
           this.publication(row.id, row.state, row.coverage);
         runs.push({ ...row, awaitingAnswer: !!row.awaitingAnswer,
           ...(publication && { publication }),
+          ...(publication === "published" && (() => { const verdict = this.publishedVerdict(row.id); return verdict ? { publishedVerdict: verdict } : {}; })()),
           lastActivityAt: row.state === "running" ? this.transcriptUpdatedAt(row.id) : undefined,
           result: row.base && row.head ? { reviewed: { baseSha: row.base, headSha: row.head } } : null,
           reviewerProgress: row.finished === null ? undefined : { planned: row.planned, finished: row.finished, wave: row.wave,

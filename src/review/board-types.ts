@@ -12,6 +12,8 @@ export interface ReviewCard {
     ready: boolean;
     awaitingAnswer?: true;
     publicationPending?: true;
+    /** The current range's review was published on GitHub and no review runs: the verdict it was posted with, when known. */
+    published?: { verdict?: import("./desk-publication-types").PublicationVerdict };
     lastActivityAt?: string;
     runState?: DeskRunState | "other-revision";
     progress?: Omit<DeskReviewerProgress, "sessions"> | undefined;

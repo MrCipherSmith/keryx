@@ -7,6 +7,8 @@ import { absoluteTime, errMessage } from "../lib/format";
 import { DECISION_LABEL } from "./model";
 import type { ReviewCard } from "./types";
 import { runActive, sameRange } from "./useReviewRuns";
+import { runFinished } from "../../../../src/review/board-badges";
+import { isImportedCopy } from "../../../../src/review/review-entity";
 import { ReviewProgress, pendingManualQuestions, runStatusLabel, singleReviewerFinished, TranscriptUpdate } from "./ReviewProgress";
 import { ReviewSessions, type LoadReviewAttempt, type ActivitySubscription } from "./ReviewSessions";
 import type { AnswerReviewQuestion } from "./ReviewQuestion";
@@ -200,8 +202,11 @@ interface Props extends ReportProps {
 
 /** The attempt the Latest review section shows for the card's range. */
 export function latestAttempt(runs: readonly DeskRun[], card: DeskRevision) {
+  // The section shows the attempt an imported package copies, as "View review result" does, not the copy's "Partial".
+  const copied = (run: DeskRun) => isImportedCopy(run, runs, other =>
+    runFinished(other) && !!other.result?.reviewed && !reviewIsArchived(other));
   return runs.find(run => runActive(run) && sameRange(run, card)) ??
-    runs.find(runActive) ?? runs.find(run => !reviewIsArchived(run));
+    runs.find(runActive) ?? runs.find(run => !reviewIsArchived(run) && !copied(run)) ?? runs.find(run => !reviewIsArchived(run));
 }
 
 export function ReviewRuns({ activity, card, runs, error, loaded, working, onCancel, onRefresh, loadAttempt, onAccessLost, onOpenSession, onAnswer, onLifecycle, publication, headingRef }: Props) {

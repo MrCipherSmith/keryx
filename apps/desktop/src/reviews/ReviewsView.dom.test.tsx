@@ -724,3 +724,17 @@ test("the Reviews card and list open the originating chat and retain a separate 
   expect(opened).toEqual(["original-chat", "original-chat"]);
   expect(has("Review details for #14")).toBe(true);
 });
+
+test("the Review panel resizes with its left-edge handle and keeps its width while another Review opens", async () => {
+  await render(async () => snapshot([review(4, { state: "ready" }), review(8, { state: "published", publication: "published" })]));
+  await click(tile(4));
+  const panel = () => document.body.querySelector<HTMLElement>("aside.review-panel")!;
+  expect(panel().style.width).toBe("560px");
+  const handle = document.body.querySelector<HTMLElement>('[aria-label="Resize review details"]')!;
+  expect(handle.getAttribute("role")).toBe("separator");
+  await act(async () => { handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })); });
+  expect(panel().style.width).toBe("528px");
+  await click(tile(8));
+  expect(panel().getAttribute("aria-label")).toBe("Review of pull request #8");
+  expect(panel().style.width).toBe("528px");
+});

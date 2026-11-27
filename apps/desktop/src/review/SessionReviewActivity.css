@@ -2,12 +2,13 @@
 .session-review-item { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); width: 100%; padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg-surface); }
 .session-review-item > header { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
 .session-review-item > header > strong { min-inline-size: 0; overflow-wrap: anywhere; }
+.session-review-item > header.is-toggle { cursor: pointer; }
+.session-review-item > header > .review-action-row { margin-inline-start: auto; }
 .session-review-item summary { cursor: pointer; color: var(--accent); }
 .session-review-request { margin: 0; padding-inline-start: var(--sp-2); border-inline-start: 2px solid var(--border); white-space: pre-wrap; overflow-wrap: anywhere; }
 .session-review-message { color: var(--fg-muted); white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
 .session-review-message[role="alert"] { display: block; }
 .session-review-summary { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); color: var(--fg-muted); min-width: 0; }
 .session-review-summary > span { min-inline-size: 0; overflow-wrap: anywhere; }
-.session-review-toggle { flex: none; }
 /* Pinned above the composer while a round runs or waits: compact, and never taller than a third of the view. */
 .session-review-pinned { margin-block: 0 var(--sp-2); max-block-size: 33vh; overflow-y: auto; }

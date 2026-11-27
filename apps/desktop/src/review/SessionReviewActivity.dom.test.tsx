@@ -65,8 +65,8 @@ async function render(rig: ReturnType<typeof harness>, onActiveChange?: (id: str
 }
 
 async function expand() {
-  const toggle = [...host.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === "Show details");
-  expect(toggle).not.toBeUndefined();
+  const toggle = host.querySelector<HTMLButtonElement>('.session-review-toggle[aria-expanded="false"]');
+  expect(toggle).not.toBeNull();
   await act(() => toggle!.click());
 }
 
@@ -137,11 +137,11 @@ test("a round's card is compact by default: round, verdict and findings, with de
   expect(host.querySelector(".session-review-summary")?.textContent).toContain("Round 2 · verdict request-changes · 2 major, 1 minor");
   expect(host.querySelector(".review-plan-summary")).toBeNull();
   expect(host.querySelector(".review-session-outcome")).toBeNull();
-  const toggle = [...host.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === "Show details")!;
+  const toggle = host.querySelector<HTMLButtonElement>('.session-review-toggle[aria-expanded="false"]')!;
   expect(toggle.getAttribute("aria-expanded")).toBe("false");
   await act(() => toggle.click());
   expect(toggle.getAttribute("aria-expanded")).toBe("true");
-  expect(toggle.textContent).toBe("Hide details");
+  expect(toggle.getAttribute("title")).toBe("Hide details");
   expect(host.querySelector(".review-plan-summary")).not.toBeNull();
   expect(host.querySelector(".review-session-outcome")).not.toBeNull();
   // A finished round reports itself inactive: its card belongs in the timeline.
@@ -163,7 +163,7 @@ test("a card moving from the pinned slot to the timeline keeps its expansion and
   await typeNote("Half-written note");
   // The round finished: the caller now renders the card in the timeline, a new tree.
   await render(rig, undefined, memory, false);
-  const toggle = [...host.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === "Hide details");
+  const toggle = host.querySelector<HTMLButtonElement>('.session-review-toggle[aria-expanded="true"]');
   expect(toggle?.getAttribute("aria-expanded")).toBe("true");
   expect(host.querySelector<HTMLTextAreaElement>(".session-review-item textarea")?.value).toBe("Half-written note");
 });
@@ -175,4 +175,18 @@ test("a pinned round whose attempt can no longer be found reports itself inactiv
   rig.runCommand = (async () => ({ version: 1, runs: [] })) as typeof ReviewRun;
   await render(rig, (id, active) => reports.push([id, active]));
   expect(reports).toEqual([["run-1", false]]);
+});
+
+test("a click on the card header toggles it like the Plan card; a click on a header button does not", async () => {
+  await act(() => root.render(null));
+  await render(harness(true));
+  const header = host.querySelector<HTMLElement>(".session-review-item > header")!;
+  const toggle = () => host.querySelector<HTMLButtonElement>(".session-review-toggle")!;
+  expect(toggle().getAttribute("aria-expanded")).toBe("false");
+  await act(() => header.querySelector("strong")!.click());
+  expect(toggle().getAttribute("aria-expanded")).toBe("true");
+  await act(() => header.querySelector("strong")!.click());
+  expect(toggle().getAttribute("aria-expanded")).toBe("false");
+  await act(() => header.querySelector<HTMLButtonElement>(".review-icon-action:not(.session-review-toggle)")!.click());
+  expect(toggle().getAttribute("aria-expanded")).toBe("false");
 });

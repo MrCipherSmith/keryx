@@ -1,4 +1,4 @@
-// Flow 521 T8: `keryx review advance`, the update round Desktop's "Update review" and the skill's "Head moved" both call.
+// Flow 521 T8: `keryx review advance`, the update round of the skill's "Head moved"; Desktop's "Update review" shares its checks.
 import { describe, expect, test } from "bun:test";
 import type { DeskRun, DeskRunKey } from "./desk-run-types";
 import { advanceReview, reviewedAttempt, updateRoundOptions } from "./review-advance";

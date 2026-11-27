@@ -132,9 +132,23 @@ function newest(attempts: ReviewAttemptSummary[], wanted: (attempt: ReviewAttemp
   for (let i = attempts.length - 1; i >= 0; i--) if (wanted(attempts[i]!)) return attempts[i];
 }
 /** The attempts the Review's state, findings and publication come from: the unarchived ones, or all when every one is archived. */
+/**
+ * An imported package (`existing`) over the requested range of one of the PR's own finished, reviewed attempts is a
+ * copy of that result: it is never the Review's state or its Latest review beside the attempt it copies. One rule for
+ * the Reviews list (below) and Desktop's Latest review (ReviewRuns.latestAttempt), which passes its own `ownResult`.
+ */
+export function isImportedCopy<T extends { source: string; baseSha: string; headSha: string }>(
+  attempt: T, attempts: readonly T[], ownResult: (attempt: T) => boolean,
+): boolean {
+  return attempt.source === "existing" && attempts.some(other =>
+    other.source !== "existing" && ownResult(other) && other.baseSha === attempt.baseSha && other.headSha === attempt.headSha);
+}
+
 function stateAttempts(row: ReviewRow): ReviewAttemptSummary[] {
   const kept = row.attempts.filter(attempt => !attempt.archived);
-  return kept.length ? kept : row.attempts;
+  const visible = kept.length ? kept : row.attempts;
+  const own = visible.filter(attempt => !isImportedCopy(attempt, visible, reviewedResult));
+  return own.length ? own : visible;
 }
 
 /** The head a Review last checked: the newest reviewed result, else the newest requested range. */

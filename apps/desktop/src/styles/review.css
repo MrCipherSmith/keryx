@@ -19,6 +19,7 @@
 .review-tags .pr-open, .review-tags .pr-approved { color: var(--ok); background: var(--ok-soft); }
 .review-tags .pr-merged, .review-tags .pr-review_requested { color: var(--info); background: var(--info-soft); }
 .review-tags .pr-changes_requested { color: var(--warn); background: var(--warn-soft); }
+.review-tags .keryx-reviewed { display: inline-flex; align-items: center; gap: 3px; }
 .badge.review-publication-pending { color: var(--warn); background: var(--warn-soft); }
 .review-board .card-actions .is-following { color: var(--accent-text); background: var(--bg-selected); }
 .review-board .card-actions { flex-wrap: wrap; }

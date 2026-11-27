@@ -460,10 +460,10 @@ describe("Flow 521 AC1-AC2: a moved head has one procedure, in SKILL.detail.md",
     expect(decide).toContain("before completing: `keryx review complete` refuses it otherwise.");
   });
 
-  test("flow 521 AC6: the update round is keryx review advance, the command Desktop's Update review runs, with review plan to run it here", () => {
+  test("flow 521 AC6: the update round is keryx review advance; Desktop's Update review makes its checks as a session turn", () => {
     const update = step(4);
     expect(update).toContain("`keryx review advance --json --repo <owner/name> --number <n>` opens the next round of the same Review on the current head");
-    expect(update).toContain("Desktop's \"Update review\" runs the same command");
+    expect(update).toContain("Desktop's \"Update review\" makes the same checks and sends the round to the pull request's session as a turn");
     expect(update).toContain("`keryx review complete` and `keryx review publish` register a pull request package as one");
     expect(update).not.toContain("today Desktop's prompt still differs");
     expect(update).toContain("`keryx review --help` does not list `advance`");

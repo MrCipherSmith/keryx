@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Icon } from "../components/Icon";
 import { useToast } from "../components/Toasts";
 import { Spinner } from "../components/ui";
@@ -16,6 +16,7 @@ import { markRepliesRead, readReplies, subscribeReviewReads } from "./reviewRead
 import { DiscussionMarkdown } from "./DiscussionMarkdown";
 import { openReviewLink, ReviewBrowserLink, reviewUrl } from "./ReviewBrowserLink";
 import { ReviewChecks } from "./ReviewChecks";
+import { PanelResizer } from "./PanelResizer";
 import type { ReviewLaunchModel } from "./ReviewLaunchDialog";
 import { RunLaunchDialog, type ReviewIntent } from "./ReviewWorkspace";
 import "./ReviewDetail.css";
@@ -124,7 +125,6 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, width = 560,
   const panel = useRef<HTMLElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const panelId = useId();
-  const drag = useRef<{ pointerId: number; x: number; width: number } | null>(null);
   const openingLink = useRef(false);
   const mounted = useRef(false);
   useLayoutEffect(() => {
@@ -137,15 +137,6 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, width = 560,
       if (pane?.contains(document.activeElement) && before?.isConnected) before.focus();
     };
   }, []);
-
-  const currentWidth = () => panel.current?.offsetWidth || width;
-  const maxWidth = () => Math.max(360, (panel.current?.parentElement?.clientWidth || window.innerWidth) - 280);
-  const resize = (next: number) => onResize?.(Math.min(maxWidth(), Math.max(360, next)));
-  function startResize(event: PointerEvent<HTMLDivElement>) {
-    if (event.button !== 0) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    drag.current = { pointerId: event.pointerId, x: event.clientX, width: currentWidth() };
-  }
 
   function followLink(event: MouseEvent<HTMLElement>) {
     if (event.button > 1) return;
@@ -227,19 +218,7 @@ function ReviewDetailSheet({ cwd, repo, repositoryId, viewer, card, width = 560,
         onClose();
       }
     }}>
-    {onResize && <div className="side-resize review-detail-resize" role="separator" tabIndex={0}
-      aria-orientation="vertical" aria-label="Resize pull request details" aria-controls={panelId}
-      aria-valuemin={360} aria-valuenow={Math.min(maxWidth(), width)} aria-valuemax={maxWidth()}
-      onPointerDown={startResize} onPointerMove={event => {
-        const start = drag.current;
-        if (start?.pointerId === event.pointerId) resize(start.width + start.x - event.clientX);
-      }} onLostPointerCapture={() => { drag.current = null; }}
-      onKeyDown={event => {
-        const keys: Record<string, number> = { ArrowLeft: currentWidth() + 32, ArrowRight: currentWidth() - 32, Home: 360, End: maxWidth() };
-        if (!Object.hasOwn(keys, event.key)) return;
-        event.preventDefault();
-        resize(keys[event.key]!);
-      }} />}
+    {onResize && <PanelResizer panel={panel} panelId={panelId} width={width} label="Resize pull request details" onResize={onResize} />}
     <header className="sheet-head">
       <div className="sheet-head-row">
         <span className="flow-id">{repo} #{card.number}</span>

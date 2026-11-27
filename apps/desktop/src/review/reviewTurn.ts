@@ -50,6 +50,8 @@ export interface ReviewStartTurnInput {
   settingsKey?: string | undefined;
   /** The user's own request, when the review was asked for in words. */
   request?: string | undefined;
+  /** An update round: `state open` reopens a Review the operator closed instead of refusing it. */
+  reopen?: boolean | undefined;
 }
 
 /** The `keryx review state open` command the start turn asks the skill to run first. */
@@ -58,7 +60,7 @@ export function reviewStateOpenCommand(input: ReviewStartTurnInput): string {
   const settings = input.settingsKey ?? deskOptionsKey(input.options);
   const args = ["--pr", reviewPullRequestUrl(key), "--base", revision.baseSha, "--head", revision.headSha,
     ...(key.viewer ? ["--viewer", key.viewer] : []), "--session", sessionId, ...(settings ? ["--settings", settings] : []),
-    "--source", "desktop"];
+    "--source", "desktop", ...(input.reopen ? ["--reopen"] : [])];
   return ["keryx review state open", ...args.map(shellWord)].join(" ");
 }
 

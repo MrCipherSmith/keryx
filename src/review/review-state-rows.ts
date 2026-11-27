@@ -91,7 +91,10 @@ export function mergeReviewStateRows(rows: readonly ReviewRow[], records: readon
     };
     row.attempts.push(...roundAttempts(record, row.attempts));
     row.attempts.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    if (record.state === "closed" && row.closedAt === null) row.closedAt = record.updatedAt;
+    // A closed record closes the Review only while nothing started after it: an update round run elsewhere (a v2 attempt
+    // on the moved head) reopens it, and the card must follow that attempt, not read Closed beside it.
+    const reopened = row.attempts.some(attempt => attempt.createdAt > record.updatedAt);
+    if (record.state === "closed" && row.closedAt === null && !reopened) row.closedAt = record.updatedAt;
     byNumber.set(record.pr.number, row);
   }
   return [...byNumber.values()];

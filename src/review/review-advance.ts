@@ -1,7 +1,8 @@
 // `keryx review advance` (spec "Раунд обновления"): open the next round of the same Review on the pull request's
-// current range. One command for both surfaces: Desktop's "Update review" calls it, and so does the review-orchestrator
-// skill's "Head moved" procedure. The round itself runs through the Desktop dispatch path (`requestDeskRun` start),
-// which picks the previous round the update builds on (update-round.ts) and places the attempt in the Review.
+// current range. The review-orchestrator skill's "Head moved" procedure calls the command; its round runs through the
+// Desktop dispatch path (`requestDeskRun` start), which picks the previous round the update builds on (update-round.ts)
+// and places the attempt in the Review. Desktop's "Update review" uses `reviewedAttempt` and `advanceRequest` here and
+// sends the round to the PR's session as a turn (apps/desktop/src/review/updateRound.ts).
 
 import type { DeskReviewOptions } from "./desk-run-options";
 import type { DeskRevision, DeskRun, DeskRunKey, DeskRunSnapshot } from "./desk-run-types";
