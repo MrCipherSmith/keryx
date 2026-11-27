@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, test } from "bun:test";
-import { ReviewPlanSummary, type ReviewPlanSummaryData } from "./ReviewPlanSummary";
+import { diffBlocks, ReviewPlanSummary, type ReviewPlanSummaryData } from "./ReviewPlanSummary";
 
 const data: ReviewPlanSummaryData = {
   title: "Fix cache invalidation",
@@ -86,4 +86,28 @@ test("ReviewPlanSummary shows each dispatched assignment's tier, provider/model,
   expect(html).toContain("Dispatch model: anthropic / claude-sonnet");
   expect(html).toContain("security-sensitive project reviewer");
   expect(html).toContain("Show reviewer assignments");
+});
+
+test("ReviewPlanSummary lists files as GitHub does: quiet directory, file name, coloured counts and a diffstat", () => {
+  const html = renderToStaticMarkup(createElement(ReviewPlanSummary, { data }));
+  expect(html).toContain('title="src/cache.ts"');
+  expect(html).toContain('<span class="review-file-dir">src/</span><span class="review-file-name">cache.ts</span>');
+  expect(html).toContain('aria-label="Line changes: 7 additions, 2 deletions"');
+  expect(html).toContain('<span class="review-added">+7</span><span class="review-deleted">−2</span>');
+  // The header line colours the totals the same way.
+  expect(html).toContain('class="review-added" aria-label="8 additions">+8</span>');
+  expect(html).toContain('class="review-deleted" aria-label="3 deletions">−3</span>');
+  // A path with no directory has no directory span.
+  const bare = renderToStaticMarkup(createElement(ReviewPlanSummary, { data: { ...data, files: [{ path: "README.md", additions: 1 }] } }));
+  expect(bare).not.toContain("review-file-dir");
+  expect(bare).toContain('aria-label="Line changes: 1 additions"');
+});
+
+test("diffBlocks: five squares in proportion, one square per line under five lines", () => {
+  expect(diffBlocks(249, 2)).toEqual(["add", "add", "add", "add", "add"]);
+  expect(diffBlocks(57, 19)).toEqual(["add", "add", "add", "add", "del"]);
+  expect(diffBlocks(3, 3)).toEqual(["add", "add", "add", "del", "del"]);
+  expect(diffBlocks(1, 1)).toEqual(["add", "del", "neutral", "neutral", "neutral"]);
+  expect(diffBlocks(0, 0)).toEqual(["neutral", "neutral", "neutral", "neutral", "neutral"]);
+  expect(diffBlocks(undefined, 9)).toEqual(["del", "del", "del", "del", "del"]);
 });

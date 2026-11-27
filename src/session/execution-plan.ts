@@ -188,20 +188,43 @@ export async function setExecutionPlan(
   return writePlan(dir, input.expectedRevision, () => ({ revision: input.expectedRevision + 1, items }));
 }
 
+export type ExecutionPlanItemUpdate = { itemId: string; status: ExecutionPlanStatus };
+
 export async function updateExecutionPlan(
   dir: string,
   input: { expectedRevision: number; itemId: string; status: ExecutionPlanStatus },
 ): Promise<ExecutionPlan> {
+  return updateExecutionPlanItems(dir, { expectedRevision: input.expectedRevision, updates: [input] });
+}
+
+/**
+ * Moves several items in one revision: all of them or none. The one-`in_progress` rule is checked on the result, so
+ * "finish step 3, start step 4" is a single call. A model that has fallen behind catches the plan up in one call
+ * instead of one per step, which is the cost that made it skip the updates altogether.
+ */
+export async function updateExecutionPlanItems(
+  dir: string,
+  input: { expectedRevision: number; updates: readonly ExecutionPlanItemUpdate[] },
+): Promise<ExecutionPlan> {
   return writePlan(dir, input.expectedRevision, (current) => {
     if (current === undefined) throw new ExecutionPlanValidationError("no execution plan exists");
-    if (!(EXECUTION_PLAN_STATUSES as readonly string[]).includes(input.status)) {
-      throw new ExecutionPlanValidationError(`unknown status ${JSON.stringify(input.status)}`);
-    }
-    if (!current.items.some((item) => item.id === input.itemId)) {
-      throw new ExecutionPlanValidationError(`unknown item id: ${input.itemId}`);
+    if (input.updates.length === 0) throw new ExecutionPlanValidationError("no item updates given");
+    const statuses = new Map<string, ExecutionPlanStatus>();
+    for (const update of input.updates) {
+      if (!(EXECUTION_PLAN_STATUSES as readonly string[]).includes(update.status)) {
+        throw new ExecutionPlanValidationError(`unknown status ${JSON.stringify(update.status)}`);
+      }
+      if (!current.items.some((item) => item.id === update.itemId)) {
+        throw new ExecutionPlanValidationError(`unknown item id: ${update.itemId}`);
+      }
+      if (statuses.has(update.itemId)) throw new ExecutionPlanValidationError(`item ${update.itemId} is updated twice`);
+      statuses.set(update.itemId, update.status);
     }
     const items = validateItems(
-      current.items.map((item) => (item.id === input.itemId ? { ...item, status: input.status } : item)),
+      current.items.map((item) => {
+        const status = statuses.get(item.id);
+        return status === undefined ? item : { ...item, status };
+      }),
     );
     return { revision: current.revision + 1, items };
   });
@@ -216,6 +239,34 @@ export async function updateExecutionPlan(
  */
 export function hasActionableExecutionPlanItems(plan: ExecutionPlan | undefined): boolean {
   return plan?.items.some((item) => item.status === "pending" || item.status === "in_progress") ?? false;
+}
+
+/** Model rounds an open plan may stay unchanged inside one turn before the model is asked to bring it up to date. */
+export const EXECUTION_PLAN_STALE_ROUNDS = 6;
+
+/**
+ * Appended to the plan snapshot once the plan is stale. The text is fixed, not a running count: the snapshot rides in
+ * the system instruction, and a line that changed every round would break the prompt cache on every round.
+ */
+export const EXECUTION_PLAN_STALE_NOTE =
+  `This plan has not changed in the last ${EXECUTION_PLAN_STALE_ROUNDS} model rounds while the work went on, and the operator ` +
+  "reads it as live progress. Bring it up to date now: one plan_update call with `updates` marks the finished steps " +
+  "`completed` and the current one `in_progress`. If the work no longer follows this plan, replace it with plan_set.";
+
+/**
+ * Watches one turn's plan for staleness: true once the plan has actionable items and its revision has not changed for
+ * `staleAfter` rounds. The first round of a turn only takes the baseline, so a plan left from an earlier turn is not
+ * stale at the start of the next one; any revision change, including a write by the operator, restarts the count.
+ */
+export function executionPlanStaleness(staleAfter = EXECUTION_PLAN_STALE_ROUNDS): (plan: ExecutionPlan | undefined, round: number) => boolean {
+  let seen: { revision: number | undefined; round: number } | undefined;
+  return (plan, round) => {
+    if (seen === undefined || seen.revision !== plan?.revision) {
+      seen = { revision: plan?.revision, round };
+      return false;
+    }
+    return hasActionableExecutionPlanItems(plan) && round - seen.round >= staleAfter;
+  };
 }
 
 /** Items published for operator approval (never work in progress). */

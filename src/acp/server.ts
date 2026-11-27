@@ -1088,8 +1088,12 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     return Promise.all([telegramRelease, jobs?.sweepAll(), hooks !== undefined ? fireSessionEnd(hooks, endReason) : undefined]).then(() => undefined);
   }
 
-  /** Bind a new or loaded shell-profile session: its mode, its plan directory, and what the client is told after the reply. */
-  function bindShellSession(state: AcpSessionState, requestId: JsonRpcId): PermissionMode {
+  /**
+   * Bind a new or loaded shell-profile session: its mode, its plan directory, and what the client is told after the
+   * reply. A loaded session is always told its plan, as an empty list when it has none (or its file is unreadable):
+   * a client that kept the plan it held across the reload must hear that it is gone. A new session has no plan to say.
+   */
+  function bindShellSession(state: AcpSessionState, requestId: JsonRpcId, loaded: boolean): PermissionMode {
     const sessionId = state.sessionId;
     if (!sessionModes.has(sessionId)) sessionModes.set(sessionId, initialModeFor(state.resolvedRoot));
     const dir = state.handle.dir;
@@ -1099,15 +1103,18 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       if (typeof title === "string" && title.length > 0) {
         sendUpdate(sessionId, { sessionUpdate: "session_info_update", title, updatedAt: state.handle.summary.updatedAt });
       }
+      const sendPlan = (plan: ExecutionPlan | undefined): void => {
+        if (stopping) return;
+        if (plan !== undefined && plan.items.length > 0) {
+          sendUpdate(sessionId, { sessionUpdate: "plan", entries: acpPlanEntries(plan) });
+        } else if (loaded) {
+          sendUpdate(sessionId, { sessionUpdate: "plan", entries: [] });
+        }
+      };
       void getExecutionPlan(dir)
-        .then((plan) => {
-          if (plan !== undefined && plan.items.length > 0 && !stopping) {
-            sendUpdate(sessionId, { sessionUpdate: "plan", entries: acpPlanEntries(plan) });
-          }
-        })
-        .catch(() => {
-          // An unreadable plan file is shown as no plan, as the plan tools themselves treat it.
-        });
+        .then(sendPlan)
+        // An unreadable plan file is shown as no plan, as the plan tools themselves treat it.
+        .catch(() => sendPlan(undefined));
     });
     return modeOf(sessionId);
   }
@@ -1958,7 +1965,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         // keeps one set.
         bindSessionMcp(sessionId, requestId, parsed, state.resolvedRoot);
         announceCommands(sessionId, requestId);
-        const mode = shellProfile ? bindShellSession(state, requestId) : undefined;
+        const mode = shellProfile ? bindShellSession(state, requestId, false) : undefined;
         await startOnRememberedModel(sessionId, method);
         refuseIfStopping(method);
         // The model list, which the connection started resolving at launch (flow 288, AC5).
@@ -2880,6 +2887,11 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         ...(rendered.untrusted ? { untrustedPrompt: true, operatorText: rendered.trustedText } : {}),
         ...(telegram === undefined ? {} : { source: "telegram", automaticReview: false }),
         ...(slate !== undefined ? { slateSession: slate.ref, ...(goalTurn ? { skipCloseTrigger: true } : {}) } : {}),
+        // The shell profile's plan tools write `plan.json` into the session dir on every turn, slate or not: the turn
+        // reads it from there too, so the model sees the plan and the stale-plan note. The editor profile offers no
+        // plan tools (roster.ts) and is sent no plan, so its turns read none, even of a session another profile left
+        // with one. Nothing once another instance took the lease.
+        ...(shellProfile ? { planDir: () => (registry.canPersist(sessionId) ? state.handle.dir : undefined) } : {}),
       });
       syncAcpArchive(archive, state.history);
       if (!registry.canPersist(sessionId)) {
@@ -3372,7 +3384,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
         refuseIfStopping(method);
         // A session this connection ran before keeps its mode, across a release
         // and reload too; otherwise the project's default.
-        const mode = shellProfile ? bindShellSession(loaded, requestId) : undefined;
+        const mode = shellProfile ? bindShellSession(loaded, requestId, true) : undefined;
         const configOptions = await configOptionsFor(sessionId, method);
         refuseIfStopping(method);
         enforceIdleCap();
@@ -3409,7 +3421,7 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     return withSessionWork(sessionId, async () => {
       replayHistory(sessionId, state.history);
       announceCommands(sessionId, requestId);
-      bindShellSession(state, requestId);
+      bindShellSession(state, requestId, true);
       const configOptions = await configOptionsFor(sessionId, method);
       refuseIfStopping(method);
       return { modes: acpModeState(modeOf(sessionId)), configOptions, ...recoveryMeta(state) };

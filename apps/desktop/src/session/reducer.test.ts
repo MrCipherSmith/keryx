@@ -95,6 +95,74 @@ describe("conversation: batched updates", () => {
   });
 });
 
+describe("conversation: plan", () => {
+  // Shaped as keryx's acpPlanEntries sends it (src/acp/server.ts): the ACP status folds proposed/blocked into
+  // pending and skipped into completed, and the real id and status ride in _meta.keryx.
+  const acpStatus = (status: string) =>
+    status === "in_progress" ? "in_progress" : status === "completed" || status === "skipped" ? "completed" : "pending";
+  const plan = (...items: Array<[id: string, status: string, title?: string]>) =>
+    u({ sessionUpdate: "plan", entries: items.map(([id, status, title]) => ({
+      content: title ?? `step ${id}`, priority: "medium", status: acpStatus(status), _meta: { keryx: { id, status } },
+    })) });
+
+  test("the plan's clock starts when a plan arrives and moves only when the plan changes", () => {
+    expect(conv.planUpdatedAt).toBeNull();
+    const first = applyUpdates(conv, [{ update: plan(["a", "in_progress"], ["b", "pending"]), at: 100 }]);
+    expect(first.planUpdatedAt).toBe(100);
+    const resent = applyUpdates(first, [{ update: plan(["a", "in_progress"], ["b", "pending"]), at: 500 }]);
+    expect(resent.planUpdatedAt).toBe(100);
+    const moved = applyUpdates(resent, [{ update: plan(["a", "completed"], ["b", "in_progress"]), at: 900 }]);
+    expect(moved.planUpdatedAt).toBe(900);
+    expect(moved.plan.map((entry) => entry.status)).toEqual(["completed", "in_progress"]);
+    // A re-plan that keeps every status but renames a step is a change too.
+    const renamed = applyUpdates(moved, [{ update: plan(["a", "completed"], ["b", "in_progress", "a new title"]), at: 1300 }]);
+    expect(renamed.planUpdatedAt).toBe(1300);
+  });
+
+  test("writes the ACP status hides still move the clock: blocked, approval of a proposed step, skipped", () => {
+    const start = applyUpdates(conv, [{ update: plan(["a", "in_progress"], ["b", "pending"], ["c", "completed"]), at: 100 }]);
+    const blocked = applyUpdates(start, [{ update: plan(["a", "in_progress"], ["b", "blocked"], ["c", "completed"]), at: 200 }]);
+    expect(blocked.planUpdatedAt).toBe(200);
+    const skipped = applyUpdates(blocked, [{ update: plan(["a", "in_progress"], ["b", "blocked"], ["c", "skipped"]), at: 300 }]);
+    expect(skipped.planUpdatedAt).toBe(300);
+    const proposed = applyUpdates(conv, [{ update: plan(["a", "proposed"]), at: 400 }]);
+    const approved = applyUpdates(proposed, [{ update: plan(["a", "pending"]), at: 500 }]);
+    expect(approved.planUpdatedAt).toBe(500);
+  });
+
+  test("a reload keeps the plan's clock: keryx's re-send of the same plan after a load is not progress", () => {
+    const held = run(twoHeld, { t: "updates", updates: [routed("s1", plan(["a", "in_progress"], ["b", "pending"]), 100)] });
+    // The re-send can land while the load runs (into the loading conversation) or after it finished.
+    const during = run(held,
+      { t: "loadStart", sessionId: "s1" },
+      { t: "updates", updates: [routed("s1", plan(["a", "in_progress"], ["b", "pending"]), 500)] },
+      { t: "loadDone", sessionId: "s1", show: true });
+    expect(shownView(during).planUpdatedAt).toBe(100);
+    const after = run(held,
+      { t: "loadStart", sessionId: "s1" },
+      { t: "loadDone", sessionId: "s1", show: true },
+      { t: "updates", updates: [routed("s1", plan(["a", "in_progress"], ["b", "pending"]), 500)] });
+    expect(shownView(after).planUpdatedAt).toBe(100);
+    // A plan that did change while the session reloaded still moves it.
+    const changed = run(held,
+      { t: "loadStart", sessionId: "s1" },
+      { t: "loadDone", sessionId: "s1", show: true },
+      { t: "updates", updates: [routed("s1", plan(["a", "completed"], ["b", "in_progress"]), 500)] });
+    expect(shownView(changed).planUpdatedAt).toBe(500);
+  });
+
+  test("a turn stamps its start when the session turns busy, and the shown view carries the clocks", () => {
+    const shown = run(twoHeld, { t: "updates", updates: [routed("s1", plan(["a", "in_progress"]), 42)] });
+    expect(shownView(shown).planUpdatedAt).toBe(42);
+    expect(shownView(shown).turnStartedAt).toBeNull();
+    const busy = run(shown, { t: "busy", sessionId: "s1", busy: true, at: 700 });
+    expect(shownView(busy).turnStartedAt).toBe(700);
+    // Only the rising edge stamps it; an idle session keeps the last turn's start.
+    const again = run(busy, { t: "busy", sessionId: "s1", busy: true, at: 900 }, { t: "busy", sessionId: "s1", busy: false, at: 950 });
+    expect(shownView(again).turnStartedAt).toBe(700);
+  });
+});
+
 describe("conversation: tools", () => {
   test("findTool finds the most recent call with that id", () => {
     const t = (id: number, toolCallId: string): Item => ({

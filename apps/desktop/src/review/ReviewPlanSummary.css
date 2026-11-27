@@ -1,0 +1,34 @@
+/* A review's scope and plan, laid out as GitHub shows a pull request: a title, one quiet meta line with coloured line
+   counts, then sections divided by hairlines and named by small labels rather than by headings of their own size. */
+.review-plan-summary { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); min-width: 0; font-size: var(--fs-sm); }
+.review-plan-summary p { margin: 0; }
+.review-plan-summary > header { display: grid; gap: 2px; min-width: 0; }
+.review-plan-summary h3 { margin: 0; font-size: var(--fs-md); font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.review-plan-summary-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--sp-3); color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.review-plan-summary-stats { display: inline-flex; align-items: baseline; gap: var(--sp-2); }
+.review-plan-summary-revision code { font-size: var(--fs-xs); color: var(--fg); }
+.review-plan-summary .review-added { color: var(--ok); font-weight: 600; }
+.review-plan-summary .review-deleted { color: var(--danger); font-weight: 600; }
+
+.review-plan-summary > section { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-1); min-width: 0; padding-top: var(--sp-2); border-top: 1px solid var(--border); }
+.review-plan-summary h4 { margin: 0; color: var(--fg-muted); font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.review-plan-summary summary { cursor: pointer; color: var(--accent-text); }
+.review-plan-summary details ul { display: grid; gap: 2px; margin: var(--sp-1) 0 0; padding-inline-start: var(--sp-4); overflow-wrap: anywhere; }
+
+/* The changed files: one hairline-divided row per file, path on the left, counts and the five-square diffstat right. */
+.review-file-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--r-md); max-block-size: min(16rem, 40vh); overflow: auto; overscroll-behavior: contain; }
+.review-file-list > li { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; padding: 3px var(--sp-2); }
+.review-file-list > li + li { border-top: 1px solid var(--border); }
+.review-file-list > li:hover { background: var(--bg-hover); }
+/* A long directory shrinks behind an ellipsis first, so the file name stays readable; the row's title holds the path. */
+.review-file-path { display: flex; flex: 1; min-width: 0; font-size: var(--fs-xs); line-height: 1.6; white-space: nowrap; }
+.review-file-dir { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--fg-muted); }
+.review-file-name { flex: none; max-inline-size: 100%; overflow: hidden; text-overflow: ellipsis; color: var(--fg); }
+.review-file-stat { flex: none; display: inline-flex; align-items: center; gap: 6px; font: 600 var(--fs-xs) var(--mono); font-variant-numeric: tabular-nums; }
+.review-diff-blocks { display: inline-flex; gap: 1px; }
+.review-diff-blocks > span { inline-size: 7px; block-size: 7px; border-radius: 1px; background: var(--border-strong); }
+.review-diff-blocks > [data-kind="add"] { background: var(--ok); }
+.review-diff-blocks > [data-kind="del"] { background: var(--danger); }
+
+.review-plan-summary-stage { padding-top: var(--sp-2); border-top: 1px solid var(--border); color: var(--fg-muted); }
+.review-plan-summary-operator { margin: 0; }

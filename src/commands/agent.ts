@@ -127,8 +127,10 @@ import { executeWaves, planWaves, WaveExecutionError, type ChildTask } from "../
 import { anchorsAnnouncement } from "../session/anchors-announce";
 import type { Slate, SlateAnchors, SlateCourse } from "../session/slate";
 import {
+  EXECUTION_PLAN_STALE_NOTE,
   getExecutionPlan,
   executionPlanApprovalItems,
+  executionPlanStaleness,
   hasActionableExecutionPlanItems,
   renderExecutionPlanSnapshot,
   type ExecutionPlan,
@@ -1016,6 +1018,14 @@ export interface RunAgentTurnOptions {
    * `session/slate-lifecycle.ts`'s `SlateSessionRef` doc comment for why.
    */
   slateSession?: SlateSessionRef;
+  /**
+   * The session dir whose `plan.json` the turn reads, for a host that holds no slate ref: the ACP shell profile
+   * opens a slate only after `/goal`, and without this its turns never saw the plan, the stale-plan note or the
+   * end-of-turn plan handling the shells get. A getter, so the host's lease check runs on every read and returns
+   * `undefined` once another instance holds the session, as `slateSessionDir` does for a detached ref.
+   * Ignored when `slateSession` is set.
+   */
+  planDir?: () => string | undefined;
   /**
    * Flow 387 review r1 F-001: the host's promise that it keeps the ORIGINAL messages
    * (an archive synced before every history change, written next to a live session
@@ -2114,7 +2124,8 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "for any check covered by a read tool above, use that tool instead of shelling out to the equivalent `keryx …` " +
     "CLI command.\n" +
     "- For multi-step work, use **plan_set** to publish a structured plan, **plan_update** after each real status " +
-    "change, and **plan_get** before resolving a revision conflict. Keep stable item ids, at most one " +
+    "change (its `updates` list moves several items in one call: finish one step and start the next together), " +
+    "and **plan_get** before resolving a revision conflict. Keep stable item ids, at most one " +
     "`in_progress` item, and do not mark work complete before verification. These tools update session metadata " +
     "only; `/plan` remains the operator's separate read-only permission mode.\n" +
     "- When the user names a skill (\"use review-orchestrator\", \"по скиллу X\"), your FIRST tool call is " +
@@ -3448,6 +3459,9 @@ async function runAgentTurnCore(
    * the same loop.
    */
   const roundState = { round: 0, maxRounds };
+  // A plan the model published and then stopped moving is what the operator saw frozen at "0/16" for a whole review:
+  // after a few unchanged rounds the snapshot asks the model to catch it up.
+  const planStale = executionPlanStaleness();
   const invocationBudget = { invoked: 0, maxCalls: maxToolCalls, blocked: false, reached: false };
   const hasInvocationCapacity = (): boolean => {
     const hasCapacity =
@@ -3744,8 +3758,9 @@ async function runAgentTurnCore(
     // old gate that silently stopped feeding the plan back to both the model and
     // the sidebar at the worst possible moment. A DETACHED ref still reads
     // nothing: `slateSessionDir` is the lease-loss-aware accessor (flow 271
-    // R3-1), so a displaced shell never picks up the new holder's plan.
-    const planDir = options.slateSession === undefined ? undefined : slateSessionDir(options.slateSession);
+    // R3-1), so a displaced shell never picks up the new holder's plan. A host
+    // with no slate ref names the dir through `planDir`, with its own lease check.
+    const planDir = options.slateSession !== undefined ? slateSessionDir(options.slateSession) : options.planDir?.();
     if (planDir !== undefined) {
       try {
         currentPlan = await getExecutionPlan(planDir);
@@ -3753,7 +3768,9 @@ async function runAgentTurnCore(
         io.onSystem?.(`execution plan read failed (ignored): ${cause instanceof Error ? cause.message : String(cause)}\n`);
       }
     }
-    const planSnapshot = renderExecutionPlanSnapshot(currentPlan);
+    const snapshot = renderExecutionPlanSnapshot(currentPlan);
+    const planSnapshot =
+      snapshot !== undefined && planStale(currentPlan, roundState.round) ? `${snapshot}\n${EXECUTION_PLAN_STALE_NOTE}` : snapshot;
     const roundSystemInstruction =
       planSnapshot === undefined ? deps.systemInstruction : `${deps.systemInstruction}\n\n${planSnapshot}`;
     // Flow 267: compact BEFORE building the request, not after — once the

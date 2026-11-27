@@ -2,7 +2,7 @@ import { forwardRef, useCallback, useEffect, useMemo, useRef, useState, useSyncE
 import { lookupWithRetry } from "../lib/repoLookup";
 import { BrandMark } from "../components/BrandMark";
 import { createPortal } from "react-dom";
-import type { PlanEntry } from "../acp/types";
+import { PlanCard } from "./PlanCard";
 import { errMessage, formatTokens } from "../lib/format";
 import { setPrefs, usePrefs, MOD, SESSION_SIDEBAR_MIN } from "../lib/prefs";
 import { Icon } from "../components/Icon";
@@ -458,7 +458,7 @@ export const SessionView = forwardRef<ComposerHandle, Props>(function SessionVie
 
         <div className="composer-dock">
           {pinnedReviews}
-          {state.plan.length > 0 ? <PlanCard plan={state.plan} /> : null}
+          {state.plan.length > 0 ? <PlanCard plan={state.plan} updatedAt={state.planUpdatedAt} turnStartedAt={state.turnStartedAt} busy={state.busy} /> : null}
           <QueuePanel
             queue={state.queue}
             busy={state.busy}
@@ -570,38 +570,6 @@ function ExitBanner({ exit, onRestart }: { exit: { code: number | null; stderrTa
         </div>
         {open && tail ? <pre className="exit-tail">{tail.split("\n").slice(-30).join("\n")}</pre> : null}
       </div>
-    </div>
-  );
-}
-
-const PLAN_ICON = { pending: "circle", in_progress: "circleDot", completed: "circleCheck" } as const;
-
-function PlanCard({ plan }: { plan: PlanEntry[] }) {
-  const [open, setOpen] = useState(true);
-  const done = plan.filter((p) => p.status === "completed").length;
-  const current = plan.find((p) => p.status === "in_progress");
-  return (
-    <div className={`plan-card${open ? " is-open" : ""}`}>
-      <button className="plan-head" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <Icon name="checklist" size={14} />
-        <span className="plan-title">Plan</span>
-        <span className="plan-count">
-          {done}/{plan.length}
-        </span>
-        {!open && current ? <span className="plan-current truncate">{current.content}</span> : null}
-        <span className="grow" />
-        <Icon name={open ? "chevronDown" : "chevronUp"} size={13} />
-      </button>
-      {open ? (
-        <ol className="plan-list">
-          {plan.map((p, i) => (
-            <li key={p._meta?.keryx?.id ?? i} className={`plan-item plan-${p.status}`}>
-              <Icon name={PLAN_ICON[p.status] ?? "circle"} size={14} />
-              <span>{p.content}</span>
-            </li>
-          ))}
-        </ol>
-      ) : null}
     </div>
   );
 }
